@@ -1,0 +1,112 @@
+{% comment %} Mozemo Signage - UV Graphic LED Sign Configurator {% endcomment %}
+
+<div class="uv-configurator" id="uv-configurator-{{ block.id }}" data-block-id="{{ block.id }}" data-variant="led">
+
+  <div class="uv-configurator__preview">
+    <div class="uv-configurator__preview-inner" data-preview-box>
+      <p class="uv-configurator__preview-placeholder" data-preview-placeholder>
+        Upload your design to see a preview
+      </p>
+      <img class="uv-configurator__preview-image" data-preview-image style="display: none;" alt="Your uploaded design">
+    </div>
+  </div>
+
+  <div class="uv-configurator__panel">
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">1. Upload Your Design</label>
+      <input type="file" class="uv-configurator__file-input" data-file-input accept="image/png,image/jpeg,image/svg+xml,.pdf,.ai">
+      <p class="uv-configurator__file-status" data-file-status>PNG, JPG, SVG, PDF or AI file.</p>
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">2. Choose Size</label>
+      <select class="uv-configurator__select" data-size-select>
+        {% for item in metaobjects["app--414412210177--uv_size"].values %}
+          <option value="{{ item.width_cm.value }}" data-price="{{ item.price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
+            {{ item.label.value }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">3. Material</label>
+      <select class="uv-configurator__select" data-material-select>
+        {% for item in metaobjects["app--414412210177--uv_material"].values %}
+          <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
+            {{ item.label.value }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">4. Finish</label>
+      <select class="uv-configurator__select" data-finish-select>
+        {% for item in metaobjects["app--414412210177--uv_finish"].values %}
+          <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
+            {{ item.label.value }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">5. LED Backlight Colour</label>
+      <div class="uv-configurator__swatches" data-colour-swatches>
+        {% for colour in metaobjects["app--414412210177--uv_led_colour"].values %}
+          <button type="button" class="uv-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
+            style="background-color: {{ colour.hex_code.value }};"
+            data-colour-hex="{{ colour.hex_code.value }}"
+            data-colour-price="{{ colour.extra_price_decimal.value | default: 0 }}"
+            data-colour-name="{{ colour.name.value }}"
+            title="{{ colour.name.value }}" aria-label="{{ colour.name.value }}">
+          </button>
+        {% endfor %}
+      </div>
+      <p class="uv-configurator__selected-label" data-colour-name-label>
+        {{ metaobjects["app--414412210177--uv_led_colour"].values.first.name.value }}
+      </p>
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">6. Add-ons</label>
+      {% for addon in metaobjects["app--414412210177--uv_addon"].values %}
+        <label class="uv-configurator__checkbox-row">
+          <input type="checkbox" data-addon-checkbox data-price="{{ addon.extra_price_decimal.value | default: 0 }}" {% if addon.is_free.value %}checked{% endif %}>
+          <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="uv-configurator__field">
+      <label class="uv-configurator__label">7. Power Adapter</label>
+      <select class="uv-configurator__select" data-power-adapter-select>
+        {% for adapter in metaobjects["app--414412210177--power_adapter"].values %}
+          <option {% if forloop.first %}selected{% endif %}>{{ adapter.label.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="uv-configurator__price-box">
+      <span class="uv-configurator__price-label">Total Price</span>
+      <span class="uv-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <button type="button" class="uv-configurator__add-to-cart" data-add-to-cart
+      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
+      data-product-id="{{ product.id }}">
+      Add to Cart
+    </button>
+    <p class="uv-configurator__status" data-add-to-cart-status></p>
+
+  </div>
+</div>
+
+{{ 'uv-graphic-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'uv-graphic-configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{ "name": "UV Graphic LED Config.", "target": "section", "settings": [] }
+{% endschema %}

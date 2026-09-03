@@ -1,0 +1,72 @@
+{% comment %} Mozemo Signage - Live Bulk & Bundle Deals / Business Fit-Outs Configurator {% endcomment %}
+
+{% assign bundle_options = metaobjects["app--414412210177--bundle_option"].values %}
+
+<div class="bundle-configurator" id="bundle-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+
+  <div class="bundle-configurator__panel">
+
+    <div class="bundle-configurator__field">
+      <label class="bundle-configurator__label">1. Choose a Base Package</label>
+      <div class="bundle-configurator__packages" data-package-options>
+        {% assign package_index = 0 %}
+        {% for item in bundle_options %}
+          {% if item.category.value == "package" %}
+            <label class="bundle-configurator__package-card{% if package_index == 0 %} is-selected{% endif %}">
+              <input
+                type="radio"
+                name="bundle-package-{{ block.id }}"
+                data-package-radio
+                value="{{ item.label.value }}"
+                data-price="{{ item.price_decimal.value | default: 0 }}"
+                {% if package_index == 0 %}checked{% endif %}>
+              <span class="bundle-configurator__package-title">{{ item.label.value }}</span>
+              {% if item.description.value %}<span class="bundle-configurator__package-desc">{{ item.description.value }}</span>{% endif %}
+              <span class="bundle-configurator__package-price">${{ item.price_decimal.value | default: 0 }}</span>
+            </label>
+            {% assign package_index = package_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="bundle-configurator__field">
+      <label class="bundle-configurator__label">2. Add-ons</label>
+      {% for item in bundle_options %}
+        {% if item.category.value == "addon" %}
+          <label class="bundle-configurator__checkbox-row">
+            <input type="checkbox" data-addon-checkbox data-price="{{ item.price_decimal.value | default: 0 }}">
+            <span>{{ item.label.value }} (+${{ item.price_decimal.value | default: 0 }})</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="bundle-configurator__price-box">
+      <span class="bundle-configurator__price-label">Total Price</span>
+      <span class="bundle-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <button
+      type="button"
+      class="bundle-configurator__add-to-cart"
+      data-add-to-cart
+      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
+      data-product-id="{{ product.id }}">
+      Add to Cart
+    </button>
+    <p class="bundle-configurator__status" data-add-to-cart-status></p>
+
+  </div>
+</div>
+
+{{ 'bundle-deals-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'bundle-deals-configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Bundle Deals Config.",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}

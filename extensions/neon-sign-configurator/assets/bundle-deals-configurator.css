@@ -1,0 +1,132 @@
+.bundle-configurator {
+    background: #0a0a0f;
+    border-radius: 16px;
+    padding: 24px;
+    color: #ffffff;
+    font-family: inherit;
+}
+
+.bundle-configurator__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 600px;
+}
+
+.bundle-configurator__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    color: #b8b8c4;
+}
+
+.bundle-configurator__packages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bundle-configurator__package-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid #2c2c38;
+    border-radius: 10px;
+    background: #16161f;
+    cursor: pointer;
+    position: relative;
+}
+
+.bundle-configurator__package-card input[type="radio"] {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+}
+
+.bundle-configurator__package-card.is-selected {
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 1px #00d4ff;
+}
+
+.bundle-configurator__package-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.bundle-configurator__package-desc {
+    font-size: 13px;
+    color: #b8b8c4;
+}
+
+.bundle-configurator__package-price {
+    font-size: 14px;
+    font-weight: 600;
+    color: #00d4ff;
+    margin-top: 4px;
+}
+
+.bundle-configurator__checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.bundle-configurator__price-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #2c2c38;
+    padding-top: 16px;
+    margin-top: 8px;
+}
+
+.bundle-configurator__price-label {
+    font-size: 14px;
+    color: #b8b8c4;
+}
+
+.bundle-configurator__price-value {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #00d4ff, #7a00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.bundle-configurator__add-to-cart {
+    width: 100%;
+    padding: 14px;
+    margin-top: 14px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #00d4ff, #7a00ff);
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.bundle-configurator__add-to-cart:hover {
+    opacity: 0.9;
+}
+
+.bundle-configurator__add-to-cart:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.bundle-configurator__status {
+    font-size: 12px;
+    color: #b8b8c4;
+    margin-top: 8px;
+    min-height: 16px;
+}

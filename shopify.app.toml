@@ -1,0 +1,920 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "421dfa31d227abd21a827f2c0dc8743e"
+name = "mozemosignage-app"
+application_url = "https://building-andrews-mime-takes.trycloudflare.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[events]
+api_version = "unstable"
+
+  [[events.subscription]]
+  handle = "product-updates-stub"
+  topic = "Product"
+  actions = [ "update" ]
+  uri = "https://drove-temp-act-received.trycloudflare.com/webhooks/events/product-updates"
+  api_version = "unstable"
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,write_products"
+
+[auth]
+redirect_urls = [ "https://building-andrews-mime-takes.trycloudflare.com/api/auth" ]
+
+[app_proxy]
+url = "https://building-andrews-mime-takes.trycloudflare.com/proxy/neon-pricing"
+subpath = "neon-pricing"
+prefix = "apps"
+
+[product.metafields.app.demo_info]
+type = "single_line_text_field"
+name = "Demo Source Info"
+description = "Tracks products created by the Shopify app template for development"
+
+  [product.metafields.app.demo_info.access]
+  admin = "merchant_read_write"
+
+[metaobjects.app.neon_font]
+name = "Neon Font"
+description = "Available font styles for neon sign configurators"
+
+  [metaobjects.app.neon_font.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_font.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_font.fields.css_font_family]
+name = "CSS Font Family"
+description = "Exact font-family name used for live preview rendering (e.g. 'Barcelona')"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_font.fields.preview_image]
+name = "Preview Image"
+type = "file_reference"
+
+[metaobjects.app.neon_font.fields.font_file]
+name = "Font File (optional)"
+description = "Upload the real font file (.woff2, .ttf, .otf). If uploaded, this overrides CSS Font Family for the live preview. Leave empty to keep using the Google Fonts fallback via CSS Font Family."
+type = "file_reference"
+
+[metaobjects.app.neon_font.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_font.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.neon_colour]
+name = "Neon Colour"
+description = "Available LED colours for neon sign configurators"
+
+  [metaobjects.app.neon_colour.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_colour.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_colour.fields.hex_code]
+name = "Hex Code"
+description = "e.g. #FF69B4 - used for live preview glow colour"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_colour.fields.extra_price_decimal]
+name = "Extra Price"
+description = "Additional cost for this colour option (0 for standard colours)"
+type = "number_decimal"
+
+[metaobjects.app.neon_colour.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_colour.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.sign_size]
+name = "Sign Size"
+description = "Available size options with pricing"
+
+  [metaobjects.app.sign_size.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign_size.fields.label]
+name = "Label"
+description = "e.g. 'Small - 45cm wide'"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign_size.fields.width_cm]
+name = "Width (cm)"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.sign_size.fields.height_cm]
+name = "Height (cm)"
+description = "Approximate height for this size — used to draw dimension lines in the live preview"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.sign_size.fields.price_decimal]
+name = "Price"
+type = "number_decimal"
+
+[metaobjects.app.sign_size.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.backboard_style]
+name = "Backboard Style"
+description = "Cut Around, Rectangle, Cut-to-Letter, Naked Neon, etc."
+
+  [metaobjects.app.backboard_style.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.backboard_style.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.backboard_style.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.backboard_style.fields.preview_image]
+name = "Preview Image"
+type = "file_reference"
+
+[metaobjects.app.backboard_style.fields.shape_type]
+name = "Shape Type"
+description = "Controls how the backboard renders in the live preview. Must be exactly one of: rectangle, cut-around, cut-to-letter, naked"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.backboard_style.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.backboard_style.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.backboard_colour]
+name = "Backboard Colour"
+description = "Clear, Gloss Black, Gloss White, Frosted White, Silver, Gold"
+
+  [metaobjects.app.backboard_colour.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.backboard_colour.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.backboard_colour.fields.hex_or_swatch]
+name = "Swatch Colour (Hex)"
+type = "single_line_text_field"
+
+[metaobjects.app.backboard_colour.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.backboard_colour.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.backboard_colour.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.signage_addon]
+name = "Signage Add-on"
+description = "Wall Mount Kit, Hanging Kit, Remote & Dimmer, Waterproofing etc."
+
+  [metaobjects.app.signage_addon.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.signage_addon.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.signage_addon.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.signage_addon.fields.is_free]
+name = "Is Free"
+type = "boolean"
+
+[metaobjects.app.signage_addon.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.power_adapter]
+name = "Power Adapter"
+description = "Region-specific power adapter options"
+
+  [metaobjects.app.power_adapter.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.power_adapter.fields.label]
+name = "Label"
+description = "e.g. 'Australia / New Zealand 230V'"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.power_adapter.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.illumination_type]
+name = "Illumination Type"
+description = "Backlit, Frontlit, Front & Backlit, Fully Illuminated 3D Acrylic"
+
+  [metaobjects.app.illumination_type.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.illumination_type.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.illumination_type.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.illumination_type.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_size]
+name = "3D Sign Size"
+description = "Available size options for 3D illuminated signs"
+
+  [metaobjects.app.sign3d_size.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_size.fields.label]
+name = "Label"
+description = "e.g. 'Medium - 60cm wide'"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_size.fields.width_cm]
+name = "Width (cm)"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.sign3d_size.fields.price_decimal]
+name = "Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_size.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_material]
+name = "3D Sign Material"
+description = "Acrylic, Metal Backing, Wood Backing, etc."
+
+  [metaobjects.app.sign3d_material.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_material.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_material.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_material.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.acrylic_thickness]
+name = "Acrylic Thickness"
+description = "3mm, 5mm, 10mm, etc."
+
+  [metaobjects.app.acrylic_thickness.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.acrylic_thickness.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.acrylic_thickness.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.acrylic_thickness.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_front_colour]
+name = "3D Sign Front Colour"
+description = "Front acrylic colour options"
+
+  [metaobjects.app.sign3d_front_colour.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_front_colour.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_front_colour.fields.hex_code]
+name = "Hex Code"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_front_colour.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_front_colour.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_finish]
+name = "3D Sign Finish"
+description = "Matte, Glossy, Brushed Metal, etc."
+
+  [metaobjects.app.sign3d_finish.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_finish.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_finish.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_finish.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_mounting]
+name = "3D Sign Mounting"
+description = "Wall Mount, Standoff Mount, Freestanding, etc."
+
+  [metaobjects.app.sign3d_mounting.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_mounting.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_mounting.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_mounting.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.sign3d_addon]
+name = "3D Sign Add-on"
+description = "Optional add-ons for 3D illuminated signs"
+
+  [metaobjects.app.sign3d_addon.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.sign3d_addon.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_addon.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.sign3d_addon.fields.is_free]
+name = "Is Free"
+type = "boolean"
+
+[metaobjects.app.sign3d_addon.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.uv_size]
+name = "UV Sign Size"
+description = "Available size options for UV Graphic signs"
+
+  [metaobjects.app.uv_size.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.uv_size.fields.label]
+name = "Label"
+description = "e.g. 'Medium - 60cm wide'"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_size.fields.width_cm]
+name = "Width (cm)"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.uv_size.fields.price_decimal]
+name = "Price"
+type = "number_decimal"
+
+[metaobjects.app.uv_size.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.uv_material]
+name = "UV Sign Material"
+description = "Acrylic, Aluminium, etc."
+
+  [metaobjects.app.uv_material.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.uv_material.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_material.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.uv_material.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.uv_finish]
+name = "UV Sign Finish"
+description = "Gloss, Matte finish options"
+
+  [metaobjects.app.uv_finish.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.uv_finish.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_finish.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.uv_finish.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.uv_led_colour]
+name = "UV LED Colour"
+description = "LED backlighting colour options (used only by the LED variant of UV Graphic signs)"
+
+  [metaobjects.app.uv_led_colour.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.uv_led_colour.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_led_colour.fields.hex_code]
+name = "Hex Code"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_led_colour.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.uv_led_colour.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.uv_addon]
+name = "UV Sign Add-on"
+description = "Optional add-ons for UV Graphic signs"
+
+  [metaobjects.app.uv_addon.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.uv_addon.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.uv_addon.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.uv_addon.fields.is_free]
+name = "Is Free"
+type = "boolean"
+
+[metaobjects.app.uv_addon.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_quick_symbol]
+name = "Neon Quick Symbol"
+description = "SVG icons customers can click to add alongside their text (heart, star, moon, etc.)"
+
+  [metaobjects.app.neon_quick_symbol.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_quick_symbol.fields.label]
+name = "Label"
+description = "e.g. 'Heart', 'Star' — shown as alt text / tooltip"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_quick_symbol.fields.icon]
+name = "Icon (SVG)"
+type = "file_reference"
+required = true
+
+[metaobjects.app.neon_quick_symbol.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_quick_symbol.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.neon_background_image]
+name = "Neon Background Image"
+description = "Room/wall mockup photos shown behind the live preview. First one (lowest sort order) is the default."
+
+  [metaobjects.app.neon_background_image.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_background_image.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_background_image.fields.image]
+name = "Image"
+type = "file_reference"
+required = true
+
+[metaobjects.app.neon_background_image.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_background_image.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.neon_size_settings]
+name = "Neon Size Slider Settings"
+description = "Global settings for the custom size slider (unit, range, price per unit). Create exactly ONE entry — this is a single global config, not a list."
+
+  [metaobjects.app.neon_size_settings.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_size_settings.fields.unit]
+name = "Unit"
+description = "Must be exactly one of: cm, mm, inch, ft"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_size_settings.fields.min_value]
+name = "Minimum Value"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.neon_size_settings.fields.max_value]
+name = "Maximum Value"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.neon_size_settings.fields.price_per_unit]
+name = "Price Per Unit"
+description = "Extra price charged per unit of width when the customer uses the slider (e.g. price per cm/inch)"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.neon_size_settings.fields.height_ratio]
+name = "Height Ratio"
+description = "Height is calculated as Width ÷ this ratio (e.g. 2.6 means a 100cm-wide sign is ~38cm tall). Matches your typical sign proportions."
+type = "number_decimal"
+required = true
+
+[metaobjects.app.neon_size_settings.fields.sort_order]
+name = "Sort Order"
+description = "Controls the order units appear in as tabs on the storefront. Lowest number = leftmost/default (make your cm entry '1' since cm should be the main unit)."
+type = "number_integer"
+
+[metaobjects.app.neon_effect_mode]
+name = "Neon Effect Mode"
+description = "Colour effect options: Single Colour, RGB Colour Changing, Multicoloured Text"
+
+  [metaobjects.app.neon_effect_mode.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.neon_effect_mode.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_effect_mode.fields.mode_key]
+name = "Mode Key"
+description = "Controls the actual behaviour. Must be exactly one of: single, rgb, multicolour"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.neon_effect_mode.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.neon_effect_mode.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.neon_effect_mode.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.infinity_font]
+name = "Infinity Mirror Font"
+description = "Available font styles for Infinity Mirror Letter Signs"
+
+  [metaobjects.app.infinity_font.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_font.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_font.fields.css_font_family]
+name = "CSS Font Family"
+description = "Exact font-family name used for live preview rendering"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_font.fields.font_file]
+name = "Font File (optional)"
+description = "Upload the real font file (.woff2, .ttf, .otf). If uploaded, this overrides CSS Font Family for the live preview. Leave empty to keep using the CSS Font Family fallback."
+type = "file_reference"
+
+[metaobjects.app.infinity_font.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.infinity_size]
+name = "Infinity Mirror Size"
+description = "Available size options with pricing"
+
+  [metaobjects.app.infinity_size.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_size.fields.label]
+name = "Label"
+description = "e.g. 'Medium - 60cm wide'"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_size.fields.width_cm]
+name = "Width (cm)"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.infinity_size.fields.price_decimal]
+name = "Price"
+type = "number_decimal"
+
+[metaobjects.app.infinity_size.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.infinity_colour]
+name = "Infinity Mirror LED Colour"
+description = "LED colour options for Infinity Mirror Letter Signs"
+
+  [metaobjects.app.infinity_colour.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_colour.fields.name]
+name = "Name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_colour.fields.hex_code]
+name = "Hex Code"
+description = "e.g. #FF69B4 - used for live preview glow colour"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_colour.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.infinity_colour.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.infinity_frame_finish]
+name = "Infinity Mirror Frame Finish"
+description = "Black, Gold, Silver, Rose Gold frame finishes"
+
+  [metaobjects.app.infinity_frame_finish.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_frame_finish.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_frame_finish.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.infinity_frame_finish.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.infinity_mounting]
+name = "Infinity Mirror Mounting"
+description = "Wall Mount, Freestanding Base, etc."
+
+  [metaobjects.app.infinity_mounting.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_mounting.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_mounting.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.infinity_mounting.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.infinity_addon]
+name = "Infinity Mirror Add-on"
+description = "Optional add-ons for Infinity Mirror Letter Signs"
+
+  [metaobjects.app.infinity_addon.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.infinity_addon.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.infinity_addon.fields.extra_price_decimal]
+name = "Extra Price"
+type = "number_decimal"
+
+[metaobjects.app.infinity_addon.fields.is_free]
+name = "Is Free"
+type = "boolean"
+
+[metaobjects.app.infinity_addon.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.event_marquee_option]
+name = "Event Marquee Option"
+description = "All configurator options for Event Marquee Letter Signs (Style, Size, Bulb Colour, Mounting, Add-on), distinguished by the 'category' field."
+
+  [metaobjects.app.event_marquee_option.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.event_marquee_option.fields.category]
+name = "Category"
+description = "Must be exactly one of: style, size, colour, mounting, addon"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.event_marquee_option.fields.label]
+name = "Label"
+description = "Display name shown to the customer — used for style, size, mounting, addon, and colour name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.event_marquee_option.fields.hex_code]
+name = "Hex Code"
+description = "Used only when category = colour, e.g. #FFD27A"
+type = "single_line_text_field"
+
+[metaobjects.app.event_marquee_option.fields.height_cm]
+name = "Height (cm)"
+description = "Used only when category = size"
+type = "number_decimal"
+
+[metaobjects.app.event_marquee_option.fields.extra_price_decimal]
+name = "Extra Price"
+description = "Used for style, size, colour, mounting, and addon pricing"
+type = "number_decimal"
+
+[metaobjects.app.event_marquee_option.fields.is_free]
+name = "Is Free"
+description = "Used only when category = addon"
+type = "boolean"
+
+[metaobjects.app.event_marquee_option.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+[metaobjects.app.bundle_option]
+name = "Bundle & Fit-Out Option"
+description = "Base packages and add-ons for the Bulk & Bundle Deals / Business Fit-Outs page, distinguished by the 'category' field."
+
+  [metaobjects.app.bundle_option.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.bundle_option.fields.category]
+name = "Category"
+description = "Must be exactly one of: package, addon"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.bundle_option.fields.label]
+name = "Label"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.bundle_option.fields.description]
+name = "Description"
+description = "Used only when category = package — short description of what's included in this base package"
+type = "multi_line_text_field"
+
+[metaobjects.app.bundle_option.fields.price_decimal]
+name = "Price"
+description = "Base price for a package, or extra price for an add-on"
+type = "number_decimal"
+required = true
+
+[metaobjects.app.bundle_option.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"

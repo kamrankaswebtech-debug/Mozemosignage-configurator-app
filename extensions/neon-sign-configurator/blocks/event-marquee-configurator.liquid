@@ -1,0 +1,142 @@
+{% comment %} Mozemo Signage - Live Event Marquee Letter Signs Configurator {% endcomment %}
+
+{% assign marquee_options = metaobjects["app--414412210177--event_marquee_option"].values %}
+
+<div class="marquee-configurator" id="marquee-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+
+  <div class="marquee-configurator__preview">
+    <div class="marquee-configurator__preview-inner">
+      <span class="marquee-configurator__preview-text" data-preview-text>Your Text</span>
+    </div>
+  </div>
+
+  <div class="marquee-configurator__panel">
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">1. Enter Your Text</label>
+      <input type="text" class="marquee-configurator__text-input" data-text-input maxlength="20" placeholder="Type your text">
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">2. Letter Style</label>
+      <select class="marquee-configurator__select" data-style-select>
+        {% assign style_index = 0 %}
+        {% for item in marquee_options %}
+          {% if item.category.value == "style" %}
+            <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if style_index == 0 %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+            {% assign style_index = style_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">3. Choose Size</label>
+      <select class="marquee-configurator__select" data-size-select>
+        {% assign size_index = 0 %}
+        {% for item in marquee_options %}
+          {% if item.category.value == "size" %}
+            <option value="{{ item.height_cm.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if size_index == 0 %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+            {% assign size_index = size_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">4. Bulb Colour</label>
+      <div class="marquee-configurator__swatches" data-colour-swatches>
+        {% assign colour_index = 0 %}
+        {% for item in marquee_options %}
+          {% if item.category.value == "colour" %}
+            <button
+              type="button"
+              class="marquee-configurator__swatch{% if colour_index == 0 %} is-selected{% endif %}"
+              style="background-color: {{ item.hex_code.value }};"
+              data-colour-hex="{{ item.hex_code.value }}"
+              data-colour-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-colour-name="{{ item.label.value }}"
+              title="{{ item.label.value }}"
+              aria-label="{{ item.label.value }}">
+            </button>
+            {% assign colour_index = colour_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </div>
+      <p class="marquee-configurator__selected-label" data-colour-name-label>
+        {% for item in marquee_options %}
+          {% if item.category.value == "colour" %}{{ item.label.value }}{% break %}{% endif %}
+        {% endfor %}
+      </p>
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">5. Mounting</label>
+      <select class="marquee-configurator__select" data-mounting-select>
+        {% assign mounting_index = 0 %}
+        {% for item in marquee_options %}
+          {% if item.category.value == "mounting" %}
+            <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if mounting_index == 0 %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+            {% assign mounting_index = mounting_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">6. Power Adapter</label>
+      <select class="marquee-configurator__select" data-power-select>
+        {% for item in metaobjects["app--414412210177--power_adapter"].values %}
+          <option value="{{ item.label.value }}" {% if forloop.first %}selected{% endif %}>
+            {{ item.label.value }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="marquee-configurator__field">
+      <label class="marquee-configurator__label">7. Add-ons</label>
+      {% for item in marquee_options %}
+        {% if item.category.value == "addon" %}
+          <label class="marquee-configurator__checkbox-row">
+            <input type="checkbox" data-addon-checkbox data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if item.is_free.value %}checked{% endif %}>
+            <span>{{ item.label.value }}{% if item.is_free.value %} (Free){% endif %}</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="marquee-configurator__price-box">
+      <span class="marquee-configurator__price-label">Total Price</span>
+      <span class="marquee-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <button
+      type="button"
+      class="marquee-configurator__add-to-cart"
+      data-add-to-cart
+      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
+      data-product-id="{{ product.id }}">
+      Add to Cart
+    </button>
+    <p class="marquee-configurator__status" data-add-to-cart-status></p>
+
+  </div>
+</div>
+
+{{ 'event-marquee-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'event-marquee-configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Event Marquee Config",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}
