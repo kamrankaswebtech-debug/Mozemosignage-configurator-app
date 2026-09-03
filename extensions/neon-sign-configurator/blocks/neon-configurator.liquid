@@ -84,7 +84,7 @@
     {% for font in metaobjects["app--414412210177--neon_font"].values %}
       {% if font.font_file.value.url %}
       @font-face {
-        font-family: "moz-font-{{ font.handle }}";
+        font-family: "moz-font-{{ font.system.handle }}";
         src: url("{{ font.font_file.value.url }}");
         font-display: swap;
       }
@@ -97,7 +97,7 @@
       <select class="neon-configurator__select" data-font-select>
         {% for font in metaobjects["app--414412210177--neon_font"].values %}
           {% if font.font_file.value.url %}
-            {% assign font_value = "moz-font-" | append: font.handle %}
+            {% assign font_value = "moz-font-" | append: font.system.handle %}
           {% else %}
             {% assign font_value = font.css_font_family.value %}
           {% endif %}
