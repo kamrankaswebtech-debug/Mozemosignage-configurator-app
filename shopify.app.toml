@@ -2,7 +2,7 @@
 
 client_id = "421dfa31d227abd21a827f2c0dc8743e"
 name = "mozemosignage-app"
-application_url = "https://building-andrews-mime-takes.trycloudflare.com"
+application_url = "https://mozemosignage-configurator-app.onrender.com"
 embedded = true
 
 [build]
@@ -34,10 +34,10 @@ api_version = "2026-10"
 scopes = "read_products,write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,write_products"
 
 [auth]
-redirect_urls = [ "https://building-andrews-mime-takes.trycloudflare.com/api/auth" ]
+redirect_urls = [ "https://mozemosignage-configurator-app.onrender.com/api/auth" ]
 
 [app_proxy]
-url = "https://building-andrews-mime-takes.trycloudflare.com/proxy/neon-pricing"
+url = "https://mozemosignage-configurator-app.onrender.com/proxy/neon-pricing"
 subpath = "neon-pricing"
 prefix = "apps"
 
