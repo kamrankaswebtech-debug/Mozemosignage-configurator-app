@@ -33,7 +33,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">Quick Symbols (optional)</label>
       <div class="sign3d-configurator__symbols" data-symbol-buttons>
-        {% for symbol in metaobjects["app--414412210177--neon_quick_symbol"].values %}
+        {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
           {% if symbol.visibility.value == "neon_only" %}{% continue %}{% endif %}
           <button
             type="button"
@@ -51,7 +51,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">Font</label>
       <select class="sign3d-configurator__select" data-font-select>
-        {% for font in metaobjects["app--414412210177--neon_font"].values %}
+        {% for font in metaobjects["app--418838118401--neon_font"].values %}
           {% if font.visibility.value == "neon_only" %}{% continue %}{% endif %}
           {% if font.font_file.value.url %}
             {% assign font_value = "moz-font-" | append: font.system.handle %}
@@ -64,7 +64,7 @@
     </div>
 
     <style>
-    {% for font in metaobjects["app--414412210177--neon_font"].values %}
+    {% for font in metaobjects["app--418838118401--neon_font"].values %}
       {% if font.font_file.value.url %}
       @font-face {
         font-family: "moz-font-{{ font.system.handle }}";
@@ -78,7 +78,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">2. Illumination Type</label>
       <select class="sign3d-configurator__select" data-illumination-select>
-        {% for item in metaobjects["app--414412210177--illumination_type"].values %}
+        {% for item in metaobjects["app--418838118401--illumination_type"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -92,7 +92,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">3. Choose Size</label>
       <select class="sign3d-configurator__select" data-size-select>
-        {% for item in metaobjects["app--414412210177--sign3d_size"].values %}
+        {% for item in metaobjects["app--418838118401--sign3d_size"].values %}
           <option
             value="{{ item.width_cm.value }}"
             data-price="{{ item.price_decimal.value | default: 0 }}"
@@ -106,7 +106,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">4. Material</label>
       <select class="sign3d-configurator__select" data-material-select>
-        {% for item in metaobjects["app--414412210177--sign3d_material"].values %}
+        {% for item in metaobjects["app--418838118401--sign3d_material"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -120,7 +120,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">5. Acrylic Thickness</label>
       <select class="sign3d-configurator__select" data-thickness-select>
-        {% for item in metaobjects["app--414412210177--acrylic_thickness"].values %}
+        {% for item in metaobjects["app--418838118401--acrylic_thickness"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -134,7 +134,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">6. Front Colour</label>
       <div class="sign3d-configurator__swatches" data-colour-swatches>
-        {% for colour in metaobjects["app--414412210177--sign3d_front_colour"].values %}
+        {% for colour in metaobjects["app--418838118401--sign3d_front_colour"].values %}
           <button
             type="button"
             class="sign3d-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
@@ -148,14 +148,14 @@
         {% endfor %}
       </div>
       <p class="sign3d-configurator__selected-label" data-colour-name-label>
-        {{ metaobjects["app--414412210177--sign3d_front_colour"].values.first.name.value }}
+        {{ metaobjects["app--418838118401--sign3d_front_colour"].values.first.name.value }}
       </p>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">7. Finish</label>
       <select class="sign3d-configurator__select" data-finish-select>
-        {% for item in metaobjects["app--414412210177--sign3d_finish"].values %}
+        {% for item in metaobjects["app--418838118401--sign3d_finish"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -169,7 +169,7 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">8. Mounting</label>
       <select class="sign3d-configurator__select" data-mounting-select>
-        {% for item in metaobjects["app--414412210177--sign3d_mounting"].values %}
+        {% for item in metaobjects["app--418838118401--sign3d_mounting"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -182,7 +182,7 @@
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">9. Add-ons</label>
-      {% for addon in metaobjects["app--414412210177--sign3d_addon"].values %}
+      {% for addon in metaobjects["app--418838118401--sign3d_addon"].values %}
         <label class="sign3d-configurator__checkbox-row">
           <input
             type="checkbox"

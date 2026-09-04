@@ -1,6 +1,6 @@
 {% comment %} Mozemo Signage - Live Neon Sign Configurator {% endcomment %}
 
-{% assign default_bg_url = metaobjects["app--414412210177--neon_background_image"].values.first.image.value | image_url %}
+{% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
 <div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
   <div class="neon-configurator__preview" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
@@ -30,7 +30,7 @@
       </div>
     </div>
 
-    {% assign bg_images = metaobjects["app--414412210177--neon_background_image"].values %}
+    {% assign bg_images = metaobjects["app--418838118401--neon_background_image"].values %}
     {% if bg_images.size > 0 %}
       <div class="neon-configurator__bg-thumbs" data-bg-thumbs>
         {% for bg in bg_images %}
@@ -65,7 +65,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">Quick Symbols (optional)</label>
       <div class="neon-configurator__symbols" data-symbol-buttons>
-        {% for symbol in metaobjects["app--414412210177--neon_quick_symbol"].values %}
+        {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
           <button
             type="button"
             class="neon-configurator__symbol-btn"
@@ -81,7 +81,7 @@
 
     {% comment %} Dynamic @font-face injection for merchant-uploaded font files {% endcomment %}
     <style>
-    {% for font in metaobjects["app--414412210177--neon_font"].values %}
+    {% for font in metaobjects["app--418838118401--neon_font"].values %}
       {% if font.font_file.value.url %}
       @font-face {
         font-family: "moz-font-{{ font.system.handle }}";
@@ -95,7 +95,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">2. Choose Font</label>
       <select class="neon-configurator__select" data-font-select>
-        {% for font in metaobjects["app--414412210177--neon_font"].values %}
+        {% for font in metaobjects["app--418838118401--neon_font"].values %}
           {% if font.font_file.value.url %}
             {% assign font_value = "moz-font-" | append: font.system.handle %}
           {% else %}
@@ -108,7 +108,7 @@
       </select>
     </div>
 
-    {% assign effect_modes = metaobjects["app--414412210177--neon_effect_mode"].values %}
+    {% assign effect_modes = metaobjects["app--418838118401--neon_effect_mode"].values %}
     {% assign has_single_mode = false %}
     {% for mode in effect_modes %}
       {% if mode.mode_key.value == "single" %}
@@ -138,7 +138,7 @@
     <div class="neon-configurator__field" data-colour-field>
       <label class="neon-configurator__label">3. Choose Colour</label>
       <div class="neon-configurator__swatches" data-colour-swatches>
-        {% for colour in metaobjects["app--414412210177--neon_colour"].values %}
+        {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
           <button
             type="button"
             class="neon-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
@@ -152,14 +152,14 @@
         {% endfor %}
       </div>
       <p class="neon-configurator__selected-label" data-colour-name-label>
-        {{ metaobjects["app--414412210177--neon_colour"].values.first.name.value }}
+        {{ metaobjects["app--418838118401--neon_colour"].values.first.name.value }}
       </p>
     </div>
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">4. Choose Size</label>
       <select class="neon-configurator__select" data-size-select>
-        {% for size in metaobjects["app--414412210177--sign_size"].values %}
+        {% for size in metaobjects["app--418838118401--sign_size"].values %}
           <option
             value="{{ size.width_cm.value }}"
             data-price="{{ size.price_decimal.value | default: 0 }}"
@@ -173,7 +173,7 @@
 
     {% assign size_units_count = 0 %}
     {% assign default_unit_entry = nil %}
-    {% for u in metaobjects["app--414412210177--neon_size_settings"].values %}
+    {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
       {% assign size_units_count = size_units_count | plus: 1 %}
       {% if forloop.first %}
         {% assign default_unit_entry = u %}
@@ -184,7 +184,7 @@
 
       {% if size_units_count > 1 %}
       <div class="neon-configurator__unit-tabs" data-unit-tabs>
-        {% for u in metaobjects["app--414412210177--neon_size_settings"].values %}
+        {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
           <button type="button"
             class="neon-configurator__unit-tab{% if forloop.first %} is-selected{% endif %}"
             data-unit-tab
@@ -223,7 +223,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">5. Backboard Style</label>
       <select class="neon-configurator__select" data-backboard-style-select>
-        {% for style in metaobjects["app--414412210177--backboard_style"].values %}
+        {% for style in metaobjects["app--418838118401--backboard_style"].values %}
           <option
             value="{{ style.label.value }}"
             data-price="{{ style.extra_price_decimal.value | default: 0 }}"
@@ -238,7 +238,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">6. Backboard Colour</label>
       <select class="neon-configurator__select" data-backboard-colour-select>
-        {% for colour in metaobjects["app--414412210177--backboard_colour"].values %}
+        {% for colour in metaobjects["app--418838118401--backboard_colour"].values %}
           <option
             value="{{ colour.label.value }}"
             data-price="{{ colour.extra_price_decimal.value | default: 0 }}"
@@ -252,7 +252,7 @@
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">7. Add-ons</label>
-      {% for addon in metaobjects["app--414412210177--signage_addon"].values %}
+      {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
         <label class="neon-configurator__checkbox-row">
           <input
             type="checkbox"
@@ -272,7 +272,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">8. Power Adapter</label>
       <select class="neon-configurator__select" data-power-adapter-select>
-        {% for adapter in metaobjects["app--414412210177--power_adapter"].values %}
+        {% for adapter in metaobjects["app--418838118401--power_adapter"].values %}
           <option {% if forloop.first %}selected{% endif %}>
             {{ adapter.label.value }}
           </option>

@@ -17,7 +17,7 @@
 
     {% comment %} Dynamic @font-face injection for merchant-uploaded font files {% endcomment %}
     <style>
-    {% for item in metaobjects["app--414412210177--infinity_font"].values %}
+    {% for item in metaobjects["app--418838118401--infinity_font"].values %}
       {% if item.font_file.value.url %}
       @font-face {
         font-family: "moz-infinity-font-{{ item.handle }}";
@@ -31,7 +31,7 @@
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">2. Font</label>
       <select class="infinity-configurator__select" data-font-select>
-        {% for item in metaobjects["app--414412210177--infinity_font"].values %}
+        {% for item in metaobjects["app--418838118401--infinity_font"].values %}
           {% if item.font_file.value.url %}
             {% assign font_value = "moz-infinity-font-" | append: item.handle %}
           {% else %}
@@ -49,7 +49,7 @@
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">3. Choose Size</label>
       <select class="infinity-configurator__select" data-size-select>
-        {% for item in metaobjects["app--414412210177--infinity_size"].values %}
+        {% for item in metaobjects["app--418838118401--infinity_size"].values %}
           <option
             value="{{ item.width_cm.value }}"
             data-price="{{ item.price_decimal.value | default: 0 }}"
@@ -63,7 +63,7 @@
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">4. LED Colour</label>
       <div class="infinity-configurator__swatches" data-colour-swatches>
-        {% for colour in metaobjects["app--414412210177--infinity_colour"].values %}
+        {% for colour in metaobjects["app--418838118401--infinity_colour"].values %}
           <button
             type="button"
             class="infinity-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
@@ -77,14 +77,14 @@
         {% endfor %}
       </div>
       <p class="infinity-configurator__selected-label" data-colour-name-label>
-        {{ metaobjects["app--414412210177--infinity_colour"].values.first.name.value }}
+        {{ metaobjects["app--418838118401--infinity_colour"].values.first.name.value }}
       </p>
     </div>
 
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">5. Frame Finish</label>
       <select class="infinity-configurator__select" data-frame-select>
-        {% for item in metaobjects["app--414412210177--infinity_frame_finish"].values %}
+        {% for item in metaobjects["app--418838118401--infinity_frame_finish"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -98,7 +98,7 @@
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">6. Mounting</label>
       <select class="infinity-configurator__select" data-mounting-select>
-        {% for item in metaobjects["app--414412210177--infinity_mounting"].values %}
+        {% for item in metaobjects["app--418838118401--infinity_mounting"].values %}
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
@@ -112,7 +112,7 @@
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">7. Power Adapter</label>
       <select class="infinity-configurator__select" data-power-select>
-        {% for item in metaobjects["app--414412210177--power_adapter"].values %}
+        {% for item in metaobjects["app--418838118401--power_adapter"].values %}
           <option value="{{ item.label.value }}" {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>
@@ -122,7 +122,7 @@
 
     <div class="infinity-configurator__field">
       <label class="infinity-configurator__label">8. Add-ons</label>
-      {% for addon in metaobjects["app--414412210177--infinity_addon"].values %}
+      {% for addon in metaobjects["app--418838118401--infinity_addon"].values %}
         <label class="infinity-configurator__checkbox-row">
           <input
             type="checkbox"

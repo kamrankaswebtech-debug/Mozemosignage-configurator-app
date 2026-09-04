@@ -529,20 +529,48 @@ function initConfigurator(root) {
                 // Step 2: Add that exact-price variant to the cart
                 addToCartBtn.textContent = 'Adding...';
                 const routesRoot = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
+
+                // Mirror the theme's own product-form flow: ask cart/add.js to also render
+                // any cart-items-component sections present on the page, so the theme's cart
+                // drawer/icon can update themselves without a manual page refresh.
+                const cartItemsComponents = document.querySelectorAll('cart-items-component');
+                const sectionIds = [];
+                cartItemsComponents.forEach((el) => {
+                    if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
+                });
+
                 const response = await fetch(routesRoot + 'cart/add.js', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        items: [{ id: parseInt(priceMatchedVariantId, 10), quantity: 1, properties }]
+                        items: [{ id: parseInt(priceMatchedVariantId, 10), quantity: 1, properties }],
+                        sections: sectionIds.join(',')
                     })
                 });
 
                 if (!response.ok) throw new Error('Add to cart failed');
 
+                const addResult = await response.json();
+
                 addToCartBtn.textContent = 'Added ✓';
                 if (addToCartStatus) {
                     addToCartStatus.textContent = 'Added to cart at the correct configured price!';
                 }
+
+                // Tell the theme's own cart icon / cart drawer to update themselves —
+                // same event the theme's native product forms dispatch on a successful add.
+                try {
+                    const themeEvents = await import('@theme/events');
+                    document.dispatchEvent(new themeEvents.CartAddEvent({}, 'neon-configurator', {
+                        source: 'product-form-component',
+                        itemCount: 1,
+                        productId,
+                        sections: addResult.sections
+                    }));
+                } catch (themeEventError) {
+                    console.warn('Neon Configurator: could not notify theme cart UI.', themeEventError);
+                }
+
                 document.dispatchEvent(new CustomEvent('cart:refresh'));
             } catch (error) {
                 console.error('Neon Configurator Add to Cart error:', error);

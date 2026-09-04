@@ -1,6 +1,6 @@
 {% comment %} Mozemo Signage - Live Event Marquee Letter Signs Configurator {% endcomment %}
 
-{% assign marquee_options = metaobjects["app--414412210177--event_marquee_option"].values %}
+{% assign marquee_options = metaobjects["app--418838118401--event_marquee_option"].values %}
 
 <div class="marquee-configurator" id="marquee-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
@@ -92,7 +92,7 @@
     <div class="marquee-configurator__field">
       <label class="marquee-configurator__label">6. Power Adapter</label>
       <select class="marquee-configurator__select" data-power-select>
-        {% for item in metaobjects["app--414412210177--power_adapter"].values %}
+        {% for item in metaobjects["app--418838118401--power_adapter"].values %}
           <option value="{{ item.label.value }}" {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>

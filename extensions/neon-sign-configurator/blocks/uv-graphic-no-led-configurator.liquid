@@ -22,7 +22,7 @@
     <div class="uv-configurator__field">
       <label class="uv-configurator__label">2. Choose Size</label>
       <select class="uv-configurator__select" data-size-select>
-        {% for item in metaobjects["app--414412210177--uv_size"].values %}
+        {% for item in metaobjects["app--418838118401--uv_size"].values %}
           <option value="{{ item.width_cm.value }}" data-price="{{ item.price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>
@@ -33,7 +33,7 @@
     <div class="uv-configurator__field">
       <label class="uv-configurator__label">3. Material</label>
       <select class="uv-configurator__select" data-material-select>
-        {% for item in metaobjects["app--414412210177--uv_material"].values %}
+        {% for item in metaobjects["app--418838118401--uv_material"].values %}
           <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>
@@ -44,7 +44,7 @@
     <div class="uv-configurator__field">
       <label class="uv-configurator__label">4. Finish</label>
       <select class="uv-configurator__select" data-finish-select>
-        {% for item in metaobjects["app--414412210177--uv_finish"].values %}
+        {% for item in metaobjects["app--418838118401--uv_finish"].values %}
           <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>
@@ -54,7 +54,7 @@
 
     <div class="uv-configurator__field">
       <label class="uv-configurator__label">5. Add-ons</label>
-      {% for addon in metaobjects["app--414412210177--uv_addon"].values %}
+      {% for addon in metaobjects["app--418838118401--uv_addon"].values %}
         <label class="uv-configurator__checkbox-row">
           <input type="checkbox" data-addon-checkbox data-price="{{ addon.extra_price_decimal.value | default: 0 }}" {% if addon.is_free.value %}checked{% endif %}>
           <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
