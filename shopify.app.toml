@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "27b557ec369085c3a909fc49ce2d774b"
-name = "mozemosignage-app"
+name = "Mozemo Signage Configurator"
 application_url = "https://mozemosignage-configurator-app.onrender.com"
 embedded = true
 
@@ -19,22 +19,26 @@ api_version = "unstable"
   api_version = "unstable"
 
 [webhooks]
-api_version = "2026-10"
-
-  [[webhooks.subscriptions]]
-  uri = "/webhooks/app/uninstalled"
-  topics = [ "app/uninstalled" ]
+api_version = "2026-07"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,write_products"
+scopes = "write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,read_products,write_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://mozemosignage-configurator-app.onrender.com/api/auth" ]
+redirect_urls = [
+  "https://mozemosignage-configurator-app.onrender.com/api/auth"
+]
 
 [app_proxy]
 url = "https://mozemosignage-configurator-app.onrender.com/proxy/neon-pricing"
