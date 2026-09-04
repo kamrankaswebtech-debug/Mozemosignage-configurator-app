@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "421dfa31d227abd21a827f2c0dc8743e"
+client_id = "27b557ec369085c3a909fc49ce2d774b"
 name = "mozemosignage-app"
 application_url = "https://mozemosignage-configurator-app.onrender.com"
 embedded = true
