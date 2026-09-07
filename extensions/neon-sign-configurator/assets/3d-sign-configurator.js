@@ -20,6 +20,51 @@ if (document.readyState === 'loading') {
 document.addEventListener('shopify:section:load', initAllSign3dConfigurators);
 document.addEventListener('cart:refresh', initAllSign3dConfigurators);
 
+// Shopify can take a brief moment to make a brand-new variant (created via the Admin API)
+// fully available to the storefront cart endpoint. Retrying a couple of times with an
+// increasing delay — only for freshly-created variants — avoids showing a false error.
+async function addItemToCartWithRetry(routesRoot, variantId, properties, sectionIds, maxRetries) {
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(routesRoot + 'cart/add.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: [{ id: parseInt(variantId, 10), quantity: 1, properties }],
+                    sections: sectionIds.join(',')
+                })
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+            lastError = new Error('Add to cart failed with status ' + response.status);
+        } catch (err) {
+            lastError = err;
+        }
+        if (attempt < maxRetries) {
+            const delay = 900 + (attempt * 500);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+    }
+    throw lastError;
+}
+
+// Shows a spinning loader inside the button next to the given text.
+function setButtonLoadingText(button, text) {
+    button.innerHTML = '<span class="sign3d-configurator__spinner"></span><span>' + text + '</span>';
+}
+
+// Shows a status message under the button, then clears it automatically after a few seconds.
+function showTemporaryStatus(statusEl, text, durationMs) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    clearTimeout(statusEl._clearTimeoutId);
+    statusEl._clearTimeoutId = setTimeout(() => {
+        statusEl.textContent = '';
+    }, durationMs);
+}
+
 function initSign3dConfigurator(root) {
     const previewText = root.querySelector('[data-preview-text]');
     const textInput = root.querySelector('[data-text-input]');
@@ -39,6 +84,14 @@ function initSign3dConfigurator(root) {
     const totalPriceEl = root.querySelector('[data-total-price]');
     const addToCartBtn = root.querySelector('[data-add-to-cart]');
     const addToCartStatus = root.querySelector('[data-add-to-cart-status]');
+    const previewStage = root.querySelector('[data-preview-stage]');
+    const previewInner = root.querySelector('[data-preview-inner]');
+    const widthLabel = root.querySelector('[data-width-label]');
+    const heightLabel = root.querySelector('[data-height-label]');
+    const moveBadge = root.querySelector('[data-move-badge]');
+    const alignButtons = root.querySelectorAll('[data-align-btn]');
+    let textOffsetX = 0;
+    let textOffsetY = 0;
 
     let selectedColourHex = swatches.length ? swatches[0].dataset.colourHex : '#ffffff';
     let selectedColourPrice = swatches.length ? parseFloat(swatches[0].dataset.colourPrice) || 0 : 0;
@@ -60,6 +113,64 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewFont() {
         if (fontSelect) previewText.style.fontFamily = fontSelect.value;
+    }
+
+    function updatePreviewTransform() {
+        previewText.style.transform = 'translate(' + textOffsetX + 'px, ' + textOffsetY + 'px)';
+    }
+
+    function updatePreviewScale() {
+        const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
+        const widthCm = parseFloat(sizeOption?.value) || 60;
+        const heightCm = parseFloat(sizeOption?.dataset.height) || Math.round(widthCm / 2.6);
+
+        const fontSize = Math.min(80, Math.max(20, widthCm * 0.4));
+        previewText.style.fontSize = fontSize + 'px';
+
+        if (widthLabel) widthLabel.textContent = widthCm + ' cm';
+        if (heightLabel) heightLabel.textContent = heightCm + ' cm';
+    }
+
+    function enableTextDrag() {
+        if (!previewText || !previewStage) return;
+
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialOffsetX = 0;
+        let initialOffsetY = 0;
+
+        previewText.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            previewText.setPointerCapture(event.pointerId);
+            previewText.classList.add('is-dragging');
+            if (previewInner) previewInner.classList.add('is-selected');
+            if (moveBadge) moveBadge.hidden = false;
+            dragStartX = event.clientX;
+            dragStartY = event.clientY;
+            initialOffsetX = textOffsetX;
+            initialOffsetY = textOffsetY;
+        });
+
+        previewText.addEventListener('pointermove', (event) => {
+            if (!previewText.hasPointerCapture(event.pointerId)) return;
+            textOffsetX = initialOffsetX + event.clientX - dragStartX;
+            textOffsetY = initialOffsetY + event.clientY - dragStartY;
+            updatePreviewTransform();
+        });
+
+        const stopDragging = (event) => {
+            if (previewText.hasPointerCapture(event.pointerId)) previewText.releasePointerCapture(event.pointerId);
+            previewText.classList.remove('is-dragging');
+        };
+
+        previewText.addEventListener('pointerup', stopDragging);
+        previewText.addEventListener('pointercancel', stopDragging);
+
+        document.addEventListener('click', (event) => {
+            if (previewText.contains(event.target)) return;
+            if (previewInner) previewInner.classList.remove('is-selected');
+            if (moveBadge) moveBadge.hidden = true;
+        });
     }
 
     function renderIcons() {
@@ -129,6 +240,18 @@ function initSign3dConfigurator(root) {
         select.addEventListener('change', calculateTotal);
     });
 
+    sizeSelect.addEventListener('change', updatePreviewScale);
+
+    enableTextDrag();
+
+    alignButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            alignButtons.forEach((b) => b.classList.remove('is-selected'));
+            btn.classList.add('is-selected');
+            previewText.style.textAlign = btn.dataset.align;
+        });
+    });
+
     addonCheckboxes.forEach((checkbox) => {
         checkbox.addEventListener('change', calculateTotal);
     });
@@ -161,7 +284,7 @@ function initSign3dConfigurator(root) {
             };
 
             addToCartBtn.disabled = true;
-            addToCartBtn.textContent = 'Syncing price...';
+            setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
             try {
                 const productId = addToCartBtn.dataset.productId;
@@ -178,26 +301,45 @@ function initSign3dConfigurator(root) {
                 if (proxyData.error || !proxyData.variantId) throw new Error(proxyData.error || 'No variant returned');
 
                 const priceMatchedVariantId = proxyData.variantId;
+                const isNewVariant = proxyData.reused === false;
 
-                addToCartBtn.textContent = 'Adding...';
+                setButtonLoadingText(addToCartBtn, 'Adding...');
                 const routesRoot = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
-                const response = await fetch(routesRoot + 'cart/add.js', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        items: [{ id: parseInt(priceMatchedVariantId, 10), quantity: 1, properties }]
-                    })
+
+                const cartItemsComponents = document.querySelectorAll('cart-items-component');
+                const sectionIds = [];
+                cartItemsComponents.forEach((el) => {
+                    if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
                 });
 
-                if (!response.ok) throw new Error('Add to cart failed');
+                const addResult = await addItemToCartWithRetry(
+                    routesRoot,
+                    priceMatchedVariantId,
+                    properties,
+                    sectionIds,
+                    isNewVariant ? 3 : 0
+                );
 
                 addToCartBtn.textContent = 'Added ✓';
-                if (addToCartStatus) addToCartStatus.textContent = 'Added to cart at the correct configured price!';
+                showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);
+
+                try {
+                    const themeEvents = await import('@theme/events');
+                    document.dispatchEvent(new themeEvents.CartAddEvent({}, '3d-sign-configurator', {
+                        source: 'product-form-component',
+                        itemCount: 1,
+                        productId,
+                        sections: addResult.sections
+                    }));
+                } catch (themeEventError) {
+                    console.warn('3D Sign Configurator: could not notify theme cart UI.', themeEventError);
+                }
+
                 document.dispatchEvent(new CustomEvent('cart:refresh'));
             } catch (error) {
                 console.error('3D Sign Configurator Add to Cart error:', error);
                 addToCartBtn.textContent = 'Error - try again';
-                if (addToCartStatus) addToCartStatus.textContent = 'Something went wrong. Please try again.';
+                showTemporaryStatus(addToCartStatus, 'Something went wrong. Please try again.', 5000);
             } finally {
                 setTimeout(() => {
                     addToCartBtn.disabled = false;
@@ -210,5 +352,6 @@ function initSign3dConfigurator(root) {
     updatePreviewText();
     updatePreviewFont();
     updatePreviewColour();
+    updatePreviewScale();
     calculateTotal();
 }

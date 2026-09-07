@@ -316,6 +316,12 @@ name = "Width (cm)"
 type = "number_decimal"
 required = true
 
+[metaobjects.app.sign3d_size.fields.height_cm]
+name = "Height (cm)"
+description = "Approximate height for this size — used to draw dimension lines in the live preview"
+type = "number_decimal"
+required = true
+
 [metaobjects.app.sign3d_size.fields.price_decimal]
 name = "Price"
 type = "number_decimal"

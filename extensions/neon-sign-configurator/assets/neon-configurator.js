@@ -22,6 +22,53 @@ if (document.readyState === 'loading') {
 document.addEventListener('shopify:section:load', initAllNeonConfigurators);
 document.addEventListener('cart:refresh', initAllNeonConfigurators);
 
+// Shopify can take a brief moment to make a brand-new variant (created via the Admin API)
+// fully available to the storefront cart endpoint. Retrying a couple of times with a short
+// delay — only for freshly-created variants — avoids showing the customer a false error.
+async function addItemToCartWithRetry(routesRoot, variantId, properties, sectionIds, maxRetries) {
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(routesRoot + 'cart/add.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: [{ id: parseInt(variantId, 10), quantity: 1, properties }],
+                    sections: sectionIds.join(',')
+                })
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+            lastError = new Error('Add to cart failed with status ' + response.status);
+        } catch (err) {
+            lastError = err;
+        }
+        if (attempt < maxRetries) {
+            // Wait a bit longer each retry (900ms, then 1400ms, then 1900ms) —
+            // a brand-new variant needs a moment to fully propagate to the storefront cart endpoint.
+            const delay = 900 + (attempt * 500);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+    }
+    throw lastError;
+}
+
+// Shows a spinning loader inside the button next to the given text.
+function setButtonLoadingText(button, text) {
+    button.innerHTML = '<span class="neon-configurator__spinner"></span><span>' + text + '</span>';
+}
+
+// Shows a status message under the button, then clears it automatically after a few seconds.
+function showTemporaryStatus(statusEl, text, durationMs) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    clearTimeout(statusEl._clearTimeoutId);
+    statusEl._clearTimeoutId = setTimeout(() => {
+        statusEl.textContent = '';
+    }, durationMs);
+}
+
 function initConfigurator(root) {
     const previewText = root.querySelector('[data-preview-text]');
     const textInput = root.querySelector('[data-text-input]');
@@ -503,7 +550,7 @@ function initConfigurator(root) {
                 : 'None';
 
             addToCartBtn.disabled = true;
-            addToCartBtn.textContent = 'Syncing price...';
+            setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
             try {
                 const productId = addToCartBtn.dataset.productId;
@@ -525,9 +572,10 @@ function initConfigurator(root) {
                 }
 
                 const priceMatchedVariantId = proxyData.variantId;
+                const isNewVariant = proxyData.reused === false;
 
                 // Step 2: Add that exact-price variant to the cart
-                addToCartBtn.textContent = 'Adding...';
+                setButtonLoadingText(addToCartBtn, 'Adding...');
                 const routesRoot = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
 
                 // Mirror the theme's own product-form flow: ask cart/add.js to also render
@@ -539,23 +587,18 @@ function initConfigurator(root) {
                     if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
                 });
 
-                const response = await fetch(routesRoot + 'cart/add.js', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        items: [{ id: parseInt(priceMatchedVariantId, 10), quantity: 1, properties }],
-                        sections: sectionIds.join(',')
-                    })
-                });
-
-                if (!response.ok) throw new Error('Add to cart failed');
-
-                const addResult = await response.json();
+                // A brand-new variant can take a moment to become available to this endpoint —
+                // retry a couple of times automatically before treating it as a real failure.
+                const addResult = await addItemToCartWithRetry(
+                    routesRoot,
+                    priceMatchedVariantId,
+                    properties,
+                    sectionIds,
+                    isNewVariant ? 3 : 0
+                );
 
                 addToCartBtn.textContent = 'Added ✓';
-                if (addToCartStatus) {
-                    addToCartStatus.textContent = 'Added to cart at the correct configured price!';
-                }
+                showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);
 
                 // Tell the theme's own cart icon / cart drawer to update themselves —
                 // same event the theme's native product forms dispatch on a successful add.
@@ -575,9 +618,7 @@ function initConfigurator(root) {
             } catch (error) {
                 console.error('Neon Configurator Add to Cart error:', error);
                 addToCartBtn.textContent = 'Error - try again';
-                if (addToCartStatus) {
-                    addToCartStatus.textContent = 'Something went wrong. Please try again.';
-                }
+                showTemporaryStatus(addToCartStatus, 'Something went wrong. Please try again.', 5000);
             } finally {
                 setTimeout(() => {
                     addToCartBtn.disabled = false;

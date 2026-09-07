@@ -519,6 +519,30 @@
     cursor: not-allowed;
 }
 
+.neon-configurator__add-to-cart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.neon-configurator__spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: neon-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes neon-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .neon-configurator__status {
     font-size: 12px;
     color: #b8b8c4;
