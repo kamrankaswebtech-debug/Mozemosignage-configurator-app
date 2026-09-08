@@ -20,7 +20,7 @@
     {% for item in metaobjects["app--418838118401--infinity_font"].values %}
       {% if item.font_file.value.url %}
       @font-face {
-        font-family: "moz-infinity-font-{{ item.handle }}";
+        font-family: "moz-infinity-font-{{ item.system.handle }}";
         src: url("{{ item.font_file.value.url }}");
         font-display: swap;
       }
@@ -33,7 +33,7 @@
       <select class="infinity-configurator__select" data-font-select>
         {% for item in metaobjects["app--418838118401--infinity_font"].values %}
           {% if item.font_file.value.url %}
-            {% assign font_value = "moz-infinity-font-" | append: item.handle %}
+            {% assign font_value = "moz-infinity-font-" | append: item.system.handle %}
           {% else %}
             {% assign font_value = item.css_font_family.value %}
           {% endif %}

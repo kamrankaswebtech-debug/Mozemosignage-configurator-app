@@ -94,8 +94,8 @@ export default function AddonsPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Addons">
-            <s-section heading="Add New Addon">
+        <s-page heading="Frame Finishes">
+            <s-section heading="Add New Frame Finishes">
                 <s-link href="/app/infinity-mirror">← Back to Infinity Mirror</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />

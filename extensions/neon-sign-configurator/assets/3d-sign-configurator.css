@@ -82,6 +82,42 @@
     margin-top: 2px;
 }
 
+.sign3d-configurator__toolbar {
+    position: absolute;
+    bottom: 44px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    z-index: 2;
+}
+
+.sign3d-configurator__toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(8, 8, 26, 0.85);
+    border: 1px solid #2c2c38;
+    color: #00d4ff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.sign3d-configurator__toolbar-btn:hover {
+    border-color: #00d4ff;
+}
+
+.sign3d-configurator__toolbar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .sign3d-configurator__preview-stage {
     position: relative;
     display: flex;
@@ -94,17 +130,79 @@
 
 .sign3d-configurator__preview-inner {
     position: relative;
-    display: inline-flex;
+    width: 100%;
+    display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px dashed transparent;
-    border-radius: 6px;
-    padding: 6px 10px;
-    transition: border-color 0.15s ease;
 }
 
-.sign3d-configurator__preview-inner.is-selected {
-    border-color: rgba(0, 212, 255, 0.6);
+.sign3d-configurator__text-flex {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 0;
+}
+
+.sign3d-configurator__letter {
+    display: inline-block;
+    position: relative;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.sign3d-configurator__letter.is-selected {
+    outline: 1px dashed rgba(0, 212, 255, 0.5);
+    outline-offset: 3px;
+}
+
+.sign3d-configurator__selection-box {
+    position: absolute;
+    border: 2px dashed #00d4ff;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.sign3d-configurator__resize-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #00d4ff;
+    border: 2px solid #08081a;
+    border-radius: 3px;
+    pointer-events: auto;
+    z-index: 4;
+}
+
+.sign3d-configurator__resize-handle[data-resize-handle="tl"] {
+    top: -6px;
+    left: -6px;
+    cursor: nwse-resize;
+}
+
+.sign3d-configurator__resize-handle[data-resize-handle="tr"] {
+    top: -6px;
+    right: -6px;
+    cursor: nesw-resize;
+}
+
+.sign3d-configurator__resize-handle[data-resize-handle="bl"] {
+    bottom: -6px;
+    left: -6px;
+    cursor: nesw-resize;
+}
+
+.sign3d-configurator__resize-handle[data-resize-handle="br"] {
+    bottom: -6px;
+    right: -6px;
+    cursor: nwse-resize;
+}
+
+.sign3d-configurator__selection-box[hidden] {
+    display: none;
 }
 
 .sign3d-configurator__move-badge {
@@ -124,7 +222,18 @@
     white-space: nowrap;
 }
 
-.sign3d-configurator__move-badge[hidden] {
+.sign3d-configurator__select-all-btn {
+    background: none;
+    border: 1px solid #2c2c38;
+    color: #7a7a88;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.sign3d-configurator__select-all-btn[hidden] {
     display: none;
 }
 
@@ -226,24 +335,14 @@
     color: #00d4ff;
 }
 
-.sign3d-configurator__preview-text {
-    position: relative;
-    display: inline-block;
+.sign3d-configurator__text-flex {
     font-size: 44px;
     font-weight: 800;
     letter-spacing: 0.01em;
     color: #ffffff;
-    text-align: center;
     word-break: break-word;
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5), 4px 4px 8px rgba(0, 0, 0, 0.35);
-    cursor: grab;
-    user-select: none;
-    touch-action: none;
     transition: color 0.25s ease;
-}
-
-.sign3d-configurator__preview-text.is-dragging {
-    cursor: grabbing;
 }
 
 .sign3d-configurator__panel {

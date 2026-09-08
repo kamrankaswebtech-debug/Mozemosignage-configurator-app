@@ -88,18 +88,333 @@ function initSign3dConfigurator(root) {
     const previewInner = root.querySelector('[data-preview-inner]');
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
-    const moveBadge = root.querySelector('[data-move-badge]');
+    const textFlex = root.querySelector('[data-text-flex]');
+    const selectionBox = root.querySelector('[data-selection-box]');
     const alignButtons = root.querySelectorAll('[data-align-btn]');
-    let textOffsetX = 0;
-    let textOffsetY = 0;
+    const selectAllBtn = root.querySelector('[data-select-all-btn]');
+    const undoBtn = root.querySelector('[data-undo-btn]');
+    const redoBtn = root.querySelector('[data-redo-btn]');
+    const resetColourBtn = root.querySelector('[data-reset-colour-btn]');
+    const resetScaleSizeBtn = root.querySelector('[data-reset-scale-size-btn]');
+    const resetFontBtn = root.querySelector('[data-reset-font-btn]');
+    let historyStack = [];
+    let historyIndex = -1;
+    let groupOffsetX = 0;
+    let groupOffsetY = 0;
+    let letterOffsets = [];
+    let letterScales = [];
+    let groupScale = 1;
+    let baseFontSize = 44;
+    let selectedLetterIndex = null;
 
     let selectedColourHex = swatches.length ? swatches[0].dataset.colourHex : '#ffffff';
     let selectedColourPrice = swatches.length ? parseFloat(swatches[0].dataset.colourPrice) || 0 : 0;
     let currentTotal = 0;
 
+    function applyLetterTransform(span, i) {
+        const off = letterOffsets[i] || { x: 0, y: 0 };
+        const scale = letterScales[i] || 1;
+        span.style.transform = 'translate(' + (groupOffsetX + off.x) + 'px, ' + (groupOffsetY + off.y) + 'px) scale(' + scale + ')';
+    }
+
+    function attachResizeHandles() {
+        if (!selectionBox) return;
+        const handles = selectionBox.querySelectorAll('[data-resize-handle]');
+        handles.forEach((handle) => {
+            handle.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handle.setPointerCapture(event.pointerId);
+
+                const boxRect = selectionBox.getBoundingClientRect();
+                const centerX = boxRect.left + boxRect.width / 2;
+                const centerY = boxRect.top + boxRect.height / 2;
+                const startDist = Math.hypot(event.clientX - centerX, event.clientY - centerY) || 1;
+                const startScale = selectedLetterIndex !== null ? (letterScales[selectedLetterIndex] || 1) : groupScale;
+
+                const onMove = (moveEvent) => {
+                    const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY) || 1;
+                    const factor = dist / startDist;
+                    const newScale = Math.min(3, Math.max(0.3, startScale * factor));
+                    resizeMoved = true;
+
+                    if (selectedLetterIndex !== null) {
+                        letterScales[selectedLetterIndex] = newScale;
+                        const span = textFlex.querySelector('[data-letter-index="' + selectedLetterIndex + '"]');
+                        applyLetterTransform(span, selectedLetterIndex);
+                        showSelectionBoxAround(span);
+                    } else {
+                        groupScale = newScale;
+                        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+                        showSelectionBoxAround(textFlex);
+                    }
+                };
+
+                let resizeMoved = false;
+
+                const onUp = (upEvent) => {
+                    handle.releasePointerCapture(upEvent.pointerId);
+                    handle.removeEventListener('pointermove', onMove);
+                    handle.removeEventListener('pointerup', onUp);
+                    if (resizeMoved) pushHistory();
+                };
+
+                handle.addEventListener('pointermove', onMove);
+                handle.addEventListener('pointerup', onUp);
+            });
+        });
+    }
+
+    function refreshAllLetterTransforms() {
+        if (!textFlex) return;
+        textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
+            applyLetterTransform(span, Number(span.dataset.letterIndex));
+        });
+    }
+
+    function hideSelectionBox() {
+        if (selectionBox) selectionBox.hidden = true;
+        if (selectAllBtn) selectAllBtn.hidden = true;
+        if (textFlex) {
+            textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((s) => s.classList.remove('is-selected'));
+        }
+    }
+
+    function showSelectionBoxAround(el) {
+        if (!selectionBox || !previewStage || !el) return;
+        const stageRect = previewStage.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        selectionBox.style.left = (elRect.left - stageRect.left - 6) + 'px';
+        selectionBox.style.top = (elRect.top - stageRect.top - 6) + 'px';
+        selectionBox.style.width = (elRect.width + 12) + 'px';
+        selectionBox.style.height = (elRect.height + 12) + 'px';
+        selectionBox.hidden = false;
+    }
+
+    function selectLetter(index) {
+        selectedLetterIndex = index;
+        textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((s) => {
+            s.classList.toggle('is-selected', Number(s.dataset.letterIndex) === index);
+        });
+        const target = textFlex.querySelector('[data-letter-index="' + index + '"]');
+        showSelectionBoxAround(target);
+        if (selectAllBtn) selectAllBtn.hidden = false;
+    }
+
+    function selectGroup() {
+        selectedLetterIndex = null;
+        hideSelectionBox();
+        showSelectionBoxAround(textFlex);
+    }
+
+    function attachLetterDrag(span, i) {
+        let startX = 0;
+        let startY = 0;
+        let startOffX = 0;
+        let startOffY = 0;
+        let moved = false;
+        let draggingWholeGroup = false;
+
+        span.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            span.setPointerCapture(event.pointerId);
+            moved = false;
+            draggingWholeGroup = selectedLetterIndex !== i;
+            startX = event.clientX;
+            startY = event.clientY;
+            if (draggingWholeGroup) {
+                startOffX = groupOffsetX;
+                startOffY = groupOffsetY;
+            } else {
+                const off = letterOffsets[i] || { x: 0, y: 0 };
+                startOffX = off.x;
+                startOffY = off.y;
+            }
+        });
+
+        span.addEventListener('pointermove', (event) => {
+            if (!span.hasPointerCapture(event.pointerId)) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+
+            if (draggingWholeGroup) {
+                groupOffsetX = startOffX + dx;
+                groupOffsetY = startOffY + dy;
+                refreshAllLetterTransforms();
+                showSelectionBoxAround(textFlex);
+            } else {
+                letterOffsets[i] = { x: startOffX + dx, y: startOffY + dy };
+                applyLetterTransform(span, i);
+                showSelectionBoxAround(span);
+            }
+        });
+
+        span.addEventListener('pointerup', (event) => {
+            if (span.hasPointerCapture(event.pointerId)) span.releasePointerCapture(event.pointerId);
+            if (!moved) {
+                if (selectedLetterIndex === i) {
+                    selectGroup();
+                } else {
+                    selectLetter(i);
+                }
+            } else {
+                pushHistory();
+            }
+        });
+    }
+
+    function rebuildLetterDOM(value) {
+        if (!textFlex) return;
+        textFlex.innerHTML = '';
+        value.split('').forEach((ch, i) => {
+            const span = document.createElement('span');
+            span.className = 'sign3d-configurator__letter';
+            span.textContent = ch === ' ' ? '\u00A0' : ch;
+            span.dataset.letterIndex = i;
+            applyLetterTransform(span, i);
+            attachLetterDrag(span, i);
+            textFlex.appendChild(span);
+        });
+
+        selectGroup();
+    }
+
+    function renderLetters() {
+        if (!textFlex) return;
+        const value = textInput.value.trim() || 'Your Brand';
+
+        if (letterOffsets.length !== value.length) {
+            letterOffsets = value.split('').map(() => ({ x: 0, y: 0 }));
+            letterScales = value.split('').map(() => 1);
+            selectedLetterIndex = null;
+        }
+
+        rebuildLetterDOM(value);
+    }
+
+    // ---- Undo / Redo + Reset (Colour, Scale & Size, Font) ----
+    function captureState() {
+        const selectedAlignBtn = root.querySelector('[data-align-btn].is-selected');
+        return {
+            text: textInput.value,
+            font: fontSelect ? fontSelect.value : '',
+            colourHex: selectedColourHex,
+            colourPrice: selectedColourPrice,
+            colourName: colourNameLabel ? colourNameLabel.textContent : '',
+            symbols: selectedSymbols.map((s) => ({ url: s.url, label: s.label })),
+            align: selectedAlignBtn ? selectedAlignBtn.dataset.align : 'center',
+            letterOffsets: letterOffsets.map((o) => ({ x: o.x, y: o.y })),
+            letterScales: letterScales.slice(),
+            groupOffsetX,
+            groupOffsetY,
+            groupScale
+        };
+    }
+
+    function pushHistory() {
+        const snapshot = captureState();
+        if (historyIndex >= 0 && JSON.stringify(historyStack[historyIndex]) === JSON.stringify(snapshot)) return;
+        historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(snapshot);
+        historyIndex = historyStack.length - 1;
+        updateUndoRedoButtons();
+    }
+
+    function applyState(state) {
+        textInput.value = state.text;
+
+        letterOffsets = state.letterOffsets.map((o) => ({ x: o.x, y: o.y }));
+        letterScales = state.letterScales.slice();
+        groupOffsetX = state.groupOffsetX;
+        groupOffsetY = state.groupOffsetY;
+        groupScale = state.groupScale;
+
+        if (fontSelect && state.font) {
+            fontSelect.value = state.font;
+            updatePreviewFont();
+        }
+
+        selectedColourHex = state.colourHex;
+        selectedColourPrice = state.colourPrice;
+        swatches.forEach((swatch) => {
+            swatch.classList.toggle('is-selected', swatch.dataset.colourHex === state.colourHex);
+        });
+        if (colourNameLabel) colourNameLabel.textContent = state.colourName;
+        updatePreviewColour();
+
+        selectedSymbols = state.symbols.map((s) => ({ url: s.url, label: s.label }));
+        symbolButtons.forEach((btn) => {
+            btn.classList.toggle('is-selected', selectedSymbols.some((s) => s.url === btn.dataset.symbolUrl));
+        });
+        renderIcons();
+
+        alignButtons.forEach((btn) => {
+            btn.classList.toggle('is-selected', btn.dataset.align === state.align);
+        });
+        if (textFlex) textFlex.style.justifyContent = ALIGN_MAP[state.align] || 'center';
+
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+        const value = state.text.trim() || 'Your Brand';
+        rebuildLetterDOM(value);
+
+        calculateTotal();
+    }
+
+    function updateUndoRedoButtons() {
+        if (undoBtn) undoBtn.disabled = historyIndex <= 0;
+        if (redoBtn) redoBtn.disabled = historyIndex >= historyStack.length - 1;
+    }
+
+    function undo() {
+        if (historyIndex <= 0) return;
+        historyIndex -= 1;
+        applyState(historyStack[historyIndex]);
+        updateUndoRedoButtons();
+    }
+
+    function redo() {
+        if (historyIndex >= historyStack.length - 1) return;
+        historyIndex += 1;
+        applyState(historyStack[historyIndex]);
+        updateUndoRedoButtons();
+    }
+
+    function resetColourToDefault() {
+        if (!swatches.length) return;
+        const defaultSwatch = swatches[0];
+        swatches.forEach((s) => s.classList.remove('is-selected'));
+        defaultSwatch.classList.add('is-selected');
+        selectedColourHex = defaultSwatch.dataset.colourHex;
+        selectedColourPrice = parseFloat(defaultSwatch.dataset.colourPrice) || 0;
+        if (colourNameLabel) colourNameLabel.textContent = defaultSwatch.dataset.colourName;
+        updatePreviewColour();
+        calculateTotal();
+        pushHistory();
+    }
+
+    function resetFontToDefault() {
+        if (!fontSelect || !fontSelect.options.length) return;
+        fontSelect.selectedIndex = 0;
+        updatePreviewFont();
+        pushHistory();
+    }
+
+    function resetScaleAndSizeToDefault() {
+        groupOffsetX = 0;
+        groupOffsetY = 0;
+        groupScale = 1;
+        letterOffsets = letterOffsets.map(() => ({ x: 0, y: 0 }));
+        letterScales = letterScales.map(() => 1);
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+        refreshAllLetterTransforms();
+        selectGroup();
+        pushHistory();
+    }
+
     function updatePreviewText() {
-        const value = textInput.value.trim();
-        previewText.textContent = value.length ? value : 'Your Brand';
+        renderLetters();
     }
 
     function updatePreviewColour() {
@@ -112,11 +427,7 @@ function initSign3dConfigurator(root) {
     }
 
     function updatePreviewFont() {
-        if (fontSelect) previewText.style.fontFamily = fontSelect.value;
-    }
-
-    function updatePreviewTransform() {
-        previewText.style.transform = 'translate(' + textOffsetX + 'px, ' + textOffsetY + 'px)';
+        if (fontSelect && textFlex) textFlex.style.fontFamily = fontSelect.value;
     }
 
     function updatePreviewScale() {
@@ -124,54 +435,26 @@ function initSign3dConfigurator(root) {
         const widthCm = parseFloat(sizeOption?.value) || 60;
         const heightCm = parseFloat(sizeOption?.dataset.height) || Math.round(widthCm / 2.6);
 
-        const fontSize = Math.min(80, Math.max(20, widthCm * 0.4));
-        previewText.style.fontSize = fontSize + 'px';
+        baseFontSize = Math.min(80, Math.max(20, widthCm * 0.4));
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
 
         if (widthLabel) widthLabel.textContent = widthCm + ' cm';
         if (heightLabel) heightLabel.textContent = heightCm + ' cm';
     }
 
-    function enableTextDrag() {
-        if (!previewText || !previewStage) return;
-
-        let dragStartX = 0;
-        let dragStartY = 0;
-        let initialOffsetX = 0;
-        let initialOffsetY = 0;
-
-        previewText.addEventListener('pointerdown', (event) => {
-            event.preventDefault();
-            previewText.setPointerCapture(event.pointerId);
-            previewText.classList.add('is-dragging');
-            if (previewInner) previewInner.classList.add('is-selected');
-            if (moveBadge) moveBadge.hidden = false;
-            dragStartX = event.clientX;
-            dragStartY = event.clientY;
-            initialOffsetX = textOffsetX;
-            initialOffsetY = textOffsetY;
-        });
-
-        previewText.addEventListener('pointermove', (event) => {
-            if (!previewText.hasPointerCapture(event.pointerId)) return;
-            textOffsetX = initialOffsetX + event.clientX - dragStartX;
-            textOffsetY = initialOffsetY + event.clientY - dragStartY;
-            updatePreviewTransform();
-        });
-
-        const stopDragging = (event) => {
-            if (previewText.hasPointerCapture(event.pointerId)) previewText.releasePointerCapture(event.pointerId);
-            previewText.classList.remove('is-dragging');
-        };
-
-        previewText.addEventListener('pointerup', stopDragging);
-        previewText.addEventListener('pointercancel', stopDragging);
-
-        document.addEventListener('click', (event) => {
-            if (previewText.contains(event.target)) return;
-            if (previewInner) previewInner.classList.remove('is-selected');
-            if (moveBadge) moveBadge.hidden = true;
+    if (previewInner) {
+        previewInner.addEventListener('pointerdown', (event) => {
+            if (event.target === previewInner || event.target === textFlex) {
+                selectGroup();
+            }
         });
     }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => selectGroup());
+    }
+
+    attachResizeHandles();
 
     function renderIcons() {
         if (!iconsContainer) return;
@@ -202,10 +485,20 @@ function initSign3dConfigurator(root) {
         currentTotal = total;
     }
 
-    textInput.addEventListener('input', updatePreviewText);
+    let textHistoryTimer = null;
+    textInput.addEventListener('input', () => {
+        updatePreviewText();
+        clearTimeout(textHistoryTimer);
+        textHistoryTimer = setTimeout(() => {
+            pushHistory();
+        }, 600);
+    });
 
     if (fontSelect) {
-        fontSelect.addEventListener('change', updatePreviewFont);
+        fontSelect.addEventListener('change', () => {
+            updatePreviewFont();
+            pushHistory();
+        });
     }
 
     symbolButtons.forEach((btn) => {
@@ -221,6 +514,7 @@ function initSign3dConfigurator(root) {
                 btn.classList.add('is-selected');
             }
             renderIcons();
+            pushHistory();
         });
     });
 
@@ -233,6 +527,7 @@ function initSign3dConfigurator(root) {
             colourNameLabel.textContent = swatch.dataset.colourName;
             updatePreviewColour();
             calculateTotal();
+            pushHistory();
         });
     });
 
@@ -242,13 +537,13 @@ function initSign3dConfigurator(root) {
 
     sizeSelect.addEventListener('change', updatePreviewScale);
 
-    enableTextDrag();
-
+    const ALIGN_MAP = { left: 'flex-start', center: 'center', right: 'flex-end' };
     alignButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
             alignButtons.forEach((b) => b.classList.remove('is-selected'));
             btn.classList.add('is-selected');
-            previewText.style.textAlign = btn.dataset.align;
+            if (textFlex) textFlex.style.justifyContent = ALIGN_MAP[btn.dataset.align] || 'center';
+            pushHistory();
         });
     });
 
@@ -349,9 +644,17 @@ function initSign3dConfigurator(root) {
         });
     }
 
+    if (undoBtn) undoBtn.addEventListener('click', undo);
+    if (redoBtn) redoBtn.addEventListener('click', redo);
+    if (resetColourBtn) resetColourBtn.addEventListener('click', resetColourToDefault);
+    if (resetScaleSizeBtn) resetScaleSizeBtn.addEventListener('click', resetScaleAndSizeToDefault);
+    if (resetFontBtn) resetFontBtn.addEventListener('click', resetFontToDefault);
+
     updatePreviewText();
     updatePreviewFont();
     updatePreviewColour();
     updatePreviewScale();
     calculateTotal();
+    pushHistory();
+    updateUndoRedoButtons();
 }

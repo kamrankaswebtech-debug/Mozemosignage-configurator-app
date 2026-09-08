@@ -1,6 +1,7 @@
 .uv-configurator {
     display: grid;
     grid-template-columns: 1.2fr 1fr;
+    align-items: start;
     gap: 32px;
     background: #0a0a0f;
     border-radius: 16px;
@@ -12,6 +13,9 @@
     background: #16161f;
     border-radius: 12px;
     min-height: 320px;
+    max-height: calc(100vh - 40px);
+    position: sticky;
+    top: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -153,6 +157,30 @@
 .uv-configurator__add-to-cart:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.uv-configurator__add-to-cart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.uv-configurator__spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: uv-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes uv-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .uv-configurator__status {

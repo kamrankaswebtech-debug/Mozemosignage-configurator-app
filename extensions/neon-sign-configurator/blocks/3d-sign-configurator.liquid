@@ -9,11 +9,18 @@
     </div>
     <div class="sign3d-configurator__preview-stage" data-preview-stage>
       <div class="sign3d-configurator__preview-inner" data-preview-inner>
-        <div class="sign3d-configurator__move-badge" data-move-badge hidden>
-          <span class="sign3d-configurator__move-icon">✥</span> MOVE
-        </div>
-        <span class="sign3d-configurator__preview-text" data-preview-text>Your Brand</span>
+        <div class="sign3d-configurator__text-flex" data-text-flex data-preview-text></div>
         <span class="sign3d-configurator__preview-icons" data-preview-icons></span>
+        <div class="sign3d-configurator__selection-box" data-selection-box hidden>
+          <div class="sign3d-configurator__move-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>
+            MOVE
+          </div>
+          <span class="sign3d-configurator__resize-handle" data-resize-handle="tl"></span>
+          <span class="sign3d-configurator__resize-handle" data-resize-handle="tr"></span>
+          <span class="sign3d-configurator__resize-handle" data-resize-handle="bl"></span>
+          <span class="sign3d-configurator__resize-handle" data-resize-handle="br"></span>
+        </div>
       </div>
       <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--width">
         <span class="sign3d-configurator__dim-label" data-width-label>0 cm</span>
@@ -21,6 +28,28 @@
       <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--height">
         <span class="sign3d-configurator__dim-label" data-height-label>0 cm</span>
       </div>
+    </div>
+    <div class="sign3d-configurator__toolbar" data-configurator-toolbar>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-undo-btn title="Undo" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-6.7L3 9"/></svg>
+        Undo
+      </button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-redo-btn title="Redo" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-6.7L21 9"/></svg>
+        Redo
+      </button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-colour-btn title="Reset Colour">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/></svg>
+        Reset Colour
+      </button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-scale-size-btn title="Reset Scale &amp; Size">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/></svg>
+        Reset Scale &amp; Size
+      </button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-font-btn title="Reset Font">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/></svg>
+        Reset Font
+      </button>
     </div>
     <div class="sign3d-configurator__preview-footer">
       <div class="sign3d-configurator__preview-footer-item">
@@ -49,6 +78,7 @@
         <button type="button" class="sign3d-configurator__align-btn" data-align-btn data-align="right" aria-label="Align right">
           <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M0 1h16M6 6h10M3 11h13" stroke="currentColor" stroke-width="1.5"/></svg>
         </button>
+        <button type="button" class="sign3d-configurator__select-all-btn" data-select-all-btn hidden>Select All</button>
       </div>
     </div>
 
