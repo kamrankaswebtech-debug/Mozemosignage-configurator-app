@@ -14,8 +14,18 @@
     </div>
     <div class="neon-configurator__preview-stage" data-preview-stage>
       <div class="neon-configurator__preview-inner" data-preview-inner>
-        <span class="neon-configurator__preview-text" data-preview-text>Your Text</span>
+        <div class="neon-configurator__text-flex" data-text-flex></div>
         <span class="neon-configurator__preview-icons" data-preview-icons></span>
+        <div class="neon-configurator__selection-box" data-selection-box hidden>
+          <div class="neon-configurator__move-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>
+            MOVE
+          </div>
+          <span class="neon-configurator__resize-handle" data-resize-handle="tl"></span>
+          <span class="neon-configurator__resize-handle" data-resize-handle="tr"></span>
+          <span class="neon-configurator__resize-handle" data-resize-handle="bl"></span>
+          <span class="neon-configurator__resize-handle" data-resize-handle="br"></span>
+        </div>
       </div>
       <div class="neon-configurator__dim-line neon-configurator__dim-line--width">
         <span class="neon-configurator__dim-label" data-width-label>0 cm</span>

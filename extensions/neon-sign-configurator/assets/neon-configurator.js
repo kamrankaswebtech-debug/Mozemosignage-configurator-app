@@ -70,7 +70,7 @@ function showTemporaryStatus(statusEl, text, durationMs) {
 }
 
 function initConfigurator(root) {
-    const previewText = root.querySelector('[data-preview-text]');
+    const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
     const swatches = root.querySelectorAll('[data-colour-swatches] .neon-configurator__swatch');
@@ -113,9 +113,16 @@ function initConfigurator(root) {
     const powerAdapterSelect = root.querySelector('[data-power-adapter-select]');
     const addToCartBtn = root.querySelector('[data-add-to-cart]');
     const addToCartStatus = root.querySelector('[data-add-to-cart-status]');
-    let textOffsetX = 0;
-    let textOffsetY = 0;
     let textRotation = 0;
+
+    const selectionBox = root.querySelector('[data-selection-box]');
+    let groupOffsetX = 0;
+    let groupOffsetY = 0;
+    let letterOffsets = [];
+    let letterScales = [];
+    let groupScale = 1;
+    let baseFontSize = 48;
+    let selectedLetterIndex = null;
 
     const letterPopup = root.querySelector('[data-letter-popup]');
     const letterPopupTitle = root.querySelector('[data-letter-popup-title]');
@@ -169,85 +176,210 @@ function initConfigurator(root) {
         closeLetterPopup();
     });
 
-    function renderMulticolourText() {
-        previewText.innerHTML = '';
-        const value = textInput.value.trim() || 'Your Text';
-        const hexList = swatches.length ? Array.from(swatches).map((s) => s.dataset.colourHex) : ['#ffffff'];
-        value.split('').forEach((ch, i) => {
-            if (!letterColours[i]) letterColours[i] = hexList[0];
-            const span = document.createElement('span');
-            span.textContent = ch;
-            span.style.color = letterColours[i];
-            span.addEventListener('click', (event) => {
-                event.stopPropagation();
-                openLetterPopup(i, span, ch);
-            });
-            previewText.appendChild(span);
+    function applyLetterTransform(span, i) {
+        const off = letterOffsets[i] || { x: 0, y: 0 };
+        const scale = letterScales[i] || 1;
+        span.style.transform = 'translate(' + (groupOffsetX + off.x) + 'px, ' + (groupOffsetY + off.y) + 'px) scale(' + scale + ')';
+    }
+
+    function refreshAllLetterTransforms() {
+        if (!textFlex) return;
+        textFlex.querySelectorAll('.neon-configurator__letter').forEach((span) => {
+            applyLetterTransform(span, Number(span.dataset.letterIndex));
         });
+    }
+
+    function hideSelectionBox() {
+        if (selectionBox) selectionBox.hidden = true;
+        if (textFlex) {
+            textFlex.querySelectorAll('.neon-configurator__letter').forEach((s) => s.classList.remove('is-selected'));
+        }
+    }
+
+    function showSelectionBoxAround(el) {
+        if (!selectionBox || !previewStage || !el) return;
+        const stageRect = previewStage.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        selectionBox.style.left = (elRect.left - stageRect.left - 6) + 'px';
+        selectionBox.style.top = (elRect.top - stageRect.top - 6) + 'px';
+        selectionBox.style.width = (elRect.width + 12) + 'px';
+        selectionBox.style.height = (elRect.height + 12) + 'px';
+        selectionBox.hidden = false;
+    }
+
+    function selectLetter(index) {
+        selectedLetterIndex = index;
+        textFlex.querySelectorAll('.neon-configurator__letter').forEach((s) => {
+            s.classList.toggle('is-selected', Number(s.dataset.letterIndex) === index);
+        });
+        const target = textFlex.querySelector('[data-letter-index="' + index + '"]');
+        showSelectionBoxAround(target);
+    }
+
+    function selectGroup() {
+        selectedLetterIndex = null;
+        hideSelectionBox();
+        showSelectionBoxAround(textFlex);
+    }
+
+    function attachLetterDrag(span, i, ch) {
+        let startX = 0;
+        let startY = 0;
+        let startOffX = 0;
+        let startOffY = 0;
+        let moved = false;
+        let draggingWholeGroup = false;
+
+        span.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            span.setPointerCapture(event.pointerId);
+            moved = false;
+            draggingWholeGroup = selectedLetterIndex !== i;
+            startX = event.clientX;
+            startY = event.clientY;
+            if (draggingWholeGroup) {
+                startOffX = groupOffsetX;
+                startOffY = groupOffsetY;
+            } else {
+                const off = letterOffsets[i] || { x: 0, y: 0 };
+                startOffX = off.x;
+                startOffY = off.y;
+            }
+        });
+
+        span.addEventListener('pointermove', (event) => {
+            if (!span.hasPointerCapture(event.pointerId)) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+
+            if (draggingWholeGroup) {
+                groupOffsetX = startOffX + dx;
+                groupOffsetY = startOffY + dy;
+                refreshAllLetterTransforms();
+                showSelectionBoxAround(textFlex);
+            } else {
+                letterOffsets[i] = { x: startOffX + dx, y: startOffY + dy };
+                applyLetterTransform(span, i);
+                showSelectionBoxAround(span);
+            }
+        });
+
+        span.addEventListener('pointerup', (event) => {
+            if (span.hasPointerCapture(event.pointerId)) span.releasePointerCapture(event.pointerId);
+            if (!moved) {
+                if (currentEffectMode === 'multicolour') {
+                    openLetterPopup(i, span, ch);
+                    return;
+                }
+                if (selectedLetterIndex === i) {
+                    selectGroup();
+                } else {
+                    selectLetter(i);
+                }
+            }
+        });
+    }
+
+    function renderLetters() {
+        if (!textFlex) return;
+        const value = textInput.value.trim() || 'Your Text';
+
+        if (letterOffsets.length !== value.length) {
+            letterOffsets = value.split('').map(() => ({ x: 0, y: 0 }));
+            letterScales = value.split('').map(() => 1);
+            letterColours = value.split('').map((_, i) => letterColours[i] || (swatches.length ? swatches[0].dataset.colourHex : '#ffffff'));
+            selectedLetterIndex = null;
+        }
+
+        textFlex.innerHTML = '';
+        value.split('').forEach((ch, i) => {
+            const span = document.createElement('span');
+            span.className = 'neon-configurator__letter';
+            span.textContent = ch === ' ' ? '\u00A0' : ch;
+            span.dataset.letterIndex = i;
+            span.style.color = currentEffectMode === 'multicolour' ? letterColours[i] : '';
+            applyLetterTransform(span, i);
+            attachLetterDrag(span, i, ch);
+            textFlex.appendChild(span);
+        });
+
+        selectGroup();
         closeLetterPopup();
     }
 
     function updatePreviewText() {
-        if (currentEffectMode === 'multicolour') {
-            renderMulticolourText();
-        } else {
-            const value = textInput.value.trim();
-            previewText.textContent = value.length ? value : 'Your Text';
-        }
+        renderLetters();
     }
 
     function updatePreviewFont() {
-        previewText.style.fontFamily = fontSelect.value;
+        if (textFlex) textFlex.style.fontFamily = fontSelect.value;
     }
 
     function updatePreviewTransform() {
-        previewText.style.transform = 'translate(' + textOffsetX + 'px, ' + textOffsetY + 'px) rotate(' + textRotation + 'deg)';
+        if (textFlex) textFlex.style.transform = 'rotate(' + textRotation + 'deg)';
     }
 
     function updateRotationLabel() {
         if (rotationValueLabel) rotationValueLabel.textContent = textRotation + '°';
     }
 
-    function enableTextDrag() {
-        if (!previewText || !previewStage) return;
-
-        let dragStartX = 0;
-        let dragStartY = 0;
-        let initialOffsetX = 0;
-        let initialOffsetY = 0;
-
-        previewText.addEventListener('pointerdown', (event) => {
-            // In Multicoloured Text mode, letters must be individually clickable —
-            // skip capturing the pointer so per-letter click events aren't intercepted.
-            if (currentEffectMode === 'multicolour') return;
-
-            event.preventDefault();
-            previewText.setPointerCapture(event.pointerId);
-            previewText.classList.add('is-dragging');
-            dragStartX = event.clientX;
-            dragStartY = event.clientY;
-            initialOffsetX = textOffsetX;
-            initialOffsetY = textOffsetY;
+    if (previewInner) {
+        previewInner.addEventListener('pointerdown', (event) => {
+            if (event.target === previewInner || event.target === textFlex) {
+                selectGroup();
+            }
         });
-
-        previewText.addEventListener('pointermove', (event) => {
-            if (!previewText.hasPointerCapture(event.pointerId)) return;
-            textOffsetX = initialOffsetX + event.clientX - dragStartX;
-            textOffsetY = initialOffsetY + event.clientY - dragStartY;
-            updatePreviewTransform();
-        });
-
-        const stopDragging = (event) => {
-            if (previewText.hasPointerCapture(event.pointerId)) previewText.releasePointerCapture(event.pointerId);
-            previewText.classList.remove('is-dragging');
-        };
-
-        previewText.addEventListener('pointerup', stopDragging);
-        previewText.addEventListener('pointercancel', stopDragging);
     }
+
+    function attachResizeHandles() {
+        if (!selectionBox) return;
+        const handles = selectionBox.querySelectorAll('[data-resize-handle]');
+        handles.forEach((handle) => {
+            handle.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handle.setPointerCapture(event.pointerId);
+
+                const boxRect = selectionBox.getBoundingClientRect();
+                const centerX = boxRect.left + boxRect.width / 2;
+                const centerY = boxRect.top + boxRect.height / 2;
+                const startDist = Math.hypot(event.clientX - centerX, event.clientY - centerY) || 1;
+                const startScale = selectedLetterIndex !== null ? (letterScales[selectedLetterIndex] || 1) : groupScale;
+
+                const onMove = (moveEvent) => {
+                    const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY) || 1;
+                    const factor = dist / startDist;
+                    const newScale = Math.min(3, Math.max(0.3, startScale * factor));
+
+                    if (selectedLetterIndex !== null) {
+                        letterScales[selectedLetterIndex] = newScale;
+                        const span = textFlex.querySelector('[data-letter-index="' + selectedLetterIndex + '"]');
+                        applyLetterTransform(span, selectedLetterIndex);
+                        showSelectionBoxAround(span);
+                    } else {
+                        groupScale = newScale;
+                        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+                        showSelectionBoxAround(textFlex);
+                    }
+                };
+
+                const onUp = (upEvent) => {
+                    handle.releasePointerCapture(upEvent.pointerId);
+                    handle.removeEventListener('pointermove', onMove);
+                    handle.removeEventListener('pointerup', onUp);
+                };
+
+                handle.addEventListener('pointermove', onMove);
+                handle.addEventListener('pointerup', onUp);
+            });
+        });
+    }
+
     function updatePreviewColour() {
-        if (currentEffectMode !== 'multicolour') {
-            previewText.style.color = selectedColourHex;
+        if (currentEffectMode !== 'multicolour' && textFlex) {
+            textFlex.style.color = selectedColourHex;
         }
         if (iconsContainer) {
             iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((el) => {
@@ -290,8 +422,8 @@ function initConfigurator(root) {
         }
 
         // Scale font size proportionally to width, clamped to a sensible range
-        const fontSize = Math.min(90, Math.max(22, widthCm * 0.42));
-        previewText.style.fontSize = fontSize + 'px';
+        baseFontSize = Math.min(90, Math.max(22, widthCm * 0.42));
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
 
         if (widthLabel) {
             widthLabel.textContent = widthCm + ' ' + unit;
@@ -365,7 +497,7 @@ function initConfigurator(root) {
         });
     }
 
-    enableTextDrag();
+    attachResizeHandles();
 
     textInput.addEventListener('input', () => {
         updatePreviewText();
@@ -537,7 +669,7 @@ function initConfigurator(root) {
                 'Add-ons': selectedAddons || 'None',
                 'Colour Effect': root.querySelector('[data-effect-mode-radio]:checked')?.nextElementSibling?.textContent.trim() || 'Single Colour',
                 'Configured Total': '$' + currentTotal.toFixed(2),
-                'Text Position': 'X: ' + Math.round(textOffsetX) + 'px, Y: ' + Math.round(textOffsetY) + 'px',
+                'Text Position': 'Group X: ' + Math.round(groupOffsetX) + 'px, Y: ' + Math.round(groupOffsetY) + 'px',
                 'Text Rotation': textRotation + '°'
             };
 

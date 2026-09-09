@@ -20,6 +20,46 @@ if (document.readyState === 'loading') {
 document.addEventListener('shopify:section:load', initAllBundleConfigurators);
 document.addEventListener('cart:refresh', initAllBundleConfigurators);
 
+async function addItemToCartWithRetry(routesRoot, variantId, properties, sectionIds, maxRetries) {
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch(routesRoot + 'cart/add.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: [{ id: parseInt(variantId, 10), quantity: 1, properties }],
+                    sections: sectionIds.join(',')
+                })
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+            lastError = new Error('Add to cart failed with status ' + response.status);
+        } catch (err) {
+            lastError = err;
+        }
+        if (attempt < maxRetries) {
+            const delay = 900 + (attempt * 500);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+    }
+    throw lastError;
+}
+
+function setButtonLoadingText(button, text) {
+    button.innerHTML = '<span class="bundle-configurator__spinner"></span><span>' + text + '</span>';
+}
+
+function showTemporaryStatus(statusEl, text, durationMs) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    clearTimeout(statusEl._clearTimeoutId);
+    statusEl._clearTimeoutId = setTimeout(() => {
+        statusEl.textContent = '';
+    }, durationMs);
+}
+
 function initBundleConfigurator(root) {
     const packageRadios = root.querySelectorAll('[data-package-radio]');
     const packageCards = root.querySelectorAll('.bundle-configurator__package-card');
@@ -75,7 +115,7 @@ function initBundleConfigurator(root) {
             };
 
             addToCartBtn.disabled = true;
-            addToCartBtn.textContent = 'Syncing price...';
+            setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
             try {
                 const productId = addToCartBtn.dataset.productId;
@@ -92,26 +132,45 @@ function initBundleConfigurator(root) {
                 if (proxyData.error || !proxyData.variantId) throw new Error(proxyData.error || 'No variant returned');
 
                 const priceMatchedVariantId = proxyData.variantId;
+                const isNewVariant = proxyData.reused === false;
 
-                addToCartBtn.textContent = 'Adding...';
+                setButtonLoadingText(addToCartBtn, 'Adding...');
                 const routesRoot = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
-                const response = await fetch(routesRoot + 'cart/add.js', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        items: [{ id: parseInt(priceMatchedVariantId, 10), quantity: 1, properties }]
-                    })
+
+                const cartItemsComponents = document.querySelectorAll('cart-items-component');
+                const sectionIds = [];
+                cartItemsComponents.forEach((el) => {
+                    if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
                 });
 
-                if (!response.ok) throw new Error('Add to cart failed');
+                const addResult = await addItemToCartWithRetry(
+                    routesRoot,
+                    priceMatchedVariantId,
+                    properties,
+                    sectionIds,
+                    isNewVariant ? 3 : 0
+                );
 
                 addToCartBtn.textContent = 'Added ✓';
-                if (addToCartStatus) addToCartStatus.textContent = 'Added to cart at the correct configured price!';
+                showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);
+
+                try {
+                    const themeEvents = await import('@theme/events');
+                    document.dispatchEvent(new themeEvents.CartAddEvent({}, 'bundle-deals-configurator', {
+                        source: 'product-form-component',
+                        itemCount: 1,
+                        productId,
+                        sections: addResult.sections
+                    }));
+                } catch (themeEventError) {
+                    console.warn('Bundle Deals Configurator: could not notify theme cart UI.', themeEventError);
+                }
+
                 document.dispatchEvent(new CustomEvent('cart:refresh'));
             } catch (error) {
                 console.error('Bundle Deals Configurator Add to Cart error:', error);
                 addToCartBtn.textContent = 'Error - try again';
-                if (addToCartStatus) addToCartStatus.textContent = 'Something went wrong. Please try again.';
+                showTemporaryStatus(addToCartStatus, 'Something went wrong. Please try again.', 5000);
             } finally {
                 setTimeout(() => {
                     addToCartBtn.disabled = false;
