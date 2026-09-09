@@ -124,6 +124,13 @@ function initConfigurator(root) {
     let baseFontSize = 48;
     let selectedLetterIndex = null;
 
+    // 'letter' | 'icon' | null — tracks which system currently owns the shared selection box
+    let activeSelectionKind = null;
+    let iconOffsets = [];
+    let iconScales = [];
+    let iconGroupScale = 1;
+    let selectedIconIndex = null;
+
     const letterPopup = root.querySelector('[data-letter-popup]');
     const letterPopupTitle = root.querySelector('[data-letter-popup-title]');
     const letterPopupSwatches = root.querySelector('[data-letter-popup-swatches]');
@@ -194,6 +201,10 @@ function initConfigurator(root) {
         if (textFlex) {
             textFlex.querySelectorAll('.neon-configurator__letter').forEach((s) => s.classList.remove('is-selected'));
         }
+        if (iconsContainer) {
+            iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((s) => s.classList.remove('is-selected'));
+        }
+        activeSelectionKind = null;
     }
 
     function showSelectionBoxAround(el) {
@@ -208,6 +219,8 @@ function initConfigurator(root) {
     }
 
     function selectLetter(index) {
+        hideSelectionBox();
+        activeSelectionKind = 'letter';
         selectedLetterIndex = index;
         textFlex.querySelectorAll('.neon-configurator__letter').forEach((s) => {
             s.classList.toggle('is-selected', Number(s.dataset.letterIndex) === index);
@@ -217,9 +230,109 @@ function initConfigurator(root) {
     }
 
     function selectGroup() {
-        selectedLetterIndex = null;
         hideSelectionBox();
+        activeSelectionKind = 'letter';
+        selectedLetterIndex = null;
         showSelectionBoxAround(textFlex);
+    }
+
+    function applyIconTransform(span, i) {
+        const off = iconOffsets[i] || { x: 0, y: 0 };
+        const scale = iconScales[i] || 1;
+        span.style.transform = 'translate(' + off.x + 'px, ' + off.y + 'px) scale(' + scale + ')';
+    }
+
+    function refreshAllIconTransforms() {
+        if (!iconsContainer) return;
+        iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((span) => {
+            applyIconTransform(span, Number(span.dataset.iconIndex));
+        });
+    }
+
+    function updateIconsContainerTransform() {
+        if (!iconsContainer) return;
+        iconsContainer.style.transform = 'rotate(' + textRotation + 'deg) scale(' + iconGroupScale + ')';
+    }
+
+    function selectIcon(index) {
+        hideSelectionBox();
+        activeSelectionKind = 'icon';
+        selectedIconIndex = index;
+        iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((s) => {
+            s.classList.toggle('is-selected', Number(s.dataset.iconIndex) === index);
+        });
+        const target = iconsContainer.querySelector('[data-icon-index="' + index + '"]');
+        showSelectionBoxAround(target);
+    }
+
+    function selectIconGroup() {
+        hideSelectionBox();
+        activeSelectionKind = 'icon';
+        selectedIconIndex = null;
+        showSelectionBoxAround(iconsContainer);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    function attachIconDrag(span, i) {
+        let startX = 0;
+        let startY = 0;
+        let startOffX = 0;
+        let startOffY = 0;
+        let moved = false;
+
+        span.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            span.setPointerCapture(event.pointerId);
+            moved = false;
+            const off = iconOffsets[i] || { x: 0, y: 0 };
+            startOffX = off.x;
+            startOffY = off.y;
+            startX = event.clientX;
+            startY = event.clientY;
+        });
+
+        span.addEventListener('pointermove', (event) => {
+            if (!span.hasPointerCapture(event.pointerId)) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+
+            iconOffsets[i] = { x: startOffX + dx, y: startOffY + dy };
+            applyIconTransform(span, i);
+            showSelectionBoxAround(span);
+        });
+
+        span.addEventListener('pointerup', (event) => {
+            if (span.hasPointerCapture(event.pointerId)) span.releasePointerCapture(event.pointerId);
+            if (!moved) {
+                selectIcon(i);
+            }
+        });
     }
 
     function attachLetterDrag(span, i, ch) {
@@ -305,7 +418,7 @@ function initConfigurator(root) {
             textFlex.appendChild(span);
         });
 
-        selectGroup();
+        hideSelectionBox();
         closeLetterPopup();
     }
 
@@ -319,6 +432,7 @@ function initConfigurator(root) {
 
     function updatePreviewTransform() {
         if (textFlex) textFlex.style.transform = 'rotate(' + textRotation + 'deg)';
+        updateIconsContainerTransform();
     }
 
     function updateRotationLabel() {
@@ -329,6 +443,11 @@ function initConfigurator(root) {
         previewInner.addEventListener('pointerdown', (event) => {
             if (event.target === previewInner || event.target === textFlex) {
                 selectGroup();
+            }
+        });
+        document.addEventListener('pointerdown', (event) => {
+            if (!previewInner.contains(event.target)) {
+                hideSelectionBox();
             }
         });
     }
@@ -346,14 +465,27 @@ function initConfigurator(root) {
                 const centerX = boxRect.left + boxRect.width / 2;
                 const centerY = boxRect.top + boxRect.height / 2;
                 const startDist = Math.hypot(event.clientX - centerX, event.clientY - centerY) || 1;
-                const startScale = selectedLetterIndex !== null ? (letterScales[selectedLetterIndex] || 1) : groupScale;
+                const startScale = activeSelectionKind === 'icon'
+                    ? (selectedIconIndex !== null ? (iconScales[selectedIconIndex] || 1) : iconGroupScale)
+                    : (selectedLetterIndex !== null ? (letterScales[selectedLetterIndex] || 1) : groupScale);
 
                 const onMove = (moveEvent) => {
                     const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY) || 1;
                     const factor = dist / startDist;
                     const newScale = Math.min(3, Math.max(0.3, startScale * factor));
 
-                    if (selectedLetterIndex !== null) {
+                    if (activeSelectionKind === 'icon') {
+                        if (selectedIconIndex !== null) {
+                            iconScales[selectedIconIndex] = newScale;
+                            const span = iconsContainer.querySelector('[data-icon-index="' + selectedIconIndex + '"]');
+                            applyIconTransform(span, selectedIconIndex);
+                            showSelectionBoxAround(span);
+                        } else {
+                            iconGroupScale = newScale;
+                            updateIconsContainerTransform();
+                            showSelectionBoxAround(iconsContainer);
+                        }
+                    } else if (selectedLetterIndex !== null) {
                         letterScales[selectedLetterIndex] = newScale;
                         const span = textFlex.querySelector('[data-letter-index="' + selectedLetterIndex + '"]');
                         applyLetterTransform(span, selectedLetterIndex);
@@ -390,16 +522,28 @@ function initConfigurator(root) {
 
     function renderIcons() {
         if (!iconsContainer) return;
+
+        if (iconOffsets.length !== selectedSymbols.length) {
+            iconOffsets = selectedSymbols.map(() => ({ x: 0, y: 0 }));
+            iconScales = selectedSymbols.map(() => 1);
+            selectedIconIndex = null;
+        }
+
         iconsContainer.innerHTML = '';
-        selectedSymbols.forEach((sym) => {
+        selectedSymbols.forEach((sym, i) => {
             const iconSpan = document.createElement('span');
             iconSpan.className = 'neon-configurator__preview-icon';
+            iconSpan.dataset.iconIndex = i;
             iconSpan.style.webkitMaskImage = 'url("' + sym.url + '")';
             iconSpan.style.maskImage = 'url("' + sym.url + '")';
             iconSpan.style.color = selectedColourHex;
             iconSpan.title = sym.label;
+            applyIconTransform(iconSpan, i);
+            attachIconDrag(iconSpan, i);
             iconsContainer.appendChild(iconSpan);
         });
+
+        if (activeSelectionKind === 'icon') hideSelectionBox();
     }
 
     function updatePreviewScale() {

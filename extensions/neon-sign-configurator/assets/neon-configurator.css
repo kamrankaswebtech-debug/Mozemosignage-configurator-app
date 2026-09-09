@@ -521,6 +521,14 @@
     filter:
         drop-shadow(0 0 4px currentColor) drop-shadow(0 0 12px currentColor);
     transition: color 0.25s ease, filter 0.3s ease, opacity 0.3s ease;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.neon-configurator__preview-icon.is-selected {
+    outline: 1px dashed rgba(255, 46, 196, 0.5);
+    outline-offset: 3px;
 }
 
 .neon-configurator__preview-inner.is-off .neon-configurator__preview-icon {
