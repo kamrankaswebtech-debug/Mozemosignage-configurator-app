@@ -7,6 +7,14 @@
       <p class="sign3d-configurator__preview-badge-title">VISUAL ESTIMATE</p>
       <p class="sign3d-configurator__preview-badge-sub">Mock-up for visual estimate only. Final professional artwork supplied for approval before manufacturing.</p>
     </div>
+
+    <div class="sign3d-configurator__measurements-toggle">
+      <label class="sign3d-configurator__switch">
+        <input type="checkbox" data-hide-measurements-toggle checked>
+        <span class="sign3d-configurator__switch-slider"></span>
+      </label>
+      <span class="sign3d-configurator__measurements-toggle-label">Hide Measurements</span>
+    </div>
     <div class="sign3d-configurator__preview-stage" data-preview-stage>
       <div class="sign3d-configurator__preview-inner" data-preview-inner>
         <div class="sign3d-configurator__text-flex" data-text-flex data-preview-text></div>
@@ -79,6 +87,15 @@
           <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M0 1h16M6 6h10M3 11h13" stroke="currentColor" stroke-width="1.5"/></svg>
         </button>
         <button type="button" class="sign3d-configurator__select-all-btn" data-select-all-btn hidden>Select All</button>
+      </div>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">Upload Your Background Wallpaper</label>
+      <input type="file" class="sign3d-configurator__wallpaper-input" data-wallpaper-input accept="image/*">
+      <div class="sign3d-configurator__wallpaper-actions" data-wallpaper-actions hidden>
+        <button type="button" class="sign3d-configurator__wallpaper-btn" data-wallpaper-view-btn>View your Simple Signs</button>
+        <button type="button" class="sign3d-configurator__wallpaper-btn sign3d-configurator__wallpaper-btn--delete" data-wallpaper-delete-btn>Delete Wallpaper</button>
       </div>
     </div>
 

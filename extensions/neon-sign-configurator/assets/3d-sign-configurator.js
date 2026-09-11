@@ -90,6 +90,13 @@ function initSign3dConfigurator(root) {
     const heightLabel = root.querySelector('[data-height-label]');
     const textFlex = root.querySelector('[data-text-flex]');
     const selectionBox = root.querySelector('[data-selection-box]');
+    const previewBox = root.querySelector('.sign3d-configurator__preview');
+    const wallpaperInput = root.querySelector('[data-wallpaper-input]');
+    const wallpaperActions = root.querySelector('[data-wallpaper-actions]');
+    const wallpaperViewBtn = root.querySelector('[data-wallpaper-view-btn]');
+    const wallpaperDeleteBtn = root.querySelector('[data-wallpaper-delete-btn]');
+    let wallpaperObjectUrl = null;
+    let wallpaperShowingDefault = false;
     const alignButtons = root.querySelectorAll('[data-align-btn]');
     const selectAllBtn = root.querySelector('[data-select-all-btn]');
     const undoBtn = root.querySelector('[data-undo-btn]');
@@ -182,6 +189,7 @@ function initSign3dConfigurator(root) {
 
     function showSelectionBoxAround(el) {
         if (!selectionBox || !previewStage || !el) return;
+        if (!measurementsVisible) return;
         const stageRect = previewStage.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
         selectionBox.style.left = (elRect.left - stageRect.left - 6) + 'px';
@@ -278,7 +286,7 @@ function initSign3dConfigurator(root) {
             textFlex.appendChild(span);
         });
 
-        selectGroup();
+        hideSelectionBox();
     }
 
     function renderLetters() {
@@ -442,11 +450,28 @@ function initSign3dConfigurator(root) {
         if (heightLabel) heightLabel.textContent = heightCm + ' cm';
     }
 
+    let measurementsVisible = true;
+    const hideMeasurementsToggle = root.querySelector('[data-hide-measurements-toggle]');
+
     if (previewInner) {
         previewInner.addEventListener('pointerdown', (event) => {
             if (event.target === previewInner || event.target === textFlex) {
                 selectGroup();
             }
+        });
+    }
+
+    document.addEventListener('pointerdown', (event) => {
+        if (previewInner && !previewInner.contains(event.target)) {
+            hideSelectionBox();
+        }
+    });
+
+    if (hideMeasurementsToggle) {
+        hideMeasurementsToggle.addEventListener('change', () => {
+            measurementsVisible = hideMeasurementsToggle.checked;
+            if (previewStage) previewStage.classList.toggle('no-measurements', !measurementsVisible);
+            if (!measurementsVisible) hideSelectionBox();
         });
     }
 
@@ -517,6 +542,53 @@ function initSign3dConfigurator(root) {
             pushHistory();
         });
     });
+
+    function applyWallpaperBackground() {
+        if (!previewBox) return;
+        if (wallpaperObjectUrl && !wallpaperShowingDefault) {
+            previewBox.style.backgroundImage = "url('" + wallpaperObjectUrl + "')";
+            previewBox.style.backgroundSize = 'cover';
+            previewBox.style.backgroundPosition = 'center';
+        } else {
+            previewBox.style.backgroundImage = '';
+            previewBox.style.backgroundSize = '';
+            previewBox.style.backgroundPosition = '';
+        }
+    }
+
+    function clearWallpaper() {
+        if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
+        wallpaperObjectUrl = null;
+        wallpaperShowingDefault = false;
+        if (wallpaperInput) wallpaperInput.value = '';
+        if (wallpaperActions) wallpaperActions.hidden = true;
+        applyWallpaperBackground();
+    }
+
+    if (wallpaperInput) {
+        wallpaperInput.addEventListener('change', () => {
+            const file = wallpaperInput.files && wallpaperInput.files[0];
+            if (!file) return;
+            if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
+            wallpaperObjectUrl = URL.createObjectURL(file);
+            wallpaperShowingDefault = false;
+            if (wallpaperActions) wallpaperActions.hidden = false;
+            if (wallpaperViewBtn) wallpaperViewBtn.textContent = 'View your Simple Signs';
+            applyWallpaperBackground();
+        });
+    }
+
+    if (wallpaperViewBtn) {
+        wallpaperViewBtn.addEventListener('click', () => {
+            wallpaperShowingDefault = !wallpaperShowingDefault;
+            wallpaperViewBtn.textContent = wallpaperShowingDefault ? 'View my Wallpaper' : 'View your Simple Signs';
+            applyWallpaperBackground();
+        });
+    }
+
+    if (wallpaperDeleteBtn) {
+        wallpaperDeleteBtn.addEventListener('click', () => clearWallpaper());
+    }
 
     swatches.forEach((swatch) => {
         swatch.addEventListener('click', () => {
