@@ -2,7 +2,7 @@
 
 client_id = "27b557ec369085c3a909fc49ce2d774b"
 name = "Mozemo Signage Configurator"
-application_url = "https://enemies-province-comfortable-justin.trycloudflare.com"
+application_url = "https://mozemosignage-configurator-app.onrender.com"
 embedded = true
 
 [build]
@@ -41,11 +41,11 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://enemies-province-comfortable-justin.trycloudflare.com/api/auth"
+  "https://mozemosignage-configurator-app.onrender.com/api/auth"
 ]
 
 [app_proxy]
-url = "https://enemies-province-comfortable-justin.trycloudflare.com/proxy/neon-pricing"
+url = "https://mozemosignage-configurator-app.onrender.com/proxy/neon-pricing"
 subpath = "neon-pricing"
 prefix = "apps"
 
