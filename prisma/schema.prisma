@@ -13,6 +13,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model ProductionBlueprint {
+  id             String    @id @default(cuid())
+  shop           String
+  shopifyOrderId String
+  orderName      String
+  orderNumber    Int?
+  lineItemId     String
+  productTitle   String
+  quantity       Int       @default(1)
+  customerName   String?
+  customerEmail  String?
+  destination    String?
+  orderStatus    String?
+  propertiesJson String
+  fileName       String
+  pdfData        Bytes
+  createdAt      DateTime  @default(now())
+  emailSentAt    DateTime?
+  emailSentTo    String?
+
+  @@index([shop])
+  @@index([shopifyOrderId])
+}
+
 model Session {
   id            String    @id
   shop          String

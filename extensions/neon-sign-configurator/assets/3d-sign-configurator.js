@@ -637,6 +637,10 @@ function initSign3dConfigurator(root) {
                 .map((checkbox) => checkbox.closest('label').querySelector('span').textContent.trim())
                 .join(', ');
 
+            const sizeOptionForBlueprint = sizeSelect.options[sizeSelect.selectedIndex];
+            const blueprintWidthCm = parseFloat(sizeOptionForBlueprint?.value) || '';
+            const blueprintHeightCm = parseFloat(sizeOptionForBlueprint?.dataset.height) || '';
+
             const properties = {
                 'Custom Text': textInput.value.trim() || 'Your Brand',
                 'Illumination Type': illuminationSelect.options[illuminationSelect.selectedIndex].textContent.trim(),
@@ -647,7 +651,9 @@ function initSign3dConfigurator(root) {
                 'Finish': finishSelect.options[finishSelect.selectedIndex].textContent.trim(),
                 'Mounting': mountingSelect.options[mountingSelect.selectedIndex].textContent.trim(),
                 'Add-ons': selectedAddons || 'None',
-                'Configured Total': '$' + currentTotal.toFixed(2)
+                'Configured Total': '$' + currentTotal.toFixed(2),
+                '_blueprint_width_cm': blueprintWidthCm,
+                '_blueprint_height_cm': blueprintHeightCm
             };
 
             addToCartBtn.disabled = true;
