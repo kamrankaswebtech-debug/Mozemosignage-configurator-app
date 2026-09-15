@@ -100,6 +100,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    z-index: 5;
 }
 
 .neon-configurator__toggle-label {
@@ -117,9 +118,15 @@
 }
 
 .neon-configurator__switch input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
     opacity: 0;
-    width: 0;
-    height: 0;
+    cursor: pointer;
+    z-index: 2;
 }
 
 .neon-configurator__switch-slider {
@@ -132,6 +139,8 @@
     background-color: #3a3a48;
     border-radius: 22px;
     transition: 0.2s;
+    pointer-events: none;
+    z-index: 1;
 }
 
 .neon-configurator__switch-slider::before {
@@ -156,8 +165,8 @@
 
 .neon-configurator__preview-inner.is-off .neon-configurator__letter {
     text-shadow: none !important;
-    opacity: 0.32;
-    filter: saturate(0.55) brightness(0.75);
+    opacity: 1;
+    filter: none;
     transition: color 0.3s ease, text-shadow 0.3s ease, opacity 0.3s ease, filter 0.3s ease;
 }
 
@@ -519,7 +528,7 @@
     -webkit-mask-size: contain;
     mask-size: contain;
     filter:
-        drop-shadow(0 0 4px currentColor) drop-shadow(0 0 12px currentColor);
+        drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor);
     transition: color 0.25s ease, filter 0.3s ease, opacity 0.3s ease;
     cursor: grab;
     user-select: none;
@@ -533,7 +542,7 @@
 
 .neon-configurator__preview-inner.is-off .neon-configurator__preview-icon {
     filter: none !important;
-    opacity: 0.32;
+    opacity: 1;
 }
 
 .neon-configurator__checkbox-row {

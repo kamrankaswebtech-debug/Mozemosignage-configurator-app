@@ -19,7 +19,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const order: any = payload;
         const lineItems: any[] = Array.isArray(order.line_items) ? order.line_items : [];
 
-        // Sirf wahi line items jo configurator se aaye hain (jinke paas custom properties hain)
+        // Only line items that came from a configurator (i.e. have custom properties attached)
         const configuredItems = lineItems.filter(
             (item) => Array.isArray(item.properties) && item.properties.length > 0,
         );

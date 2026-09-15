@@ -108,6 +108,8 @@ function initConfigurator(root) {
     let selectedColourHex = swatches.length ? swatches[0].dataset.colourHex : '#ffffff';
     let selectedColourPrice = swatches.length ? parseFloat(swatches[0].dataset.colourPrice) || 0 : 0;
     let currentTotal = 0;
+    let currentWidthCm = 0;
+    let currentHeightCm = 0;
     const BACKBOARD_SHAPES = ['rectangle', 'cut-around', 'cut-to-letter', 'naked'];
 
     const powerAdapterSelect = root.querySelector('[data-power-adapter-select]');
@@ -547,34 +549,41 @@ function initConfigurator(root) {
     }
 
     function updatePreviewScale() {
-        let widthCm;
-        let heightCm;
+        let widthValue;
+        let heightValue;
         let unit = 'cm';
 
         if (customSizeActive && customSizeSlider) {
-            widthCm = parseFloat(customSizeSlider.value) || 60;
+            widthValue = parseFloat(customSizeSlider.value) || 60;
             const heightRatio = parseFloat(customSizeSlider.dataset.heightRatio) || 2.6;
-            heightCm = Math.round((widthCm / heightRatio) * 10) / 10;
+            heightValue = Math.round((widthValue / heightRatio) * 10) / 10;
             unit = customSizeSlider.dataset.unit || 'cm';
 
-            if (sliderWidthLabel) sliderWidthLabel.textContent = 'Width: ' + widthCm + ' ' + unit;
-            if (sliderHeightLabel) sliderHeightLabel.textContent = 'Height: ' + heightCm + ' ' + unit;
+            if (sliderWidthLabel) sliderWidthLabel.textContent = 'Width: ' + widthValue + ' ' + unit;
+            if (sliderHeightLabel) sliderHeightLabel.textContent = 'Height: ' + heightValue + ' ' + unit;
         } else {
             const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
-            widthCm = parseFloat(sizeOption?.value) || 60;
-            heightCm = parseFloat(sizeOption?.dataset.height) || Math.round(widthCm / 2.6);
+            widthValue = parseFloat(sizeOption?.value) || 60;
+            heightValue = parseFloat(sizeOption?.dataset.height) || Math.round(widthValue / 2.6);
         }
 
         // Scale font size proportionally to width, clamped to a sensible range
-        baseFontSize = Math.min(90, Math.max(22, widthCm * 0.42));
+        baseFontSize = Math.min(90, Math.max(22, widthValue * 0.42));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
 
         if (widthLabel) {
-            widthLabel.textContent = widthCm + ' ' + unit;
+            widthLabel.textContent = widthValue + ' ' + unit;
         }
         if (heightLabel) {
-            heightLabel.textContent = heightCm + ' ' + unit;
+            heightLabel.textContent = heightValue + ' ' + unit;
         }
+
+        // The manufacturer blueprint PDF always expects width/height in centimetres,
+        // regardless of which unit the customer used on the custom size slider.
+        const UNIT_TO_CM = { cm: 1, mm: 0.1, inch: 2.54, ft: 30.48 };
+        const cmFactor = UNIT_TO_CM[unit] || 1;
+        currentWidthCm = Math.round(widthValue * cmFactor * 10) / 10;
+        currentHeightCm = Math.round(heightValue * cmFactor * 10) / 10;
     }
 
     function updateBackboardPanel() {
@@ -814,7 +823,9 @@ function initConfigurator(root) {
                 'Colour Effect': root.querySelector('[data-effect-mode-radio]:checked')?.nextElementSibling?.textContent.trim() || 'Single Colour',
                 'Configured Total': '$' + currentTotal.toFixed(2),
                 'Text Position': 'Group X: ' + Math.round(groupOffsetX) + 'px, Y: ' + Math.round(groupOffsetY) + 'px',
-                'Text Rotation': textRotation + '°'
+                'Text Rotation': textRotation + '°',
+                '_blueprint_width_cm': currentWidthCm,
+                '_blueprint_height_cm': currentHeightCm
             };
 
             if (powerAdapterSelect) {
