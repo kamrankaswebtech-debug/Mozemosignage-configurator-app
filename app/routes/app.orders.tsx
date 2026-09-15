@@ -90,7 +90,7 @@ export default function ProductionOrders() {
 
                 </s-paragraph>
 
-                {records.length === 0 && <s-paragraph>Abhi tak koi blueprint generate nahi hua.</s-paragraph>}
+                {records.length === 0 && <s-paragraph>No blueprint has been generated yet.</s-paragraph>}
 
                 <s-stack direction="block" gap="base">
                     {records.map((record) => (
@@ -124,9 +124,9 @@ function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: R
                     </s-paragraph>
                 </s-stack>
 
-                <s-button href={`/app/orders/${record.id}/download`} target="_blank">
-                    Download
-                </s-button>
+                <s-link href={`/app/orders/${record.id}/download`} target="_blank">
+                    Download PDF
+                </s-link>
 
                 <emailFetcher.Form method="post">
                     <input type="hidden" name="intent" value="send-email" />
