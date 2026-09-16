@@ -194,7 +194,7 @@ type = "file_reference"
 
 [metaobjects.app.backboard_style.fields.shape_type]
 name = "Shape Type"
-description = "Controls how the backboard renders in the live preview. Must be exactly one of: rectangle, cut-around, cut-to-letter, naked"
+description = "Controls how the backboard renders in the live preview. Must be exactly one of: rectangle, cut-around, cut-to-letter, naked, open-box, acrylic-stand-middle"
 type = "single_line_text_field"
 required = true
 
@@ -261,6 +261,16 @@ type = "boolean"
 [metaobjects.app.signage_addon.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+[metaobjects.app.signage_addon.fields.category]
+name = "Category"
+description = "Controls which admin page/storefront section this entry belongs to. Must be exactly one of: addon, neon_type, outdoor_thickness, size_visibility. Leave empty for addon (default, backward compatible)."
+type = "single_line_text_field"
+
+[metaobjects.app.signage_addon.fields.type_key]
+name = "Type Key"
+description = "Only used for category = neon_type (must be exactly 'indoor' or 'outdoor') or category = size_visibility (must be exactly one of: choose_size_indoor, choose_size_outdoor, custom_slider_indoor, custom_slider_outdoor). Leave empty for other categories."
+type = "single_line_text_field"
 
 [metaobjects.app.power_adapter]
 name = "Power Adapter"

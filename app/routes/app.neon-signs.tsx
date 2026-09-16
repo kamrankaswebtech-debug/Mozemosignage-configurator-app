@@ -8,6 +8,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
+    { title: "Neon Type (Indoor / Outdoor)", path: "/app/neon-signs/neon-types", description: "Manage Indoor (Silicone LED Flex) and Outdoor (Solid Acrylic) neon type options." },
+    { title: "Outdoor Thickness", path: "/app/neon-signs/outdoor-thickness", description: "Manage thickness options (10mm, 12mm, etc.) shown only for Outdoor neon." },
+    { title: "Size Visibility", path: "/app/neon-signs/size-visibility", description: "Control which size options (Choose Size / Custom Slider) show for Indoor vs Outdoor." },
     { title: "Fonts", path: "/app/neon-signs/fonts", description: "Manage available font styles shown in the configurator." },
     { title: "Colours", path: "/app/neon-signs/colours", description: "Manage LED colour options and their extra pricing." },
     { title: "Sizes", path: "/app/neon-signs/sizes", description: "Manage sign size options and their pricing." },

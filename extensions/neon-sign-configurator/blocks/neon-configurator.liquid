@@ -1,6 +1,31 @@
 {% comment %} Mozemo Signage - Live Neon Sign Configurator {% endcomment %}
 
 {% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
+
+{% comment %} Neon Type / Outdoor Thickness / Size Visibility — all reuse the signage_addon metaobject via "category", no new metaobject definition needed. {% endcomment %}
+{% assign neon_type_count = 0 %}
+{% assign neon_type_first_key = "" %}
+{% assign outdoor_thickness_count = 0 %}
+{% assign show_choose_size_indoor = true %}
+{% assign show_choose_size_outdoor = true %}
+{% assign show_slider_indoor = true %}
+{% assign show_slider_outdoor = true %}
+{% for item in metaobjects["app--418838118401--signage_addon"].values %}
+  {% if item.category.value == "neon_type" %}
+    {% assign neon_type_count = neon_type_count | plus: 1 %}
+    {% if neon_type_first_key == "" %}{% assign neon_type_first_key = item.type_key.value %}{% endif %}
+  {% endif %}
+  {% if item.category.value == "outdoor_thickness" %}
+    {% assign outdoor_thickness_count = outdoor_thickness_count | plus: 1 %}
+  {% endif %}
+  {% if item.category.value == "size_visibility" %}
+    {% if item.type_key.value == "choose_size_indoor" %}{% assign show_choose_size_indoor = item.is_free.value %}{% endif %}
+    {% if item.type_key.value == "choose_size_outdoor" %}{% assign show_choose_size_outdoor = item.is_free.value %}{% endif %}
+    {% if item.type_key.value == "custom_slider_indoor" %}{% assign show_slider_indoor = item.is_free.value %}{% endif %}
+    {% if item.type_key.value == "custom_slider_outdoor" %}{% assign show_slider_outdoor = item.is_free.value %}{% endif %}
+  {% endif %}
+{% endfor %}
+
 <div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
   <div class="neon-configurator__preview" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
@@ -58,6 +83,45 @@
   </div>
 
   <div class="neon-configurator__panel">
+
+    {% if neon_type_count > 0 %}
+    <div class="neon-configurator__field" data-neon-type-field>
+      <label class="neon-configurator__label">Choose Neon Type</label>
+      <div class="neon-configurator__neon-type-cards" data-neon-type-cards>
+        {% for item in metaobjects["app--418838118401--signage_addon"].values %}
+          {% if item.category.value == "neon_type" %}
+            <button
+              type="button"
+              class="neon-configurator__neon-type-card{% if item.type_key.value == neon_type_first_key %} is-selected{% endif %}"
+              data-neon-type-key="{{ item.type_key.value }}"
+              data-neon-type-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-neon-type-label="{{ item.label.value }}">
+              <span class="neon-configurator__neon-type-icon neon-configurator__neon-type-icon--{{ item.type_key.value }}"></span>
+              <span class="neon-configurator__neon-type-label">{{ item.label.value }}</span>
+              {% if item.extra_price_decimal.value != blank and item.extra_price_decimal.value != 0 %}
+                <span class="neon-configurator__neon-type-price">+${{ item.extra_price_decimal.value }}</span>
+              {% endif %}
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if outdoor_thickness_count > 0 %}
+    <div class="neon-configurator__field" data-outdoor-thickness-field hidden>
+      <label class="neon-configurator__label">Outdoor Thickness</label>
+      <select class="neon-configurator__select" data-outdoor-thickness-select>
+        {% for item in metaobjects["app--418838118401--signage_addon"].values %}
+          {% if item.category.value == "outdoor_thickness" %}
+            <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}">
+              {{ item.label.value }}
+            </option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">1. Enter Your Text</label>
@@ -166,7 +230,7 @@
       </p>
     </div>
 
-    <div class="neon-configurator__field">
+    <div class="neon-configurator__field" data-size-field="choose-size" data-visible-indoor="{{ show_choose_size_indoor }}" data-visible-outdoor="{{ show_choose_size_outdoor }}">
       <label class="neon-configurator__label">4. Choose Size</label>
       <select class="neon-configurator__select" data-size-select>
         {% for size in metaobjects["app--418838118401--sign_size"].values %}
@@ -189,7 +253,7 @@
         {% assign default_unit_entry = u %}
       {% endif %}
     {% endfor %}
-    <div class="neon-configurator__field">
+    <div class="neon-configurator__field" data-size-field="custom-slider" data-visible-indoor="{{ show_slider_indoor }}" data-visible-outdoor="{{ show_slider_outdoor }}">
       <label class="neon-configurator__label">Or Set a Custom Size (<span data-slider-unit-label>{{ default_unit_entry.unit.value | default: 'cm' }}</span>)</label>
 
       {% if size_units_count > 1 %}
@@ -232,7 +296,27 @@
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">5. Backboard Style</label>
-      <select class="neon-configurator__select" data-backboard-style-select>
+      <div class="neon-configurator__style-cards" data-backboard-style-cards>
+        {% for style in metaobjects["app--418838118401--backboard_style"].values %}
+          <button
+            type="button"
+            class="neon-configurator__style-card{% if forloop.first %} is-selected{% endif %}"
+            data-style-label="{{ style.label.value }}">
+            <span class="neon-configurator__style-card-thumb">
+              {% if style.preview_image.value %}
+                <img src="{{ style.preview_image.value | image_url: width: 160 }}" alt="{{ style.label.value }}" width="80" height="60" loading="lazy">
+              {% else %}
+                <span class="neon-configurator__style-card-fallback" data-shape-fallback="{{ style.shape_type.value | default: 'rectangle' }}">Hello</span>
+              {% endif %}
+            </span>
+            <span class="neon-configurator__style-card-label">{{ style.label.value }}</span>
+            <span class="neon-configurator__style-card-price">
+              {% if style.extra_price_decimal.value and style.extra_price_decimal.value != 0 %}+${{ style.extra_price_decimal.value }}{% else %}FREE{% endif %}
+            </span>
+          </button>
+        {% endfor %}
+      </div>
+      <select class="neon-configurator__select" data-backboard-style-select hidden aria-hidden="true" tabindex="-1">
         {% for style in metaobjects["app--418838118401--backboard_style"].values %}
           <option
             value="{{ style.label.value }}"
@@ -263,6 +347,7 @@
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">7. Add-ons</label>
       {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
+        {% if addon.category.value == blank or addon.category.value == "addon" %}
         <label class="neon-configurator__checkbox-row">
           <input
             type="checkbox"
@@ -271,6 +356,7 @@
             {% if addon.is_free.value %}checked{% endif %}>
           <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
         </label>
+        {% endif %}
       {% endfor %}
     </div>
 

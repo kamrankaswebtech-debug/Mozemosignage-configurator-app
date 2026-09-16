@@ -77,6 +77,7 @@ function initConfigurator(root) {
     const colourNameLabel = root.querySelector('[data-colour-name-label]');
     const sizeSelect = root.querySelector('[data-size-select]');
     const backboardStyleSelect = root.querySelector('[data-backboard-style-select]');
+    const backboardStyleCards = root.querySelectorAll('[data-backboard-style-cards] .neon-configurator__style-card');
     const backboardColourSelect = root.querySelector('[data-backboard-colour-select]');
     const addonCheckboxes = root.querySelectorAll('[data-addon-checkbox]');
     const totalPriceEl = root.querySelector('[data-total-price]');
@@ -110,12 +111,60 @@ function initConfigurator(root) {
     let currentTotal = 0;
     let currentWidthCm = 0;
     let currentHeightCm = 0;
-    const BACKBOARD_SHAPES = ['rectangle', 'cut-around', 'cut-to-letter', 'naked'];
+    const BACKBOARD_SHAPES = ['rectangle', 'cut-around', 'cut-to-letter', 'naked', 'open-box', 'acrylic-stand-middle'];
 
     const powerAdapterSelect = root.querySelector('[data-power-adapter-select]');
     const addToCartBtn = root.querySelector('[data-add-to-cart]');
     const addToCartStatus = root.querySelector('[data-add-to-cart-status]');
     let textRotation = 0;
+
+    // --- Neon Type (Indoor/Outdoor) + Outdoor Thickness + Size Visibility ---
+    const neonTypeCards = root.querySelectorAll('[data-neon-type-cards] .neon-configurator__neon-type-card');
+    const outdoorThicknessField = root.querySelector('[data-outdoor-thickness-field]');
+    const outdoorThicknessSelect = root.querySelector('[data-outdoor-thickness-select]');
+    const sizeVisibilityFields = root.querySelectorAll('[data-size-field]');
+    const initiallySelectedNeonTypeCard = Array.from(neonTypeCards).find((c) => c.classList.contains('is-selected'));
+    let currentNeonType = initiallySelectedNeonTypeCard ? initiallySelectedNeonTypeCard.dataset.neonTypeKey : 'indoor';
+    let currentNeonTypePrice = initiallySelectedNeonTypeCard ? (parseFloat(initiallySelectedNeonTypeCard.dataset.neonTypePrice) || 0) : 0;
+
+    function updateOutdoorThicknessVisibility() {
+        if (!outdoorThicknessField) return;
+        outdoorThicknessField.hidden = currentNeonType !== 'outdoor';
+    }
+
+    function updateSizeFieldsVisibility() {
+        sizeVisibilityFields.forEach((field) => {
+            const attr = currentNeonType === 'outdoor' ? 'visibleOutdoor' : 'visibleIndoor';
+            const isVisible = field.dataset[attr] !== 'false';
+            field.hidden = !isVisible;
+
+            // If the Custom Size Slider just got hidden while it was the active size source,
+            // fall back to the preset "Choose Size" dropdown so pricing/preview stays correct.
+            if (field.dataset.sizeField === 'custom-slider' && !isVisible && customSizeActive) {
+                customSizeActive = false;
+                updatePreviewScale();
+                calculateTotal();
+            }
+        });
+    }
+
+    function selectNeonType(card) {
+        neonTypeCards.forEach((c) => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+        currentNeonType = card.dataset.neonTypeKey;
+        currentNeonTypePrice = parseFloat(card.dataset.neonTypePrice) || 0;
+        updateOutdoorThicknessVisibility();
+        updateSizeFieldsVisibility();
+        calculateTotal();
+    }
+
+    neonTypeCards.forEach((card) => {
+        card.addEventListener('click', () => selectNeonType(card));
+    });
+
+    if (outdoorThicknessSelect) {
+        outdoorThicknessSelect.addEventListener('change', calculateTotal);
+    }
 
     const selectionBox = root.querySelector('[data-selection-box]');
     let groupOffsetX = 0;
@@ -623,6 +672,12 @@ function initConfigurator(root) {
 
         total += selectedColourPrice;
 
+        total += currentNeonTypePrice;
+        if (currentNeonType === 'outdoor' && outdoorThicknessSelect) {
+            const thicknessOption = outdoorThicknessSelect.options[outdoorThicknessSelect.selectedIndex];
+            total += parseFloat(thicknessOption?.dataset.price) || 0;
+        }
+
         const styleOption = backboardStyleSelect.options[backboardStyleSelect.selectedIndex];
         total += parseFloat(styleOption?.dataset.price) || 0;
 
@@ -678,6 +733,28 @@ function initConfigurator(root) {
 
     backboardStyleSelect.addEventListener('change', updateBackboardPanel);
     backboardColourSelect.addEventListener('change', updateBackboardPanel);
+
+    // Keep the visible cards in sync with the hidden select (single source of truth for pricing/cart)
+    function syncBackboardStyleCards() {
+        const selectedLabel = backboardStyleSelect.value;
+        backboardStyleCards.forEach((card) => {
+            card.classList.toggle('is-selected', card.dataset.styleLabel === selectedLabel);
+        });
+    }
+
+    backboardStyleCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            const label = card.dataset.styleLabel;
+            const options = Array.from(backboardStyleSelect.options);
+            const matchIndex = options.findIndex((opt) => opt.value === label);
+            if (matchIndex === -1) return;
+            backboardStyleSelect.selectedIndex = matchIndex;
+            backboardStyleSelect.dispatchEvent(new Event('change'));
+            syncBackboardStyleCards();
+        });
+    });
+
+    backboardStyleSelect.addEventListener('change', syncBackboardStyleCards);
 
     sizeSelect.addEventListener('change', () => {
         customSizeActive = false;
@@ -828,6 +905,14 @@ function initConfigurator(root) {
                 '_blueprint_height_cm': currentHeightCm
             };
 
+            if (neonTypeCards.length) {
+                const selectedCard = Array.from(neonTypeCards).find((c) => c.classList.contains('is-selected'));
+                properties['Neon Type'] = selectedCard ? selectedCard.dataset.neonTypeLabel : 'Indoor';
+                if (currentNeonType === 'outdoor' && outdoorThicknessSelect) {
+                    properties['Outdoor Thickness'] = outdoorThicknessSelect.options[outdoorThicknessSelect.selectedIndex].textContent.trim();
+                }
+            }
+
             if (powerAdapterSelect) {
                 properties['Power Adapter'] = powerAdapterSelect.options[powerAdapterSelect.selectedIndex].textContent.trim();
             }
@@ -923,5 +1008,8 @@ function initConfigurator(root) {
     updatePreviewScale();
     updatePowerState();
     updateBackboardPanel();
+    syncBackboardStyleCards();
+    updateOutdoorThicknessVisibility();
+    updateSizeFieldsVisibility();
     calculateTotal();
 }

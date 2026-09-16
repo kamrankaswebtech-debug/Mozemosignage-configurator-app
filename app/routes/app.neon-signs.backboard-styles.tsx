@@ -136,6 +136,8 @@ export default function BackboardStylesPage() {
                             <option value="cut-around">Cut Around</option>
                             <option value="cut-to-letter">Cut to Letter</option>
                             <option value="naked">Naked (No Backboard)</option>
+                            <option value="open-box">Open Box</option>
+                            <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
                         </select>
                         <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={styles.length + 1} />
@@ -175,6 +177,8 @@ export default function BackboardStylesPage() {
                                                     <option value="cut-around">Cut Around</option>
                                                     <option value="cut-to-letter">Cut to Letter</option>
                                                     <option value="naked">Naked (No Backboard)</option>
+                                                    <option value="open-box">Open Box</option>
+                                                    <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
                                                 </select>
                                                 <input type="number" step="0.01" name="extraPrice" defaultValue={s.extraPrice} />
                                                 <input type="number" name="sortOrder" defaultValue={s.sortOrder} />
