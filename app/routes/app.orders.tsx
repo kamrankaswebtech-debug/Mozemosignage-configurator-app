@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -22,10 +23,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             createdAt: true,
             emailSentAt: true,
             emailSentTo: true,
+            shareToken: true,
         },
     });
 
-    return { records };
+    const appUrl = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
+
+    const recordsWithShareUrl = records.map((record) => ({
+        ...record,
+        shareUrl: `${appUrl}/blueprint/${record.shareToken}`,
+    }));
+
+    return { records: recordsWithShareUrl };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -53,13 +62,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const pdfBase64 = Buffer.from(record.pdfData).toString("base64");
 
         try {
-            await resend.emails.send({
+            const sendResult = await resend.emails.send({
                 from: process.env.RESEND_FROM_EMAIL || "Mozemo Signage <onboarding@resend.dev>",
                 to: [email],
                 subject: `Production Blueprint — Order ${record.orderName}`,
                 html: `<p>Hi,</p><p>Please find attached the manufacturer production blueprint for order <strong>${record.orderName}</strong> (${record.productTitle}).</p><p>— Mozemo Signage</p>`,
                 attachments: [{ filename: record.fileName, content: pdfBase64 }],
             });
+
+            // The Resend SDK does not throw for API-level failures (e.g. an unverified sender
+            // domain) — it returns { data: null, error: {...} } instead, so this must be checked explicitly.
+            if (sendResult.error) {
+                console.error("Resend API rejected the email:", sendResult.error);
+                return { ok: false, error: sendResult.error.message || "Resend rejected this email" };
+            }
 
             await db.productionBlueprint.update({
                 where: { id },
@@ -105,8 +121,44 @@ export default function ProductionOrders() {
 function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: ReturnType<typeof useFetcher> }) {
     const emailFetcher = useFetcher();
     const isDeleting = deleteFetcher.state !== "idle" && deleteFetcher.formData?.get("id") === record.id;
+    const [downloadError, setDownloadError] = useState<string | null>(null);
+    const [linkCopied, setLinkCopied] = useState(false);
 
     if (isDeleting) return null;
+
+    // Downloads the PDF via an authenticated same-origin fetch (instead of a top-level
+    // link navigation), so it works correctly inside the embedded Shopify admin iframe.
+    async function handleDownload() {
+        setDownloadError(null);
+        try {
+            const response = await fetch(`/app/orders/${record.id}/download`);
+            if (!response.ok) throw new Error("Download failed");
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = record.fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error("Download failed:", err);
+            setDownloadError("Could not download the PDF. Please try again.");
+        }
+    }
+
+    function handleCopyLink() {
+        navigator.clipboard.writeText(record.shareUrl).then(() => {
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2500);
+        });
+    }
+
+    function handleWhatsAppShare() {
+        const message = `Hi, please find the production blueprint for order ${record.orderName} (${record.productTitle}): ${record.shareUrl}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+    }
 
     return (
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
@@ -124,9 +176,17 @@ function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: R
                     </s-paragraph>
                 </s-stack>
 
-                <s-link href={`/app/orders/${record.id}/download`} target="_blank">
+                <s-button onClick={handleDownload} variant="secondary">
                     Download PDF
-                </s-link>
+                </s-button>
+
+                <s-button onClick={handleCopyLink} variant="secondary">
+                    {linkCopied ? "Link Copied!" : "Copy Link"}
+                </s-button>
+
+                <s-button onClick={handleWhatsAppShare} variant="secondary">
+                    Share via WhatsApp
+                </s-button>
 
                 <emailFetcher.Form method="post">
                     <input type="hidden" name="intent" value="send-email" />
@@ -152,6 +212,7 @@ function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: R
                 </deleteFetcher.Form>
             </s-stack>
 
+            {downloadError && <s-paragraph tone="critical">{downloadError}</s-paragraph>}
             {emailFetcher.data?.error && (
                 <s-paragraph tone="critical">{emailFetcher.data.error}</s-paragraph>
             )}

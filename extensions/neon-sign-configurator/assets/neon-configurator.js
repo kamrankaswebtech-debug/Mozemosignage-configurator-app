@@ -646,7 +646,20 @@ function initConfigurator(root) {
 
         const colourOption = backboardColourSelect?.options[backboardColourSelect.selectedIndex];
         const hex = colourOption?.dataset.hex || '#e8e8e8';
-        previewInner.style.backgroundColor = hex;
+
+        // Colour is the OUTLINE/edge line only — never a filled block — exactly like the
+        // client's reference PDFs. This CSS variable feeds BOTH the plain-border shapes
+        // (rectangle/open-box/acrylic-stand's base) AND the SVG filter's flood-colour below.
+        root.style.setProperty('--moz-backboard-color', hex);
+
+        const blockId = root.dataset.blockId;
+        if (shape === 'cut-around' || shape === 'acrylic-stand-middle') {
+            previewInner.style.filter = 'url(#moz-outline-loose-' + blockId + ')';
+        } else if (shape === 'cut-to-letter') {
+            previewInner.style.filter = 'url(#moz-outline-tight-' + blockId + ')';
+        } else {
+            previewInner.style.filter = 'none';
+        }
     }
 
     function updatePowerState() {

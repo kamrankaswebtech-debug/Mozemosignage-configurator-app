@@ -29,6 +29,7 @@ model ProductionBlueprint {
   propertiesJson String
   fileName       String
   pdfData        Bytes
+  shareToken     String    @unique @default(cuid())
   createdAt      DateTime  @default(now())
   emailSentAt    DateTime?
   emailSentTo    String?

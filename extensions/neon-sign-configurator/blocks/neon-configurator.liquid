@@ -28,6 +28,31 @@
 
 <div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <filter id="moz-outline-loose-{{ block.id }}" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="14" result="dilated"/>
+        <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+        <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
+        <feComposite in="flood-colour" in2="ring" operator="in" result="coloured-ring"/>
+        <feMerge>
+          <feMergeNode in="coloured-ring"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      <filter id="moz-outline-tight-{{ block.id }}" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="dilated"/>
+        <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+        <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
+        <feComposite in="flood-colour" in2="ring" operator="in" result="coloured-ring"/>
+        <feMerge>
+          <feMergeNode in="coloured-ring"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
+
   <div class="neon-configurator__preview" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
     <div class="neon-configurator__preview-toggle">
       <span class="neon-configurator__toggle-label">OFF</span>
