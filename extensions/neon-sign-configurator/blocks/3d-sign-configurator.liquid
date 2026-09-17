@@ -8,12 +8,28 @@
       <p class="sign3d-configurator__preview-badge-sub">Mock-up for visual estimate only. Final professional artwork supplied for approval before manufacturing.</p>
     </div>
 
-    <div class="sign3d-configurator__measurements-toggle">
-      <label class="sign3d-configurator__switch">
-        <input type="checkbox" data-hide-measurements-toggle checked>
-        <span class="sign3d-configurator__switch-slider"></span>
-      </label>
-      <span class="sign3d-configurator__measurements-toggle-label">Hide Measurements</span>
+    <div class="sign3d-configurator__toggle-group">
+      <div class="sign3d-configurator__toggle-row">
+        <label class="sign3d-configurator__switch">
+          <input type="checkbox" data-hide-measurements-toggle checked>
+          <span class="sign3d-configurator__switch-slider"></span>
+        </label>
+        <span class="sign3d-configurator__toggle-label" data-measurements-label>Measurements On</span>
+      </div>
+      <div class="sign3d-configurator__toggle-row">
+        <label class="sign3d-configurator__switch">
+          <input type="checkbox" data-hide-wallpaper-toggle checked>
+          <span class="sign3d-configurator__switch-slider"></span>
+        </label>
+        <span class="sign3d-configurator__toggle-label" data-wallpaper-toggle-label>Wallpaper On</span>
+      </div>
+      <div class="sign3d-configurator__toggle-row">
+        <label class="sign3d-configurator__switch">
+          <input type="checkbox" data-led-toggle checked>
+          <span class="sign3d-configurator__switch-slider"></span>
+        </label>
+        <span class="sign3d-configurator__toggle-label" data-led-label>LED On</span>
+      </div>
     </div>
     <div class="sign3d-configurator__preview-stage" data-preview-stage>
       <div class="sign3d-configurator__preview-inner" data-preview-inner>
@@ -94,8 +110,29 @@
       <label class="sign3d-configurator__label">Upload Your Background Wallpaper</label>
       <input type="file" class="sign3d-configurator__wallpaper-input" data-wallpaper-input accept="image/*">
       <div class="sign3d-configurator__wallpaper-actions" data-wallpaper-actions hidden>
-        <button type="button" class="sign3d-configurator__wallpaper-btn" data-wallpaper-view-btn>View your Simple Signs</button>
         <button type="button" class="sign3d-configurator__wallpaper-btn sign3d-configurator__wallpaper-btn--delete" data-wallpaper-delete-btn>Delete Wallpaper</button>
+      </div>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">Symbol Position</label>
+      <div class="sign3d-configurator__symbol-position-options" data-symbol-position-options>
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="left">
+          <span>Left</span>
+        </label>
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked>
+          <span>Right</span>
+        </label>
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="top">
+          <span>Top</span>
+        </label>
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom">
+          <span>Bottom</span>
+        </label>
       </div>
     </div>
 

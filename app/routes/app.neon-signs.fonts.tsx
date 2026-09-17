@@ -11,6 +11,8 @@ type FontEntry = {
     cssFontFamily: string;
     sortOrder: string;
     fontFileUrl: string | null;
+    previewImageUrl: string | null;
+    isNew: boolean;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -29,6 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               value
               reference {
                 ... on GenericFile { url }
+                ... on MediaImage { image { url } }
               }
             }
           }
@@ -41,9 +44,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const fonts: FontEntry[] = data.data.metaobjects.edges.map((edge: any) => {
         const fieldMap: Record<string, string> = {};
         let fontFileUrl: string | null = null;
+        let previewImageUrl: string | null = null;
         edge.node.fields.forEach((f: any) => {
             fieldMap[f.key] = f.value;
             if (f.key === "font_file" && f.reference?.url) fontFileUrl = f.reference.url;
+            if (f.key === "preview_image" && f.reference?.image?.url) previewImageUrl = f.reference.image.url;
         });
         return {
             id: edge.node.id,
@@ -52,6 +57,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             cssFontFamily: fieldMap.css_font_family || "",
             sortOrder: fieldMap.sort_order || "0",
             fontFileUrl,
+            previewImageUrl,
+            isNew: fieldMap.is_new === "true",
         };
     });
 
@@ -87,12 +94,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const name = String(formData.get("name") || "");
         const cssFontFamily = String(formData.get("cssFontFamily") || "");
         const sortOrder = String(formData.get("sortOrder") || "0");
+        const isNew = formData.get("isNew") === "on";
         const fontFile = formData.get("fontFile") as File | null;
+        const previewImage = formData.get("previewImage") as File | null;
 
         const fields: { key: string; value: string }[] = [
             { key: "name", value: name },
             { key: "css_font_family", value: cssFontFamily },
             { key: "sort_order", value: sortOrder },
+            { key: "is_new", value: isNew ? "true" : "false" },
         ];
 
         // Only upload + attach a font file if the merchant actually selected one this time
@@ -153,6 +163,64 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             if (fileGid) fields.push({ key: "font_file", value: fileGid });
         }
 
+        // Only upload + attach a preview image if the merchant actually selected one this time
+        if (previewImage && previewImage.size > 0) {
+            const stagedImageResponse = await admin.graphql(
+                `#graphql
+        mutation StagedImageUpload($input: [StagedUploadInput!]!) {
+          stagedUploadsCreate(input: $input) {
+            stagedTargets { url resourceUrl parameters { name value } }
+            userErrors { field message }
+          }
+        }`,
+                {
+                    variables: {
+                        input: [
+                            {
+                                resource: "IMAGE",
+                                filename: previewImage.name,
+                                mimeType: previewImage.type || "image/png",
+                                fileSize: String(previewImage.size),
+                                httpMethod: "POST",
+                            },
+                        ],
+                    },
+                }
+            );
+            const stagedImageData = await stagedImageResponse.json();
+            const stagedImageErrors = stagedImageData.data?.stagedUploadsCreate?.userErrors;
+            if (stagedImageErrors?.length) return { error: "Preview image upload failed: " + stagedImageErrors[0].message };
+            const imageTarget = stagedImageData.data?.stagedUploadsCreate?.stagedTargets?.[0];
+            if (!imageTarget) return { error: "Could not prepare preview image upload." };
+
+            const uploadImageForm = new FormData();
+            imageTarget.parameters.forEach((p: any) => uploadImageForm.append(p.name, p.value));
+            uploadImageForm.append("file", previewImage);
+
+            const uploadImageResponse = await fetch(imageTarget.url, { method: "POST", body: uploadImageForm });
+            if (!uploadImageResponse.ok) return { error: "Preview image upload to storage failed." };
+
+            const imageCreateResponse = await admin.graphql(
+                `#graphql
+        mutation CreateImageFile($files: [FileCreateInput!]!) {
+          fileCreate(files: $files) {
+            files { id }
+            userErrors { field message }
+          }
+        }`,
+                {
+                    variables: {
+                        files: [{ originalSource: imageTarget.resourceUrl, contentType: "IMAGE" }],
+                    },
+                }
+            );
+            const imageCreateData = await imageCreateResponse.json();
+            const imageCreateErrors = imageCreateData.data?.fileCreate?.userErrors;
+            if (imageCreateErrors?.length) return { error: "Preview image registration failed: " + imageCreateErrors[0].message };
+            const imageGid = imageCreateData.data?.fileCreate?.files?.[0]?.id;
+            if (imageGid) fields.push({ key: "preview_image", value: imageGid });
+        }
+
         if (intent === "create") {
             const response = await admin.graphql(
                 `#graphql
@@ -197,6 +265,7 @@ export default function NeonFontsPage() {
     const revalidator = useRevalidator();
     const [editingId, setEditingId] = useState<string | null>(null);
     const createFileInputRef = useRef<HTMLInputElement>(null);
+    const createPreviewImageInputRef = useRef<HTMLInputElement>(null);
 
     const isSubmitting = fetcher.state !== "idle";
 
@@ -205,6 +274,7 @@ export default function NeonFontsPage() {
             shopify.toast.show("Saved successfully");
             setEditingId(null);
             if (createFileInputRef.current) createFileInputRef.current.value = "";
+            if (createPreviewImageInputRef.current) createPreviewImageInputRef.current.value = "";
             // Shopify's metaobject write can take a moment to propagate to reads —
             // re-fetch the list shortly after so the new/edited font shows up without a manual refresh
             setTimeout(() => revalidator.revalidate(), 800);
@@ -218,21 +288,35 @@ export default function NeonFontsPage() {
         <s-page heading="Neon Fonts">
             <s-section heading="Add New Font">
                 <s-link href="/app/neon-signs">← Back to Neon Signs</s-link>
+
                 <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
-                        <input type="text" name="name" placeholder="Display Name (e.g. Barcelona)" required />
+                        <input type="text" name="name" placeholder="Display Name (e.g. Barcelon)" required />
                         <input type="text" name="cssFontFamily" placeholder="CSS Font Family fallback (e.g. Dancing Script)" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={fonts.length + 1} />
-                        <input ref={createFileInputRef} type="file" name="fontFile" accept=".woff2,.woff,.ttf,.otf" />
+                        <label style={{ display: "flex", flexDirection: "column", fontSize: "12px", color: "#666" }}>
+                            Font File (optional)
+                            <input ref={createFileInputRef} type="file" name="fontFile" accept=".woff2,.woff,.ttf,.otf" />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", fontSize: "12px", color: "#666" }}>
+                            Preview Image (optional)
+                            <input ref={createPreviewImageInputRef} type="file" name="previewImage" accept="image/*" />
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px" }}>
+                            <input type="checkbox" name="isNew" />
+                            Mark as New
+                        </label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
                             Add Font
                         </s-button>
                     </s-stack>
                     <p style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
-                        Uploading a real font file (.woff2/.ttf/.otf) is optional — if uploaded, it's used in the live preview instead of the CSS Font Family fallback above.
+                        Uploading a real font file (.woff2/.ttf/.otf) is optional — if uploaded, it's used in the live preview instead of the CSS Font Family fallback above. The preview image is shown on the storefront font-picker card; leave empty to show a plain text sample instead.
                     </p>
                 </fetcher.Form>
+
+
             </s-section>
 
             <s-section heading={`Existing Fonts (${fonts.length})`}>
@@ -241,7 +325,9 @@ export default function NeonFontsPage() {
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
                             <th style={{ padding: "8px" }}>Name</th>
                             <th style={{ padding: "8px" }}>CSS Font Family</th>
+                            <th style={{ padding: "8px" }}>Preview Image</th>
                             <th style={{ padding: "8px" }}>Font File</th>
+                            <th style={{ padding: "8px" }}>New</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
@@ -250,7 +336,7 @@ export default function NeonFontsPage() {
                         {fonts.map((font) => (
                             <tr key={font.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === font.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={7} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={font.id} />
@@ -258,7 +344,18 @@ export default function NeonFontsPage() {
                                                 <input type="text" name="name" defaultValue={font.name} required />
                                                 <input type="text" name="cssFontFamily" defaultValue={font.cssFontFamily} required />
                                                 <input type="number" name="sortOrder" defaultValue={font.sortOrder} />
-                                                <input type="file" name="fontFile" accept=".woff2,.woff,.ttf,.otf" />
+                                                <label style={{ display: "flex", flexDirection: "column", fontSize: "12px", color: "#666" }}>
+                                                    Font File
+                                                    <input type="file" name="fontFile" accept=".woff2,.woff,.ttf,.otf" />
+                                                </label>
+                                                <label style={{ display: "flex", flexDirection: "column", fontSize: "12px", color: "#666" }}>
+                                                    Preview Image
+                                                    <input type="file" name="previewImage" accept="image/*" />
+                                                </label>
+                                                <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px" }}>
+                                                    <input type="checkbox" name="isNew" defaultChecked={font.isNew} />
+                                                    Mark as New
+                                                </label>
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
                                                     Save
                                                 </s-button>
@@ -267,7 +364,7 @@ export default function NeonFontsPage() {
                                                 </s-button>
                                             </s-stack>
                                             <p style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
-                                                Leave file empty to keep the current font file. Choose a new file to replace it.
+                                                Leave file/image empty to keep the current one. Choose a new file to replace it.
                                             </p>
                                         </fetcher.Form>
                                     </td>
@@ -276,12 +373,20 @@ export default function NeonFontsPage() {
                                         <td style={{ padding: "8px" }}>{font.name}</td>
                                         <td style={{ padding: "8px" }}>{font.cssFontFamily}</td>
                                         <td style={{ padding: "8px" }}>
+                                            {font.previewImageUrl ? (
+                                                <img src={font.previewImageUrl} alt={font.name} style={{ height: "32px", maxWidth: "80px", objectFit: "contain" }} />
+                                            ) : (
+                                                <span style={{ color: "#999" }}>None</span>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: "8px" }}>
                                             {font.fontFileUrl ? (
                                                 <a href={font.fontFileUrl} target="_blank" rel="noreferrer">Uploaded ✓</a>
                                             ) : (
                                                 <span style={{ color: "#999" }}>Not uploaded</span>
                                             )}
                                         </td>
+                                        <td style={{ padding: "8px" }}>{font.isNew ? "✓" : ""}</td>
                                         <td style={{ padding: "8px" }}>{font.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">

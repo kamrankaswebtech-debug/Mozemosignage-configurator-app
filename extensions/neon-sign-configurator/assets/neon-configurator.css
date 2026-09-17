@@ -83,6 +83,45 @@
 
 
 
+.neon-configurator__text-wrap {
+    /* CSS Grid stacking: shape-source and text-flex share the SAME grid cell, so the
+       browser guarantees them the exact same width every time — this is what makes the
+       outline wrap identically with the real text (fixes ghost/misaligned outline on
+       wrapped multi-line text), with no manual JS position/size copying needed. */
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-items: center;
+    max-width: 100%;
+}
+
+.neon-configurator__shape-source {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    z-index: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    word-break: break-word;
+    color: #050505;
+    opacity: 0;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 0.15s ease;
+}
+
+.neon-configurator__shape-letter {
+    display: inline-block;
+}
+
+.neon-configurator__shape-source.is-active {
+    opacity: 1;
+}
+
 .neon-configurator__preview-inner.backboard--rectangle {
     padding: 22px 32px;
     border-radius: 6px;
@@ -94,11 +133,12 @@
 .neon-configurator__preview-inner.backboard--cut-around,
 .neon-configurator__preview-inner.backboard--cut-to-letter,
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
-    /* No CSS border/background here on purpose — the outline is painted dynamically by an
-       SVG filter (see updateBackboardPanel() in neon-configurator.js) so it hugs the EXACT
-       rendered shape of the customer's text — matches the client's reference PDFs 1:1,
-       works for any text, any font, any length, fully dynamic. Padding just reserves room. */
-    padding: 30px 46px;
+    /* No CSS border/background here on purpose — the outline is painted dynamically on the
+       hidden .neon-configurator__shape-source clone (see updateBackboardPanel() in
+       neon-configurator.js), so it hugs the EXACT rendered shape of the customer's current
+       text/font/size — fully dynamic, matches the client's reference PDFs. Padding reserves
+       just enough room for the outline's gap+thickness so it isn't clipped by the stage. */
+    padding: 18px 26px;
     border: none;
     background: transparent;
     box-shadow: none;
@@ -107,42 +147,98 @@
 .neon-configurator__preview-inner.backboard--naked {
     background: transparent !important;
     border: none !important;
-    filter: none !important;
     padding: 0;
     border-radius: 0;
     box-shadow: none;
 }
 
 .neon-configurator__preview-inner.backboard--open-box {
-    padding: 24px 36px;
-    border-radius: 4px;
+    padding: 26px 40px;
+    border-radius: 2px;
     border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.45));
-    background:
-        radial-gradient(circle, #9a9aa8 40%, #2c2c38 100%),
-        radial-gradient(circle, #9a9aa8 40%, #2c2c38 100%),
-        radial-gradient(circle, #9a9aa8 40%, #2c2c38 100%),
-        radial-gradient(circle, #9a9aa8 40%, #2c2c38 100%);
-    background-repeat: no-repeat;
-    background-size: 10px 10px;
-    background-position:
-        6px 6px,
-        calc(100% - 16px) 6px,
-        6px calc(100% - 16px),
-        calc(100% - 16px) calc(100% - 16px);
+    background: transparent;
     box-shadow: none;
     position: relative;
 }
 
 .neon-configurator__preview-inner.backboard--open-box::before {
+    /* The second, slightly-inset frame line the corner clamps visually "clip" onto —
+       matches the reference photo's double-line look. */
     content: "";
     position: absolute;
-    top: 6px;
-    left: -6px;
-    right: -6px;
-    bottom: -6px;
+    top: 9px;
+    left: 9px;
+    right: 9px;
+    bottom: 9px;
     border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.45));
-    border-radius: 4px;
+    border-radius: 2px;
     pointer-events: none;
+}
+
+.neon-configurator__corner-clamp {
+    position: absolute;
+    width: 28px;
+    height: 10px;
+    display: none;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.neon-configurator__preview-inner.backboard--open-box .neon-configurator__corner-clamp {
+    display: block;
+}
+
+.neon-configurator__corner-clamp::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 0;
+    width: 19px;
+    height: 10px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(90deg, #6b6b78, #c4c4d0 45%, #6b6b78);
+}
+
+.neon-configurator__corner-clamp::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #6b6b78;
+    box-shadow: inset 0 0 0 2px #2c2c38;
+}
+
+.neon-configurator__corner-clamp--tl {
+    /* Reaches from the outer border line to the inset inner border line, so it visually
+       "clips" both frame lines together — matching the reference photo. */
+    top: -6px;
+    left: -6px;
+    transform: rotate(-45deg);
+    transform-origin: left center;
+}
+
+.neon-configurator__corner-clamp--tr {
+    top: -6px;
+    right: -6px;
+    transform: rotate(45deg) scaleX(-1);
+    transform-origin: left center;
+}
+
+.neon-configurator__corner-clamp--bl {
+    bottom: -6px;
+    left: -6px;
+    transform: rotate(45deg);
+    transform-origin: left center;
+}
+
+.neon-configurator__corner-clamp--br {
+    bottom: -6px;
+    right: -6px;
+    transform: rotate(-45deg) scaleX(-1);
+    transform-origin: left center;
 }
 
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
@@ -244,6 +340,78 @@
 .neon-configurator__style-card-price {
     font-size: 10px;
     color: #b8b8c4;
+}
+
+.neon-configurator__font-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.neon-configurator__font-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.neon-configurator__font-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.12);
+}
+
+.neon-configurator__font-card-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    border-radius: 999px;
+    z-index: 1;
+}
+
+.neon-configurator__font-card-thumb {
+    width: 100%;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0f;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.neon-configurator__font-card-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.neon-configurator__font-card-sample {
+    font-size: 18px;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.neon-configurator__font-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
 }
 
 
@@ -409,7 +577,11 @@
 }
 
 .neon-configurator__text-flex {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
     position: relative;
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -663,6 +835,8 @@
 }
 
 .neon-configurator__preview-icons {
+    position: relative;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     gap: 8px;

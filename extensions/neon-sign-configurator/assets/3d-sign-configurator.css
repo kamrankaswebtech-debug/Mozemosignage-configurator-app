@@ -50,17 +50,24 @@
     max-width: 200px;
 }
 
-.sign3d-configurator__measurements-toggle {
+.sign3d-configurator__toggle-group {
     position: absolute;
     top: 16px;
     right: 16px;
     z-index: 3;
     display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.sign3d-configurator__toggle-row {
+    display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.sign3d-configurator__measurements-toggle-label {
+.sign3d-configurator__toggle-label {
     font-size: 11px;
     font-weight: 700;
     color: #ffffff;
@@ -81,6 +88,7 @@
     height: 0;
 }
 
+/* Inactive (off) — black background with a pink/purple border, per the client's reference. */
 .sign3d-configurator__switch-slider {
     position: absolute;
     cursor: pointer;
@@ -88,25 +96,29 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #3a3a48;
+    background-color: #000000;
+    border: 2px solid #ff2ec4;
     border-radius: 22px;
-    transition: 0.2s;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    box-sizing: border-box;
 }
 
 .sign3d-configurator__switch-slider::before {
     position: absolute;
     content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
     background-color: #ffffff;
     border-radius: 50%;
     transition: 0.2s;
 }
 
+/* Active (on) — solid pink/purple fill, no border, per the client's reference. */
 .sign3d-configurator__switch input:checked+.sign3d-configurator__switch-slider {
-    background: linear-gradient(90deg, #00d4ff, #7a00ff);
+    background: linear-gradient(90deg, #ff2ec4, #7a00ff);
+    border-color: transparent;
 }
 
 .sign3d-configurator__switch input:checked+.sign3d-configurator__switch-slider::before {
@@ -116,6 +128,33 @@
 .sign3d-configurator__preview-stage.no-measurements .sign3d-configurator__dim-line,
 .sign3d-configurator__preview-stage.no-measurements .sign3d-configurator__selection-box {
     display: none !important;
+}
+
+/* "Turn Off LED" — ON: full colour with a glowing light-emission effect (matches the Neon configurator's glow). OFF: full colour, no glow — sign looks unlit but the colour stays exactly as configured. */
+.sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter {
+    text-shadow:
+        0 0 5px #ffffff,
+        0 0 15px #ffffff,
+        0 0 30px currentColor,
+        0 0 60px currentColor;
+}
+
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
+    text-shadow: none;
+}
+
+.sign3d-configurator__preview-inner.led-on .sign3d-configurator__preview-icon {
+    filter:
+        drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor);
+}
+
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__preview-icon {
+    filter: none;
+}
+
+.sign3d-configurator__letter,
+.sign3d-configurator__preview-icon {
+    transition: text-shadow 0.3s ease, filter 0.3s ease;
 }
 
 .sign3d-configurator__preview-footer {
@@ -409,7 +448,6 @@
     letter-spacing: 0.01em;
     color: #ffffff;
     word-break: break-word;
-    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5), 4px 4px 8px rgba(0, 0, 0, 0.35);
     transition: color 0.25s ease;
 }
 
@@ -590,6 +628,69 @@
     color: #b8b8c4;
     margin-top: 8px;
     min-height: 16px;
+}
+
+.sign3d-configurator__symbol-position-options {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sign3d-configurator__symbol-position-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #b8b8c4;
+    cursor: pointer;
+}
+
+.sign3d-configurator__symbol-position-option input {
+    accent-color: #00d4ff;
+}
+
+/* Right (default) — natural DOM order: text first, symbols after. */
+.sign3d-configurator__preview-inner.symbols-right {
+    flex-direction: row;
+}
+
+.sign3d-configurator__preview-inner.symbols-right .sign3d-configurator__preview-icons {
+    order: 1;
+    margin-left: 12px;
+    margin-top: 0;
+}
+
+/* Left — symbols moved before the text via flex order. */
+.sign3d-configurator__preview-inner.symbols-left {
+    flex-direction: row;
+}
+
+.sign3d-configurator__preview-inner.symbols-left .sign3d-configurator__preview-icons {
+    order: -1;
+    margin-left: 0;
+    margin-right: 12px;
+}
+
+/* Top — stacked vertically, symbols above the text. */
+.sign3d-configurator__preview-inner.symbols-top {
+    flex-direction: column;
+}
+
+.sign3d-configurator__preview-inner.symbols-top .sign3d-configurator__preview-icons {
+    order: -1;
+    margin-left: 0;
+    margin-bottom: 12px;
+}
+
+/* Bottom — stacked vertically, symbols below the text. */
+.sign3d-configurator__preview-inner.symbols-bottom {
+    flex-direction: column;
+}
+
+.sign3d-configurator__preview-inner.symbols-bottom .sign3d-configurator__preview-icons {
+    order: 1;
+    margin-left: 0;
+    margin-top: 12px;
 }
 
 .sign3d-configurator__symbols {

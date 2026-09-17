@@ -15,6 +15,7 @@ api_version = "unstable"
   handle = "product-updates-stub"
   topic = "Product"
   actions = [ "update" ]
+  triggers = [ "product.title" ]
   uri = "https://drove-temp-act-received.trycloudflare.com/webhooks/events/product-updates"
   api_version = "unstable"
 
@@ -99,6 +100,11 @@ type = "file_reference"
 [metaobjects.app.neon_font.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+[metaobjects.app.neon_font.fields.is_new]
+name = "Is New"
+description = "Shows a 'NEW' badge on this font's card in the storefront font picker."
+type = "boolean"
 
 [metaobjects.app.neon_font.fields.visibility]
 name = "Visibility"

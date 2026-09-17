@@ -71,7 +71,9 @@ function initSign3dConfigurator(root) {
     const fontSelect = root.querySelector('[data-font-select]');
     const symbolButtons = root.querySelectorAll('[data-symbol-buttons] .sign3d-configurator__symbol-btn');
     const iconsContainer = root.querySelector('[data-preview-icons]');
+    const symbolPositionRadios = root.querySelectorAll('[data-symbol-position-radio]');
     let selectedSymbols = [];
+    let currentSymbolPosition = 'right';
     const illuminationSelect = root.querySelector('[data-illumination-select]');
     const sizeSelect = root.querySelector('[data-size-select]');
     const materialSelect = root.querySelector('[data-material-select]');
@@ -91,12 +93,17 @@ function initSign3dConfigurator(root) {
     const textFlex = root.querySelector('[data-text-flex]');
     const selectionBox = root.querySelector('[data-selection-box]');
     const previewBox = root.querySelector('.sign3d-configurator__preview');
+    const previewInnerForLed = root.querySelector('[data-preview-inner]');
     const wallpaperInput = root.querySelector('[data-wallpaper-input]');
     const wallpaperActions = root.querySelector('[data-wallpaper-actions]');
-    const wallpaperViewBtn = root.querySelector('[data-wallpaper-view-btn]');
     const wallpaperDeleteBtn = root.querySelector('[data-wallpaper-delete-btn]');
+    const wallpaperToggle = root.querySelector('[data-hide-wallpaper-toggle]');
+    const wallpaperToggleLabel = root.querySelector('[data-wallpaper-toggle-label]');
+    const measurementsLabel = root.querySelector('[data-measurements-label]');
+    const ledToggle = root.querySelector('[data-led-toggle]');
+    const ledLabel = root.querySelector('[data-led-label]');
     let wallpaperObjectUrl = null;
-    let wallpaperShowingDefault = false;
+    let wallpaperHidden = false;
     const alignButtons = root.querySelectorAll('[data-align-btn]');
     const selectAllBtn = root.querySelector('[data-select-all-btn]');
     const undoBtn = root.querySelector('[data-undo-btn]');
@@ -451,6 +458,7 @@ function initSign3dConfigurator(root) {
     }
 
     let measurementsVisible = true;
+    let ledOn = true;
     const hideMeasurementsToggle = root.querySelector('[data-hide-measurements-toggle]');
 
     if (previewInner) {
@@ -471,7 +479,36 @@ function initSign3dConfigurator(root) {
         hideMeasurementsToggle.addEventListener('change', () => {
             measurementsVisible = hideMeasurementsToggle.checked;
             if (previewStage) previewStage.classList.toggle('no-measurements', !measurementsVisible);
+            if (measurementsLabel) measurementsLabel.textContent = measurementsVisible ? 'Measurements On' : 'Measurements Off';
             if (!measurementsVisible) hideSelectionBox();
+        });
+    }
+
+    function updateLedState() {
+        if (!previewInnerForLed) return;
+        previewInnerForLed.classList.toggle('led-on', ledOn);
+        previewInnerForLed.classList.toggle('led-off', !ledOn);
+    }
+
+    function updateSymbolPositionClass() {
+        if (!previewInner) return;
+        ['symbols-left', 'symbols-right', 'symbols-top', 'symbols-bottom'].forEach((cls) => previewInner.classList.remove(cls));
+        previewInner.classList.add('symbols-' + currentSymbolPosition);
+    }
+
+    symbolPositionRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            currentSymbolPosition = radio.value;
+            updateSymbolPositionClass();
+        });
+    });
+
+    if (ledToggle) {
+        ledToggle.addEventListener('change', () => {
+            ledOn = ledToggle.checked;
+            updateLedState();
+            if (ledLabel) ledLabel.textContent = ledOn ? 'LED On' : 'LED Off';
         });
     }
 
@@ -545,7 +582,7 @@ function initSign3dConfigurator(root) {
 
     function applyWallpaperBackground() {
         if (!previewBox) return;
-        if (wallpaperObjectUrl && !wallpaperShowingDefault) {
+        if (wallpaperObjectUrl && !wallpaperHidden) {
             previewBox.style.backgroundImage = "url('" + wallpaperObjectUrl + "')";
             previewBox.style.backgroundSize = 'cover';
             previewBox.style.backgroundPosition = 'center';
@@ -559,9 +596,11 @@ function initSign3dConfigurator(root) {
     function clearWallpaper() {
         if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
         wallpaperObjectUrl = null;
-        wallpaperShowingDefault = false;
+        wallpaperHidden = false;
         if (wallpaperInput) wallpaperInput.value = '';
         if (wallpaperActions) wallpaperActions.hidden = true;
+        if (wallpaperToggle) wallpaperToggle.checked = true;
+        if (wallpaperToggleLabel) wallpaperToggleLabel.textContent = 'Wallpaper On';
         applyWallpaperBackground();
     }
 
@@ -571,17 +610,18 @@ function initSign3dConfigurator(root) {
             if (!file) return;
             if (wallpaperObjectUrl) URL.revokeObjectURL(wallpaperObjectUrl);
             wallpaperObjectUrl = URL.createObjectURL(file);
-            wallpaperShowingDefault = false;
+            wallpaperHidden = false;
             if (wallpaperActions) wallpaperActions.hidden = false;
-            if (wallpaperViewBtn) wallpaperViewBtn.textContent = 'View your Simple Signs';
+            if (wallpaperToggle) wallpaperToggle.checked = true;
+            if (wallpaperToggleLabel) wallpaperToggleLabel.textContent = 'Wallpaper On';
             applyWallpaperBackground();
         });
     }
 
-    if (wallpaperViewBtn) {
-        wallpaperViewBtn.addEventListener('click', () => {
-            wallpaperShowingDefault = !wallpaperShowingDefault;
-            wallpaperViewBtn.textContent = wallpaperShowingDefault ? 'View my Wallpaper' : 'View your Simple Signs';
+    if (wallpaperToggle) {
+        wallpaperToggle.addEventListener('change', () => {
+            wallpaperHidden = !wallpaperToggle.checked;
+            if (wallpaperToggleLabel) wallpaperToggleLabel.textContent = wallpaperToggle.checked ? 'Wallpaper On' : 'Wallpaper Off';
             applyWallpaperBackground();
         });
     }
@@ -651,6 +691,7 @@ function initSign3dConfigurator(root) {
                 'Finish': finishSelect.options[finishSelect.selectedIndex].textContent.trim(),
                 'Mounting': mountingSelect.options[mountingSelect.selectedIndex].textContent.trim(),
                 'Add-ons': selectedAddons || 'None',
+                'Symbol Position': currentSymbolPosition.charAt(0).toUpperCase() + currentSymbolPosition.slice(1),
                 'Configured Total': '$' + currentTotal.toFixed(2),
                 '_blueprint_width_cm': blueprintWidthCm,
                 '_blueprint_height_cm': blueprintHeightCm
@@ -732,6 +773,8 @@ function initSign3dConfigurator(root) {
     updatePreviewFont();
     updatePreviewColour();
     updatePreviewScale();
+    updateLedState();
+    updateSymbolPositionClass();
     calculateTotal();
     pushHistory();
     updateUndoRedoButtons();

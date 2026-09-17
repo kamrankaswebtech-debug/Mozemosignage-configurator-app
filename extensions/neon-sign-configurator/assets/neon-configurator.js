@@ -73,6 +73,7 @@ function initConfigurator(root) {
     const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
+    const fontCards = root.querySelectorAll('[data-font-cards] .neon-configurator__font-card');
     const swatches = root.querySelectorAll('[data-colour-swatches] .neon-configurator__swatch');
     const colourNameLabel = root.querySelector('[data-colour-name-label]');
     const sizeSelect = root.querySelector('[data-size-select]');
@@ -82,6 +83,8 @@ function initConfigurator(root) {
     const addonCheckboxes = root.querySelectorAll('[data-addon-checkbox]');
     const totalPriceEl = root.querySelector('[data-total-price]');
     const previewInner = root.querySelector('[data-preview-inner]');
+    const shapeSource = root.querySelector('[data-shape-source]');
+    const textWrap = root.querySelector('[data-text-wrap]');
     const previewStage = root.querySelector('[data-preview-stage]');
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
@@ -234,10 +237,21 @@ function initConfigurator(root) {
         closeLetterPopup();
     });
 
-    function applyLetterTransform(span, i) {
+    function computeLetterTransform(i) {
         const off = letterOffsets[i] || { x: 0, y: 0 };
         const scale = letterScales[i] || 1;
-        span.style.transform = 'translate(' + (groupOffsetX + off.x) + 'px, ' + (groupOffsetY + off.y) + 'px) scale(' + scale + ')';
+        return 'translate(' + (groupOffsetX + off.x) + 'px, ' + (groupOffsetY + off.y) + 'px) scale(' + scale + ')';
+    }
+
+    function applyLetterTransform(span, i) {
+        const transformStr = computeLetterTransform(i);
+        span.style.transform = transformStr;
+        // Keep the hidden shape-source clone's matching letter perfectly aligned —
+        // same index, same transform — so the outline always hugs the real letter's
+        // exact position, even after dragging/resizing an individual letter.
+        if (shapeSource && shapeSource.children[i]) {
+            shapeSource.children[i].style.transform = transformStr;
+        }
     }
 
     function refreshAllLetterTransforms() {
@@ -458,6 +472,8 @@ function initConfigurator(root) {
         }
 
         textFlex.innerHTML = '';
+        if (shapeSource) shapeSource.innerHTML = '';
+
         value.split('').forEach((ch, i) => {
             const span = document.createElement('span');
             span.className = 'neon-configurator__letter';
@@ -467,10 +483,22 @@ function initConfigurator(root) {
             applyLetterTransform(span, i);
             attachLetterDrag(span, i, ch);
             textFlex.appendChild(span);
+
+            // Mirror the exact same letter (same character, same wrapping position, same
+            // transform) into the hidden shape-source — this is what makes the outline
+            // hug the REAL text pixel-for-pixel instead of drifting/duplicating.
+            if (shapeSource) {
+                const shapeSpan = document.createElement('span');
+                shapeSpan.className = 'neon-configurator__shape-letter';
+                shapeSpan.textContent = ch === ' ' ? '\u00A0' : ch;
+                shapeSpan.style.transform = computeLetterTransform(i);
+                shapeSource.appendChild(shapeSpan);
+            }
         });
 
         hideSelectionBox();
         closeLetterPopup();
+        syncShapeSourceStyle();
     }
 
     function updatePreviewText() {
@@ -479,11 +507,27 @@ function initConfigurator(root) {
 
     function updatePreviewFont() {
         if (textFlex) textFlex.style.fontFamily = fontSelect.value;
+        syncShapeSourceStyle();
     }
 
     function updatePreviewTransform() {
-        if (textFlex) textFlex.style.transform = 'rotate(' + textRotation + 'deg)';
+        // Rotating the shared wrapper (text-wrap) rotates BOTH the real text and the hidden
+        // outline clone together as one unit — simpler and guaranteed in sync.
+        if (textWrap) textWrap.style.transform = 'rotate(' + textRotation + 'deg)';
         updateIconsContainerTransform();
+    }
+
+    // Keeps the hidden shape-source clone's font/size in sync with the REAL text — purely so
+    // the outline always hugs the customer's actual current text/font/size. The clone's WIDTH
+    // is no longer copied manually here: it lives inside .neon-configurator__text-wrap (CSS
+    // Grid), which forces shape-source and text-flex to always share the identical rendered
+    // width automatically — this is what guarantees identical text wrapping between the two
+    // (fixes ghost/misaligned outline on wrapped multi-line text). Fully dynamic: called
+    // automatically whenever text, font, size, or scale changes.
+    function syncShapeSourceStyle() {
+        if (!shapeSource) return;
+        shapeSource.style.fontFamily = fontSelect.value;
+        shapeSource.style.fontSize = (baseFontSize * groupScale) + 'px';
     }
 
     function updateRotationLabel() {
@@ -492,7 +536,7 @@ function initConfigurator(root) {
 
     if (previewInner) {
         previewInner.addEventListener('pointerdown', (event) => {
-            if (event.target === previewInner || event.target === textFlex) {
+            if (event.target === previewInner || event.target === textFlex || event.target === textWrap) {
                 selectGroup();
             }
         });
@@ -545,6 +589,7 @@ function initConfigurator(root) {
                         groupScale = newScale;
                         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
                         showSelectionBoxAround(textFlex);
+                        syncShapeSourceStyle();
                     }
                 };
 
@@ -619,6 +664,7 @@ function initConfigurator(root) {
         // Scale font size proportionally to width, clamped to a sensible range
         baseFontSize = Math.min(90, Math.max(22, widthValue * 0.42));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+        syncShapeSourceStyle();
 
         if (widthLabel) {
             widthLabel.textContent = widthValue + ' ' + unit;
@@ -648,17 +694,26 @@ function initConfigurator(root) {
         const hex = colourOption?.dataset.hex || '#e8e8e8';
 
         // Colour is the OUTLINE/edge line only — never a filled block — exactly like the
-        // client's reference PDFs. This CSS variable feeds BOTH the plain-border shapes
-        // (rectangle/open-box/acrylic-stand's base) AND the SVG filter's flood-colour below.
+        // client's reference PDFs. This CSS variable feeds the plain-border shapes
+        // (rectangle/open-box/acrylic-stand's base line) AND the SVG filter's flood-colour below.
         root.style.setProperty('--moz-backboard-color', hex);
 
+        // The outline for Cut Around / Cut to Letter / Acrylic Stand is drawn on the hidden,
+        // glow-free clone of the text (data-shape-source) — NOT on the real glowing letters —
+        // because the neon glow (text-shadow) would otherwise pollute the shape's alpha channel
+        // and make the SVG filter render a solid block instead of a thin contour-hugging line.
         const blockId = root.dataset.blockId;
-        if (shape === 'cut-around' || shape === 'acrylic-stand-middle') {
-            previewInner.style.filter = 'url(#moz-outline-loose-' + blockId + ')';
-        } else if (shape === 'cut-to-letter') {
-            previewInner.style.filter = 'url(#moz-outline-tight-' + blockId + ')';
-        } else {
-            previewInner.style.filter = 'none';
+        if (shapeSource) {
+            if (shape === 'cut-around' || shape === 'acrylic-stand-middle') {
+                shapeSource.style.filter = 'url(#moz-outline-loose-' + blockId + ')';
+                shapeSource.classList.add('is-active');
+            } else if (shape === 'cut-to-letter') {
+                shapeSource.style.filter = 'url(#moz-outline-tight-' + blockId + ')';
+                shapeSource.classList.add('is-active');
+            } else {
+                shapeSource.style.filter = 'none';
+                shapeSource.classList.remove('is-active');
+            }
         }
     }
 
@@ -724,8 +779,27 @@ function initConfigurator(root) {
         updatePreviewText();
     });
 
+    function syncFontCards() {
+        const selectedValue = fontSelect.value;
+        fontCards.forEach((card) => {
+            card.classList.toggle('is-selected', card.dataset.fontValue === selectedValue);
+        });
+    }
+
+    fontCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            const value = card.dataset.fontValue;
+            const options = Array.from(fontSelect.options);
+            const matchIndex = options.findIndex((opt) => opt.value === value);
+            if (matchIndex === -1) return;
+            fontSelect.selectedIndex = matchIndex;
+            fontSelect.dispatchEvent(new Event('change'));
+        });
+    });
+
     fontSelect.addEventListener('change', () => {
         updatePreviewFont();
+        syncFontCards();
     });
 
     swatches.forEach((swatch) => {
@@ -1020,8 +1094,10 @@ function initConfigurator(root) {
     updatePreviewColour();
     updatePreviewScale();
     updatePowerState();
+    syncShapeSourceStyle();
     updateBackboardPanel();
     syncBackboardStyleCards();
+    syncFontCards();
     updateOutdoorThicknessVisibility();
     updateSizeFieldsVisibility();
     calculateTotal();

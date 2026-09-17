@@ -31,24 +31,22 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <filter id="moz-outline-loose-{{ block.id }}" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
-        <feMorphology in="SourceAlpha" operator="dilate" radius="14" result="dilated"/>
-        <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+        <!-- Two dilates instead of one = independent GAP (inner radius) + THICKNESS (outer minus inner),
+             instead of one number controlling both. Used by Cut Around / Acrylic Stand — a slightly
+             looser gap, matching the client's reference PDFs. -->
+        <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="inner-dilate"/>
+        <feMorphology in="SourceAlpha" operator="dilate" radius="10.5" result="outer-dilate"/>
+        <feComposite in="outer-dilate" in2="inner-dilate" operator="out" result="ring"/>
         <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
-        <feComposite in="flood-colour" in2="ring" operator="in" result="coloured-ring"/>
-        <feMerge>
-          <feMergeNode in="coloured-ring"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
+        <feComposite in="flood-colour" in2="ring" operator="in"/>
       </filter>
-      <filter id="moz-outline-tight-{{ block.id }}" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
-        <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="dilated"/>
-        <feComposite in="dilated" in2="SourceAlpha" operator="out" result="ring"/>
+      <filter id="moz-outline-tight-{{ block.id }}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+        <!-- Used by Cut to Letter — a tighter gap that hugs the letters closer. -->
+        <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="inner-dilate"/>
+        <feMorphology in="SourceAlpha" operator="dilate" radius="7" result="outer-dilate"/>
+        <feComposite in="outer-dilate" in2="inner-dilate" operator="out" result="ring"/>
         <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
-        <feComposite in="flood-colour" in2="ring" operator="in" result="coloured-ring"/>
-        <feMerge>
-          <feMergeNode in="coloured-ring"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
+        <feComposite in="flood-colour" in2="ring" operator="in"/>
       </filter>
     </defs>
   </svg>
@@ -64,7 +62,14 @@
     </div>
     <div class="neon-configurator__preview-stage" data-preview-stage>
       <div class="neon-configurator__preview-inner" data-preview-inner>
-        <div class="neon-configurator__text-flex" data-text-flex></div>
+        <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--tl"></span>
+        <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--tr"></span>
+        <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--bl"></span>
+        <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--br"></span>
+        <div class="neon-configurator__text-wrap" data-text-wrap>
+          <div class="neon-configurator__shape-source" data-shape-source aria-hidden="true"></div>
+          <div class="neon-configurator__text-flex" data-text-flex></div>
+        </div>
         <span class="neon-configurator__preview-icons" data-preview-icons></span>
         <div class="neon-configurator__selection-box" data-selection-box hidden>
           <div class="neon-configurator__move-badge">
@@ -193,7 +198,32 @@
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">2. Choose Font</label>
-      <select class="neon-configurator__select" data-font-select>
+      <div class="neon-configurator__font-cards" data-font-cards>
+        {% for font in metaobjects["app--418838118401--neon_font"].values %}
+          {% if font.font_file.value.url %}
+            {% assign font_value = "moz-font-" | append: font.system.handle %}
+          {% else %}
+            {% assign font_value = font.css_font_family.value %}
+          {% endif %}
+          <button
+            type="button"
+            class="neon-configurator__font-card{% if forloop.first %} is-selected{% endif %}"
+            data-font-value="{{ font_value }}">
+            {% if font.is_new.value %}
+              <span class="neon-configurator__font-card-badge">NEW</span>
+            {% endif %}
+            <span class="neon-configurator__font-card-thumb">
+              {% if font.preview_image.value %}
+                <img src="{{ font.preview_image.value | image_url: width: 200 }}" alt="{{ font.name.value }}" width="100" height="40" loading="lazy">
+              {% else %}
+                <span class="neon-configurator__font-card-sample" style="font-family: {{ font_value }};">Your Text</span>
+              {% endif %}
+            </span>
+            <span class="neon-configurator__font-card-label">{{ font.name.value }}</span>
+          </button>
+        {% endfor %}
+      </div>
+      <select class="neon-configurator__select" data-font-select hidden aria-hidden="true" tabindex="-1">
         {% for font in metaobjects["app--418838118401--neon_font"].values %}
           {% if font.font_file.value.url %}
             {% assign font_value = "moz-font-" | append: font.system.handle %}
