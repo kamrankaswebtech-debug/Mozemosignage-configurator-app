@@ -1,0 +1,138 @@
+{% comment %} Mozemo Signage - Live Acrylic Neon Bonnet / Wall Sign Configurator {% endcomment %}
+
+<div class="bonnet-configurator" id="bonnet-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+
+  <div class="bonnet-configurator__preview">
+    <div class="bonnet-configurator__preview-inner" data-preview-inner>
+      <p class="bonnet-configurator__preview-placeholder" data-preview-placeholder>
+        Upload your design to see a preview
+      </p>
+      <img class="bonnet-configurator__preview-image" data-preview-image style="display:none;" alt="Your uploaded design">
+    </div>
+    <div class="bonnet-configurator__preview-toggle">
+      <span class="bonnet-configurator__toggle-label">OFF</span>
+      <label class="bonnet-configurator__switch">
+        <input type="checkbox" data-power-toggle checked>
+        <span class="bonnet-configurator__switch-slider"></span>
+      </label>
+      <span class="bonnet-configurator__toggle-label">ON</span>
+    </div>
+    <p class="bonnet-configurator__preview-note">Mock-up for visual estimate only. Final artwork supplied for approval before manufacturing.</p>
+  </div>
+
+  <div class="bonnet-configurator__panel">
+
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">1. Upload Your Design</label>
+      <input type="file" class="bonnet-configurator__file-input" data-file-input accept="image/png,image/jpeg,image/svg+xml,.pdf,.ai">
+      <p class="bonnet-configurator__file-status" data-file-status>PNG, JPG, SVG, PDF or AI file — your logo, name, image or custom design.</p>
+    </div>
+
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">2. Choose Face Colour</label>
+      <div class="bonnet-configurator__swatches" data-colour-swatches>
+        {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+          {% if item.category.value == "colour" %}
+            <button type="button" class="bonnet-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
+              style="background-color: {{ item.hex_code.value | default: '#1a1a1a' }};"
+              data-colour-hex="{{ item.hex_code.value | default: '#1a1a1a' }}"
+              data-colour-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-colour-name="{{ item.label.value }}"
+              title="{{ item.label.value }}" aria-label="{{ item.label.value }}">
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <p class="bonnet-configurator__selected-label" data-colour-name-label>
+        {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+          {% if item.category.value == "colour" %}{{ item.label.value }}{% break %}{% endif %}
+        {% endfor %}
+      </p>
+    </div>
+
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">3. Lighting Option</label>
+      <div class="bonnet-configurator__lighting-cards" data-lighting-cards>
+        {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+          {% if item.category.value == "lighting_mode" %}
+            <button type="button" class="bonnet-configurator__lighting-card{% if forloop.first %} is-selected{% endif %}"
+              data-lighting-key="{{ item.mode_key.value }}"
+              data-lighting-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-lighting-label="{{ item.label.value }}">
+              <span>{{ item.label.value }}</span>
+              {% if item.extra_price_decimal.value != blank and item.extra_price_decimal.value != 0 %}
+                <span class="bonnet-configurator__lighting-price">+${{ item.extra_price_decimal.value }}</span>
+              {% endif %}
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">4. Choose Size</label>
+      <select class="bonnet-configurator__select" data-size-select>
+        {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+          {% if item.category.value == "size" %}
+            <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" data-height="{{ item.height_cm.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">5. Display Use</label>
+      <div class="bonnet-configurator__use-options" data-use-options>
+        <label class="bonnet-configurator__use-option">
+          <input type="checkbox" data-use-checkbox value="bonnet" checked>
+          <span>Bonnet / Hood Display</span>
+        </label>
+        <label class="bonnet-configurator__use-option">
+          <input type="checkbox" data-use-checkbox value="wall" checked>
+          <span>Wall Display</span>
+        </label>
+      </div>
+      <p class="bonnet-configurator__use-hint">Both included as standard — this display is designed to be used both ways.</p>
+    </div>
+
+    {% assign addon_count = 0 %}
+    {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+      {% if item.category.value == "addon" %}{% assign addon_count = addon_count | plus: 1 %}{% endif %}
+    {% endfor %}
+    {% if addon_count > 0 %}
+    <div class="bonnet-configurator__field">
+      <label class="bonnet-configurator__label">6. Add-ons</label>
+      {% for item in metaobjects["app--418838118401--bonnet_option"].values %}
+        {% if item.category.value == "addon" %}
+          <label class="bonnet-configurator__checkbox-row">
+            <input type="checkbox" data-addon-checkbox data-price="{{ item.extra_price_decimal.value | default: 0 }}" {% if item.is_free.value %}checked{% endif %}>
+            <span>{{ item.label.value }}{% if item.is_free.value %} (Free){% endif %}</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="bonnet-configurator__price-box">
+      <span class="bonnet-configurator__price-label">Total Price</span>
+      <span class="bonnet-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <button type="button" class="bonnet-configurator__add-to-cart" data-add-to-cart
+      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
+      data-product-id="{{ product.id }}">
+      Add to Cart
+    </button>
+    <p class="bonnet-configurator__status" data-add-to-cart-status></p>
+
+  </div>
+</div>
+
+{{ 'bonnet-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'bonnet-configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{ "name": "Bonnet Configurator", "target": "section", "settings": [] }
+{% endschema %}

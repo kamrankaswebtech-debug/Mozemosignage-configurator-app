@@ -10,14 +10,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
     const response = await admin.graphql(
         `#graphql
-    query List { metaobjects(type: "$app:sign3d_material", first: 100) { edges { node { id fields { key value } } } } }`
+    query List { metaobjects(type: "$app:sign3d_option", first: 100) { edges { node { id fields { key value } } } } }`
     );
     const data = await response.json();
-    const items: Entry[] = data.data.metaobjects.edges.map((edge: any) => {
+    const all = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
         edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
-        return { id: edge.node.id, label: f.label || "", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0" };
+        return { id: edge.node.id, label: f.label || "", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0", category: f.category || "" };
     });
+    const items: Entry[] = all.filter((a: any) => a.category === "material");
     items.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
     return { items };
 };
@@ -30,6 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "label", value: String(formData.get("label") || "") },
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
+        { key: "category", value: "material" },
     ];
 
     if (intent === "create") {
@@ -38,7 +40,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       mutation Create($metaobject: MetaobjectCreateInput!) {
         metaobjectCreate(metaobject: $metaobject) { metaobject { id } userErrors { field message } }
       }`,
-            { variables: { metaobject: { type: "$app:sign3d_material", fields } } }
+            { variables: { metaobject: { type: "$app:sign3d_option", fields } } }
         );
         const data = await response.json();
         const errors = data.data?.metaobjectCreate?.userErrors;

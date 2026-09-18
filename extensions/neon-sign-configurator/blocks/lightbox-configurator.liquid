@@ -1,0 +1,110 @@
+{% comment %} Mozemo Signage - Live Lightbox Range Configurator {% endcomment %}
+
+<div class="lightbox-configurator" id="lightbox-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+
+  <div class="lightbox-configurator__preview">
+    <div class="lightbox-configurator__preview-inner" data-preview-inner>
+      <div class="lightbox-configurator__shape lightbox-configurator__shape--circle is-selected" data-shape-preview="circle">
+        <span class="lightbox-configurator__preview-placeholder" data-preview-placeholder>Your Design</span>
+        <img class="lightbox-configurator__preview-image" data-preview-image style="display:none;" alt="Your uploaded design" width="200" height="200">
+      </div>
+    </div>
+    <p class="lightbox-configurator__preview-note">Mock-up for visual estimate only.</p>
+  </div>
+
+  <div class="lightbox-configurator__panel">
+
+    <div class="lightbox-configurator__field">
+      <label class="lightbox-configurator__label">1. Choose Shape</label>
+      <div class="lightbox-configurator__shape-cards" data-shape-cards>
+        {% for item in metaobjects["app--418838118401--lightbox_option"].values %}
+          {% if item.category.value == "shape" %}
+            <button type="button" class="lightbox-configurator__shape-card{% if forloop.first %} is-selected{% endif %}"
+              data-shape-key="{{ item.shape_key.value }}"
+              data-shape-price="{{ item.extra_price_decimal.value | default: 0 }}">
+              <span class="lightbox-configurator__shape-icon lightbox-configurator__shape-icon--{{ item.shape_key.value }}"></span>
+              <span>{{ item.label.value }}</span>
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="lightbox-configurator__field">
+      <label class="lightbox-configurator__label">2. Sides</label>
+      <div class="lightbox-configurator__sides-options" data-sides-options>
+        <label class="lightbox-configurator__sides-option">
+          <input type="radio" name="lightbox-sides-{{ block.id }}" data-sides-radio value="single" checked>
+          <span>Single-Sided</span>
+        </label>
+        <label class="lightbox-configurator__sides-option">
+          <input type="radio" name="lightbox-sides-{{ block.id }}" data-sides-radio value="double">
+          <span>Double-Sided</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="lightbox-configurator__field">
+      <label class="lightbox-configurator__label">3. Choose Size</label>
+      <select class="lightbox-configurator__select" data-size-select>
+        {% for item in metaobjects["app--418838118401--lightbox_option"].values %}
+          {% if item.category.value == "size" %}
+            <option value="{{ item.label.value }}"
+              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-sides="{{ item.sides.value | default: 'single' }}">
+              {{ item.label.value }}
+            </option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="lightbox-configurator__field">
+      <label class="lightbox-configurator__label">4. Upload Your Design</label>
+      <input type="file" class="lightbox-configurator__file-input" data-file-input accept="image/png,image/jpeg,image/svg+xml,.pdf,.ai">
+      <p class="lightbox-configurator__file-status" data-file-status>PNG, JPG, SVG, PDF or AI file.</p>
+    </div>
+
+    <div class="lightbox-configurator__field">
+      <label class="lightbox-configurator__label">5. Frame Colour</label>
+      <div class="lightbox-configurator__swatches" data-colour-swatches>
+        {% for item in metaobjects["app--418838118401--lightbox_option"].values %}
+          {% if item.category.value == "frame_colour" %}
+            <button type="button" class="lightbox-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
+              style="background-color: {{ item.hex_code.value | default: '#1a1a1a' }};"
+              data-colour-hex="{{ item.hex_code.value | default: '#1a1a1a' }}"
+              data-colour-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-colour-name="{{ item.label.value }}"
+              title="{{ item.label.value }}" aria-label="{{ item.label.value }}">
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <p class="lightbox-configurator__selected-label" data-colour-name-label>
+        {% for item in metaobjects["app--418838118401--lightbox_option"].values %}
+          {% if item.category.value == "frame_colour" %}{{ item.label.value }}{% break %}{% endif %}
+        {% endfor %}
+      </p>
+    </div>
+
+    <div class="lightbox-configurator__price-box">
+      <span class="lightbox-configurator__price-label">Total Price</span>
+      <span class="lightbox-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <button type="button" class="lightbox-configurator__add-to-cart" data-add-to-cart
+      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
+      data-product-id="{{ product.id }}">
+      Add to Cart
+    </button>
+    <p class="lightbox-configurator__status" data-add-to-cart-status></p>
+
+  </div>
+</div>
+
+{{ 'lightbox-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'lightbox-configurator.js' | asset_url }}" defer></script>
+
+{% schema %}
+{ "name": "Lightbox Configurator", "target": "section", "settings": [] }
+{% endschema %}

@@ -21,7 +21,9 @@ export default function App() {
         <s-link href="/app/settings">Settings</s-link>
         <s-link href="/app/orders">Production Orders</s-link>
         <s-link href="/app/neon-signs">Neon Signs</s-link>
+        <s-link href="/app/acrylic-bonnet">Acrylic Neon Bonnet</s-link>
         <s-link href="/app/3d-signs">3D Illuminated Signs</s-link>
+        <s-link href="/app/lightbox">Lightbox Range</s-link>
         <s-link href="/app/uv-graphic-led">UV Graphic LED Signs</s-link>
         <s-link href="/app/uv-graphic-no-led">UV Graphic Signs (No LED)</s-link>
         <s-link href="/app/infinity-mirror">Infinity Mirror Signs</s-link>

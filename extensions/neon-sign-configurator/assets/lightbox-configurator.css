@@ -1,0 +1,275 @@
+.lightbox-configurator {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    align-items: start;
+    gap: 32px;
+    background: #0a0a0f;
+    border-radius: 16px;
+    padding: 24px;
+    color: #ffffff;
+    font-family: inherit;
+}
+
+.lightbox-configurator__preview {
+    background: #16161f;
+    border-radius: 12px;
+    min-height: 320px;
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.lightbox-configurator__preview-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 260px;
+}
+
+.lightbox-configurator__shape {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    color: #0a0a0f;
+    border: 6px solid #1a1a1a;
+    overflow: hidden;
+    transition: border-radius 0.25s ease, width 0.25s ease, height 0.25s ease, border-color 0.25s ease;
+}
+
+.lightbox-configurator__shape--circle {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+}
+
+.lightbox-configurator__shape--square {
+    width: 220px;
+    height: 220px;
+    border-radius: 6px;
+}
+
+.lightbox-configurator__shape--rectangle {
+    width: 280px;
+    height: 170px;
+    border-radius: 6px;
+}
+
+.lightbox-configurator__preview-placeholder {
+    font-size: 13px;
+    color: #7a7a88;
+    text-align: center;
+    padding: 0 16px;
+}
+
+.lightbox-configurator__preview-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.lightbox-configurator__preview-note {
+    font-size: 11px;
+    color: #7a7a88;
+    margin-top: 14px;
+}
+
+.lightbox-configurator__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.lightbox-configurator__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    color: #b8b8c4;
+}
+
+.lightbox-configurator__select,
+.lightbox-configurator__file-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    font-size: 15px;
+}
+
+.lightbox-configurator__file-status {
+    font-size: 12px;
+    color: #b8b8c4;
+    margin-top: 6px;
+}
+
+.lightbox-configurator__shape-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.lightbox-configurator__shape-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.lightbox-configurator__shape-card.is-selected {
+    border-color: #00e0c6;
+    background: rgba(0, 224, 198, 0.12);
+}
+
+.lightbox-configurator__shape-icon {
+    width: 30px;
+    height: 30px;
+    border: 2px solid currentColor;
+}
+
+.lightbox-configurator__shape-icon--circle {
+    border-radius: 50%;
+}
+
+.lightbox-configurator__shape-icon--square {
+    border-radius: 4px;
+}
+
+.lightbox-configurator__shape-icon--rectangle {
+    border-radius: 4px;
+    width: 38px;
+    height: 24px;
+}
+
+.lightbox-configurator__sides-options {
+    display: flex;
+    gap: 16px;
+}
+
+.lightbox-configurator__sides-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.lightbox-configurator__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.lightbox-configurator__swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.lightbox-configurator__swatch.is-selected {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px #000, 0 0 10px currentColor;
+}
+
+.lightbox-configurator__selected-label {
+    font-size: 13px;
+    color: #b8b8c4;
+    margin-top: 6px;
+}
+
+.lightbox-configurator__price-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #2c2c38;
+    padding-top: 16px;
+    margin-top: 8px;
+}
+
+.lightbox-configurator__price-label {
+    font-size: 14px;
+    color: #b8b8c4;
+}
+
+.lightbox-configurator__price-value {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #00e0c6, #7a00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.lightbox-configurator__add-to-cart {
+    width: 100%;
+    padding: 14px;
+    margin-top: 14px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #00e0c6, #7a00ff);
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.lightbox-configurator__add-to-cart:hover {
+    opacity: 0.9;
+}
+
+.lightbox-configurator__add-to-cart:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.lightbox-configurator__spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: lightbox-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes lightbox-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.lightbox-configurator__status {
+    font-size: 12px;
+    color: #b8b8c4;
+    margin-top: 8px;
+    min-height: 16px;
+}
+
+@media (max-width: 768px) {
+    .lightbox-configurator {
+        grid-template-columns: 1fr;
+    }
+}

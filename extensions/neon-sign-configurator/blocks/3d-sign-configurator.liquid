@@ -213,13 +213,15 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">4. Material</label>
       <select class="sign3d-configurator__select" data-material-select>
-        {% for item in metaobjects["app--418838118401--sign3d_material"].values %}
-          <option
-            value="{{ item.label.value }}"
-            data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ item.label.value }}
-          </option>
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "material" %}
+            <option
+              value="{{ item.label.value }}"
+              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              {% if forloop.first %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+          {% endif %}
         {% endfor %}
       </select>
     </div>
@@ -262,13 +264,15 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">7. Finish</label>
       <select class="sign3d-configurator__select" data-finish-select>
-        {% for item in metaobjects["app--418838118401--sign3d_finish"].values %}
-          <option
-            value="{{ item.label.value }}"
-            data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ item.label.value }}
-          </option>
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "finish" %}
+            <option
+              value="{{ item.label.value }}"
+              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              {% if forloop.first %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+          {% endif %}
         {% endfor %}
       </select>
     </div>
@@ -276,28 +280,32 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">8. Mounting</label>
       <select class="sign3d-configurator__select" data-mounting-select>
-        {% for item in metaobjects["app--418838118401--sign3d_mounting"].values %}
-          <option
-            value="{{ item.label.value }}"
-            data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ item.label.value }}
-          </option>
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "mounting" %}
+            <option
+              value="{{ item.label.value }}"
+              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              {% if forloop.first %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+          {% endif %}
         {% endfor %}
       </select>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">9. Add-ons</label>
-      {% for addon in metaobjects["app--418838118401--sign3d_addon"].values %}
-        <label class="sign3d-configurator__checkbox-row">
-          <input
-            type="checkbox"
-            data-addon-checkbox
-            data-price="{{ addon.extra_price_decimal.value | default: 0 }}"
-            {% if addon.is_free.value %}checked{% endif %}>
-          <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
-        </label>
+      {% for addon in metaobjects["app--418838118401--sign3d_option"].values %}
+        {% if addon.category.value == "addon" %}
+          <label class="sign3d-configurator__checkbox-row">
+            <input
+              type="checkbox"
+              data-addon-checkbox
+              data-price="{{ addon.extra_price_decimal.value | default: 0 }}"
+              {% if addon.is_free.value %}checked{% endif %}>
+            <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
+          </label>
+        {% endif %}
       {% endfor %}
     </div>
 

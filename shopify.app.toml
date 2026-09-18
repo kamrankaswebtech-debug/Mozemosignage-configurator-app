@@ -350,27 +350,6 @@ type = "number_decimal"
 name = "Sort Order"
 type = "number_integer"
 
-[metaobjects.app.sign3d_material]
-name = "3D Sign Material"
-description = "Acrylic, Metal Backing, Wood Backing, etc."
-
-  [metaobjects.app.sign3d_material.access]
-  admin = "merchant_read_write"
-  storefront = "public_read"
-
-[metaobjects.app.sign3d_material.fields.label]
-name = "Label"
-type = "single_line_text_field"
-required = true
-
-[metaobjects.app.sign3d_material.fields.extra_price_decimal]
-name = "Extra Price"
-type = "number_decimal"
-
-[metaobjects.app.sign3d_material.fields.sort_order]
-name = "Sort Order"
-type = "number_integer"
-
 [metaobjects.app.acrylic_thickness]
 name = "Acrylic Thickness"
 description = "3mm, 5mm, 10mm, etc."
@@ -418,70 +397,35 @@ type = "number_decimal"
 name = "Sort Order"
 type = "number_integer"
 
-[metaobjects.app.sign3d_finish]
-name = "3D Sign Finish"
-description = "Matte, Glossy, Brushed Metal, etc."
+[metaobjects.app.sign3d_option]
+name = "3D Sign Option"
+description = "Materials, Finish, Mounting, and Add-ons for 3D Illuminated Signs, distinguished by the 'category' field. Consolidated from 4 separate definitions to stay under this store's 32-definition metaobject cap."
 
-  [metaobjects.app.sign3d_finish.access]
+  [metaobjects.app.sign3d_option.access]
   admin = "merchant_read_write"
   storefront = "public_read"
 
-[metaobjects.app.sign3d_finish.fields.label]
+[metaobjects.app.sign3d_option.fields.category]
+name = "Category"
+description = "Must be exactly one of: material, finish, mounting, addon"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.sign3d_option.fields.label]
 name = "Label"
 type = "single_line_text_field"
 required = true
 
-[metaobjects.app.sign3d_finish.fields.extra_price_decimal]
+[metaobjects.app.sign3d_option.fields.extra_price_decimal]
 name = "Extra Price"
 type = "number_decimal"
 
-[metaobjects.app.sign3d_finish.fields.sort_order]
-name = "Sort Order"
-type = "number_integer"
-
-[metaobjects.app.sign3d_mounting]
-name = "3D Sign Mounting"
-description = "Wall Mount, Standoff Mount, Freestanding, etc."
-
-  [metaobjects.app.sign3d_mounting.access]
-  admin = "merchant_read_write"
-  storefront = "public_read"
-
-[metaobjects.app.sign3d_mounting.fields.label]
-name = "Label"
-type = "single_line_text_field"
-required = true
-
-[metaobjects.app.sign3d_mounting.fields.extra_price_decimal]
-name = "Extra Price"
-type = "number_decimal"
-
-[metaobjects.app.sign3d_mounting.fields.sort_order]
-name = "Sort Order"
-type = "number_integer"
-
-[metaobjects.app.sign3d_addon]
-name = "3D Sign Add-on"
-description = "Optional add-ons for 3D illuminated signs"
-
-  [metaobjects.app.sign3d_addon.access]
-  admin = "merchant_read_write"
-  storefront = "public_read"
-
-[metaobjects.app.sign3d_addon.fields.label]
-name = "Label"
-type = "single_line_text_field"
-required = true
-
-[metaobjects.app.sign3d_addon.fields.extra_price_decimal]
-name = "Extra Price"
-type = "number_decimal"
-
-[metaobjects.app.sign3d_addon.fields.is_free]
+[metaobjects.app.sign3d_option.fields.is_free]
 name = "Is Free"
+description = "Used only when category = addon"
 type = "boolean"
 
-[metaobjects.app.sign3d_addon.fields.sort_order]
+[metaobjects.app.sign3d_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
 
@@ -733,6 +677,43 @@ name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
 type = "single_line_text_field"
 
+[metaobjects.app.installation_settings]
+name = "Installation Service Settings"
+description = "Global settings for the professional installation add-on (LED Neon, UV Graphic LED, UV Print No-LED only). Create exactly ONE entry — this is a single global config, not a list."
+
+  [metaobjects.app.installation_settings.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.installation_settings.fields.price_decimal]
+name = "Installation Price"
+description = "Flat fee added to the order total when the customer selects installation."
+type = "number_decimal"
+required = true
+
+[metaobjects.app.installation_settings.fields.min_lead_days]
+name = "Minimum Lead Time (days)"
+description = "Earliest bookable installation date is this many days after the order is placed."
+type = "number_integer"
+required = true
+
+[metaobjects.app.installation_settings.fields.earliest_time]
+name = "Earliest Booking Time"
+description = "24-hour format, e.g. 10:00"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.installation_settings.fields.latest_time]
+name = "Latest Booking Time"
+description = "24-hour format, e.g. 17:00"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.installation_settings.fields.slot_interval_minutes]
+name = "Time Slot Interval (minutes)"
+description = "e.g. 60 for hourly slots, 30 for half-hourly slots."
+type = "number_integer"
+
 [metaobjects.app.infinity_font]
 name = "Infinity Mirror Font"
 description = "Available font styles for Infinity Mirror Letter Signs"
@@ -957,5 +938,100 @@ type = "number_decimal"
 required = true
 
 [metaobjects.app.bundle_option.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+
+[metaobjects.app.bonnet_option]
+name = "Acrylic Neon Bonnet Option"
+description = "All configurator options for the Acrylic Neon Bonnet Stand / Wall Sign Combo (Size, Face Colour, Lighting Mode, Add-on), distinguished by the 'category' field."
+
+  [metaobjects.app.bonnet_option.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.bonnet_option.fields.category]
+name = "Category"
+description = "Must be exactly one of: size, colour, lighting_mode, addon"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.bonnet_option.fields.label]
+name = "Label"
+description = "Display name — used for size, colour name, lighting mode, and addon"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.bonnet_option.fields.hex_code]
+name = "Hex Code"
+description = "Used only when category = colour, e.g. #FF69B4. Leave empty for 'Custom Colour' entries."
+type = "single_line_text_field"
+
+[metaobjects.app.bonnet_option.fields.mode_key]
+name = "Mode Key"
+description = "Used only when category = lighting_mode. Must be exactly one of: single, multiple, rgb"
+type = "single_line_text_field"
+
+[metaobjects.app.bonnet_option.fields.height_cm]
+name = "Height (cm)"
+description = "Used only when category = size"
+type = "number_decimal"
+
+[metaobjects.app.bonnet_option.fields.extra_price_decimal]
+name = "Extra Price / Price"
+description = "Used for size (full price), colour, lighting_mode, and addon (extra price) pricing"
+type = "number_decimal"
+
+[metaobjects.app.bonnet_option.fields.is_free]
+name = "Is Free"
+description = "Used only when category = addon"
+type = "boolean"
+
+[metaobjects.app.bonnet_option.fields.sort_order]
+name = "Sort Order"
+type = "number_integer"
+
+
+[metaobjects.app.lightbox_option]
+name = "Lightbox Range Option"
+description = "All configurator options for the Lightbox Range (Shape, Size, Sides, Frame Colour), distinguished by the 'category' field."
+
+  [metaobjects.app.lightbox_option.access]
+  admin = "merchant_read_write"
+  storefront = "public_read"
+
+[metaobjects.app.lightbox_option.fields.category]
+name = "Category"
+description = "Must be exactly one of: shape, size, frame_colour"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.lightbox_option.fields.label]
+name = "Label"
+description = "Display name — used for shape, size, and frame colour name"
+type = "single_line_text_field"
+required = true
+
+[metaobjects.app.lightbox_option.fields.hex_code]
+name = "Hex Code"
+description = "Used only when category = frame_colour, e.g. #1A1A1A. Leave empty for 'Custom Colour' entries."
+type = "single_line_text_field"
+
+[metaobjects.app.lightbox_option.fields.shape_key]
+name = "Shape Key"
+description = "Used only when category = shape. Must be exactly one of: circle, square, rectangle"
+type = "single_line_text_field"
+
+[metaobjects.app.lightbox_option.fields.sides]
+name = "Sides"
+description = "Used only when category = size — which price table this size row belongs to. Must be exactly one of: single, double"
+type = "single_line_text_field"
+
+[metaobjects.app.lightbox_option.fields.extra_price_decimal]
+name = "Extra Price / Price"
+description = "Used for shape (extra price), size (full price), and frame_colour (extra price) pricing"
+type = "number_decimal"
+
+[metaobjects.app.lightbox_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"

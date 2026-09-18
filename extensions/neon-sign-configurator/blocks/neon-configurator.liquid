@@ -431,6 +431,45 @@
       </select>
     </div>
 
+    {% assign install_settings = metaobjects["app--418838118401--installation_settings"].values.first %}
+    {% if install_settings %}
+    <div class="neon-configurator__field neon-configurator__install-field">
+      <label class="neon-configurator__label">Need Installation?</label>
+      <div class="neon-configurator__install-options" data-install-options>
+        <label class="neon-configurator__install-option">
+          <input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="no" checked>
+          <span>No installation — I will arrange installation myself</span>
+        </label>
+        <label class="neon-configurator__install-option">
+          <input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="yes" data-install-price="{{ install_settings.price_decimal.value | default: 0 }}">
+          <span>Yes, I need installation — +${{ install_settings.price_decimal.value | default: 0 }}</span>
+        </label>
+      </div>
+
+      <div class="neon-configurator__install-booking" data-install-booking hidden
+        data-min-lead-days="{{ install_settings.min_lead_days.value | default: 14 }}"
+        data-earliest-time="{{ install_settings.earliest_time.value | default: '10:00' }}"
+        data-latest-time="{{ install_settings.latest_time.value | default: '17:00' }}"
+        data-slot-interval="{{ install_settings.slot_interval_minutes.value | default: 60 }}">
+        <p class="neon-configurator__install-notice">
+          Sydney area installation, up to 100km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.
+        </p>
+        <div class="neon-configurator__install-row">
+          <label class="neon-configurator__install-sublabel" for="neon-install-date-{{ block.id }}">Preferred Installation Date</label>
+          <input type="date" id="neon-install-date-{{ block.id }}" class="neon-configurator__select" data-install-date>
+        </div>
+        <div class="neon-configurator__install-row">
+          <label class="neon-configurator__install-sublabel" for="neon-install-time-{{ block.id }}">Preferred Time Slot</label>
+          <select id="neon-install-time-{{ block.id }}" class="neon-configurator__select" data-install-time></select>
+        </div>
+        <div class="neon-configurator__install-row">
+          <label class="neon-configurator__install-sublabel" for="neon-install-address-{{ block.id }}">Installation Address (leave blank to use your shipping address)</label>
+          <input type="text" id="neon-install-address-{{ block.id }}" class="neon-configurator__select" data-install-address placeholder="Optional — defaults to shipping address">
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="neon-configurator__price-box">
       <span class="neon-configurator__price-label">Total Price</span>
 

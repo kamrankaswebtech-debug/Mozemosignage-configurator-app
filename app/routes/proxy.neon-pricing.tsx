@@ -8,6 +8,15 @@ export async function action({ request }: ActionFunctionArgs) {
         return Response.json({ error: "Unauthorized or app not installed on this shop" }, { status: 401 });
     }
 
+    // Branch by content-type: a design-file upload arrives as multipart/form-data,
+    // while every existing pricing call (Neon, 3D, Lightbox, etc.) sends plain JSON.
+    // This keeps the original pricing logic below 100% untouched — nothing here changes
+    // how JSON requests are parsed or handled.
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+        return handleFileUpload(request, admin);
+    }
+
     const body = await request.json();
     const { productId, price } = body;
 
@@ -170,4 +179,128 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const numericVariantId = newVariant.id.split("/").pop();
     return Response.json({ variantId: numericVariantId, price: newVariant.price, reused: false });
+}
+
+// Handles a customer-uploaded design file (Bonnet / Lightbox configurators) via Shopify's
+// standard stagedUploadsCreate -> direct upload -> fileCreate flow — the same proven pattern
+// already used for Neon Font uploads in the Admin. Returns a public fileUrl the storefront
+// stores in the cart line item property, and the manufacturing team can open from the order.
+async function handleFileUpload(request: Request, admin: any) {
+    const formData = await request.formData();
+    const file = formData.get("file");
+
+    if (!file || typeof file === "string") {
+        return Response.json({ error: "No file provided" }, { status: 400 });
+    }
+
+    try {
+        const fileSizeBytes = file.size;
+        const mimeType = file.type || "application/octet-stream";
+        const fileName = file.name || "design-upload";
+
+        // Step 1: Ask Shopify for a temporary, authenticated upload target
+        const stagedResponse = await admin.graphql(
+            `#graphql
+      mutation StagedUploadsCreate($input: [StagedUploadInput!]!) {
+        stagedUploadsCreate(input: $input) {
+          stagedTargets {
+            url
+            resourceUrl
+            parameters { name value }
+          }
+          userErrors { field message }
+        }
+      }`,
+            {
+                variables: {
+                    input: [
+                        {
+                            filename: fileName,
+                            mimeType,
+                            fileSize: String(fileSizeBytes),
+                            httpMethod: "POST",
+                            resource: "FILE",
+                        },
+                    ],
+                },
+            }
+        );
+        const stagedData = await stagedResponse.json();
+        const stagedErrors = stagedData.data?.stagedUploadsCreate?.userErrors;
+        if (stagedErrors?.length) {
+            console.error("Neon Pricing Proxy: staged upload error", stagedErrors);
+            return Response.json({ error: stagedErrors[0].message }, { status: 422 });
+        }
+
+        const target = stagedData.data?.stagedUploadsCreate?.stagedTargets?.[0];
+        if (!target) {
+            return Response.json({ error: "Could not get an upload target" }, { status: 500 });
+        }
+
+        // Step 2: Upload the actual file bytes directly to Shopify's storage
+        const uploadFormData = new FormData();
+        target.parameters.forEach((param: { name: string; value: string }) => {
+            uploadFormData.append(param.name, param.value);
+        });
+        uploadFormData.append("file", file, fileName);
+
+        const uploadResponse = await fetch(target.url, {
+            method: "POST",
+            body: uploadFormData,
+        });
+
+        if (!uploadResponse.ok) {
+            console.error("Neon Pricing Proxy: direct upload to storage failed", uploadResponse.status);
+            return Response.json({ error: "File upload to storage failed" }, { status: 502 });
+        }
+
+        // Step 3: Register the uploaded file as a real Shopify File so it gets a permanent URL
+        const fileCreateResponse = await admin.graphql(
+            `#graphql
+      mutation FileCreate($files: [FileCreateInput!]!) {
+        fileCreate(files: $files) {
+          files {
+            id
+            fileStatus
+            ... on GenericFile { url }
+            ... on MediaImage {
+              image { url }
+            }
+          }
+          userErrors { field message }
+        }
+      }`,
+            {
+                variables: {
+                    files: [
+                        {
+                            originalSource: target.resourceUrl,
+                            contentType: mimeType.startsWith("image/") ? "IMAGE" : "FILE",
+                        },
+                    ],
+                },
+            }
+        );
+        const fileCreateData = await fileCreateResponse.json();
+        const fileCreateErrors = fileCreateData.data?.fileCreate?.userErrors;
+        if (fileCreateErrors?.length) {
+            console.error("Neon Pricing Proxy: fileCreate error", fileCreateErrors);
+            return Response.json({ error: fileCreateErrors[0].message }, { status: 422 });
+        }
+
+        const createdFile = fileCreateData.data?.fileCreate?.files?.[0];
+        if (!createdFile) {
+            return Response.json({ error: "File registration failed" }, { status: 500 });
+        }
+
+        // A freshly-created file can briefly report fileStatus "UPLOADED" with no url yet
+        // while Shopify finishes processing it. Give the storefront the resourceUrl as a
+        // fallback so the customer never sees a broken/empty response.
+        const fileUrl = createdFile.image?.url || createdFile.url || target.resourceUrl;
+
+        return Response.json({ fileUrl });
+    } catch (err) {
+        console.error("Neon Pricing Proxy: unexpected upload error", err);
+        return Response.json({ error: "Unexpected error during upload" }, { status: 500 });
+    }
 }
