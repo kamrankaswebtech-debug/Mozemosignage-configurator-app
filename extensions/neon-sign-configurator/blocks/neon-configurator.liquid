@@ -1,5 +1,12 @@
 {% comment %} Mozemo Signage - Live Neon Sign Configurator {% endcomment %}
 
+{% comment %} Installation access moved to the very top of the file, and uses a for-loop instead of ".values.first" — the .first accessor was unreliable once many other metaobject types were accessed later in this same template, silently returning an empty value instead of the real object. A for-loop always resolves correctly. {% endcomment %}
+{% assign install_settings = nil %}
+{% for entry in metaobjects["app--418838118401--installation_settings"].values %}
+  {% assign install_settings = entry %}
+  {% break %}
+{% endfor %}
+
 {% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
 
 {% comment %} Neon Type / Outdoor Thickness / Size Visibility — all reuse the signage_addon metaobject via "category", no new metaobject definition needed. {% endcomment %}
@@ -430,8 +437,6 @@
         {% endfor %}
       </select>
     </div>
-
-    {% assign install_settings = metaobjects["app--418838118401--installation_settings"].values.first %}
     {% if install_settings %}
     <div class="neon-configurator__field neon-configurator__install-field">
       <label class="neon-configurator__label">Need Installation?</label>

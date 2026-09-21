@@ -1093,6 +1093,10 @@
     gap: 10px;
 }
 
+.neon-configurator__install-booking[hidden] {
+    display: none;
+}
+
 .neon-configurator__install-notice {
     font-size: 11px;
     color: #b8b8c4;

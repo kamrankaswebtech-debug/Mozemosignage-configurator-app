@@ -81,6 +81,65 @@ function initUvConfigurator(root) {
     let uploadedFileUrl = null;
     let uploadInProgress = false;
 
+    // --- Installation Option + Booking ---
+    const installRadios = root.querySelectorAll('[data-install-radio]');
+    const installBooking = root.querySelector('[data-install-booking]');
+    const installDateInput = root.querySelector('[data-install-date]');
+    const installTimeSelect = root.querySelector('[data-install-time]');
+    const installAddressInput = root.querySelector('[data-install-address]');
+    let installationSelected = false;
+    let installationPrice = 0;
+
+    function populateInstallTimeSlots() {
+        if (!installTimeSelect || !installBooking) return;
+        const earliest = installBooking.dataset.earliestTime || '10:00';
+        const latest = installBooking.dataset.latestTime || '17:00';
+        const interval = parseInt(installBooking.dataset.slotInterval, 10) || 60;
+
+        const [startH, startM] = earliest.split(':').map(Number);
+        const [endH, endM] = latest.split(':').map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        installTimeSelect.innerHTML = '';
+        for (let m = startMinutes; m <= endMinutes; m += interval) {
+            const h24 = Math.floor(m / 60);
+            const mm = m % 60;
+            const period = h24 >= 12 ? 'PM' : 'AM';
+            const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+            const label = h12 + ':' + String(mm).padStart(2, '0') + ' ' + period;
+            const option = document.createElement('option');
+            option.value = label;
+            option.textContent = label;
+            installTimeSelect.appendChild(option);
+        }
+    }
+
+    function setInstallMinDate() {
+        if (!installDateInput || !installBooking) return;
+        const leadDays = parseInt(installBooking.dataset.minLeadDays, 10) || 14;
+        const minDate = new Date();
+        minDate.setDate(minDate.getDate() + leadDays);
+        const isoMin = minDate.toISOString().split('T')[0];
+        installDateInput.min = isoMin;
+        if (!installDateInput.value) installDateInput.value = isoMin;
+    }
+
+    installRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+            installationSelected = radio.value === 'yes';
+            installationPrice = installationSelected ? (parseFloat(radio.dataset.installPrice) || 0) : 0;
+            if (installBooking) installBooking.hidden = !installationSelected;
+            if (installationSelected) {
+                setInstallMinDate();
+                if (installTimeSelect && !installTimeSelect.options.length) populateInstallTimeSlots();
+            }
+            calculateTotal();
+        });
+    });
+
+    if (installBooking) populateInstallTimeSlots();
+
     function calculateTotal() {
         let total = 0;
         [sizeSelect, materialSelect, finishSelect].forEach((select) => {
@@ -92,6 +151,7 @@ function initUvConfigurator(root) {
         addonCheckboxes.forEach((checkbox) => {
             if (checkbox.checked) total += parseFloat(checkbox.dataset.price) || 0;
         });
+        total += installationPrice;
         totalPriceEl.textContent = '$' + total.toFixed(2);
         currentTotal = total;
     }
@@ -102,7 +162,7 @@ function initUvConfigurator(root) {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const response = await fetch('/apps/upload-design', { method: 'POST', body: formData });
+            const response = await fetch('/apps/neon-pricing/upload-design', { method: 'POST', body: formData });
             if (!response.ok) throw new Error('Upload failed');
             const data = await response.json();
             if (data.error) throw new Error(data.error);
@@ -188,6 +248,17 @@ function initUvConfigurator(root) {
             }
             if (powerAdapterSelect) {
                 properties['Power Adapter'] = powerAdapterSelect.options[powerAdapterSelect.selectedIndex].textContent.trim();
+            }
+
+            if (installationSelected) {
+                properties['Installation'] = 'Yes, professional installation requested';
+                properties['Installation Date'] = installDateInput ? installDateInput.value : '';
+                properties['Installation Time'] = installTimeSelect ? installTimeSelect.value : '';
+                properties['Installation Address'] = (installAddressInput && installAddressInput.value.trim())
+                    ? installAddressInput.value.trim()
+                    : 'Same as shipping address';
+            } else {
+                properties['Installation'] = 'No installation — customer will arrange';
             }
 
             addToCartBtn.disabled = true;

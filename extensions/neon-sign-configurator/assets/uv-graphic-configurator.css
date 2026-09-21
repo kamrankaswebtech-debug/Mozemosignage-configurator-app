@@ -190,6 +190,60 @@
     min-height: 16px;
 }
 
+.uv-configurator__install-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.uv-configurator__install-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.uv-configurator__install-option input {
+    accent-color: #00e0c6;
+}
+
+.uv-configurator__install-booking {
+    margin-top: 12px;
+    padding: 14px;
+    border-radius: 8px;
+    background: #1c1c26;
+    border: 1px solid #2c2c38;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.uv-configurator__install-booking[hidden] {
+    display: none;
+}
+
+.uv-configurator__install-notice {
+    font-size: 11px;
+    color: #b8b8c4;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.uv-configurator__install-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.uv-configurator__install-sublabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #b8b8c4;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
 @media (max-width: 768px) {
     .uv-configurator {
         grid-template-columns: 1fr;

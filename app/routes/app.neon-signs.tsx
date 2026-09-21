@@ -12,6 +12,7 @@ const SECTIONS = [
     { title: "Outdoor Thickness", path: "/app/neon-signs/outdoor-thickness", description: "Manage thickness options (10mm, 12mm, etc.) shown only for Outdoor neon." },
     { title: "Size Visibility", path: "/app/neon-signs/size-visibility", description: "Control which size options (Choose Size / Custom Slider) show for Indoor vs Outdoor." },
     { title: "Fonts", path: "/app/neon-signs/fonts", description: "Manage available font styles shown in the configurator." },
+    { title: "Installation Option & Booking", path: "/app/neon-signs/installation", description: "Price, lead time, and available booking hours for the \"Need Installation?\" section." },
     { title: "Colours", path: "/app/neon-signs/colours", description: "Manage LED colour options and their extra pricing." },
     { title: "Sizes", path: "/app/neon-signs/sizes", description: "Manage sign size options and their pricing." },
     { title: "Backboard Styles", path: "/app/neon-signs/backboard-styles", description: "Manage backboard style options." },
