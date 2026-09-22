@@ -1,8 +1,17 @@
 {% comment %} Mozemo Signage - Live 3D Illuminated Sign Configurator {% endcomment %}
 
+{% assign default_3d_bg = nil %}
+{% for entry in metaobjects["app--418838118401--sign3d_option"].values %}
+  {% if entry.category.value == "wallpaper" %}
+    {% assign default_3d_bg = entry %}
+    {% break %}
+  {% endif %}
+{% endfor %}
+{% assign default_3d_bg_url = default_3d_bg.image.value | image_url %}
+
 <div class="sign3d-configurator" id="sign3d-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
-  <div class="sign3d-configurator__preview">
+  <div class="sign3d-configurator__preview" data-preview-box{% if default_3d_bg_url %} style="background-image: url('{{ default_3d_bg_url }}');"{% endif %}>
     <div class="sign3d-configurator__preview-badge">
       <p class="sign3d-configurator__preview-badge-title">VISUAL ESTIMATE</p>
       <p class="sign3d-configurator__preview-badge-sub">Mock-up for visual estimate only. Final professional artwork supplied for approval before manufacturing.</p>
@@ -85,6 +94,31 @@
         <span class="sign3d-configurator__preview-footer-value">Mozemo Signage</span>
       </div>
     </div>
+
+    {% assign sign3d_wallpaper_count = 0 %}
+    {% for bg in metaobjects["app--418838118401--sign3d_option"].values %}
+      {% if bg.category.value == "wallpaper" %}
+        {% assign sign3d_wallpaper_count = sign3d_wallpaper_count | plus: 1 %}
+      {% endif %}
+    {% endfor %}
+    {% if sign3d_wallpaper_count > 0 %}
+      <div class="sign3d-configurator__bg-thumbs" data-bg-thumbs>
+        {% assign wallpaper_index = 0 %}
+        {% for bg in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if bg.category.value == "wallpaper" %}
+            <button
+              type="button"
+              class="sign3d-configurator__bg-thumb{% if wallpaper_index == 0 %} is-selected{% endif %}"
+              data-bg-url="{{ bg.image.value | image_url }}"
+              title="{{ bg.label.value }}"
+              aria-label="{{ bg.label.value }}">
+              <img src="{{ bg.image.value | image_url: width: 120 }}" alt="{{ bg.label.value }}" width="60" height="45" loading="lazy">
+            </button>
+            {% assign wallpaper_index = wallpaper_index | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
   </div>
 
   <div class="sign3d-configurator__panel">
@@ -103,14 +137,6 @@
           <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M0 1h16M6 6h10M3 11h13" stroke="currentColor" stroke-width="1.5"/></svg>
         </button>
         <button type="button" class="sign3d-configurator__select-all-btn" data-select-all-btn hidden>Select All</button>
-      </div>
-    </div>
-
-    <div class="sign3d-configurator__field">
-      <label class="sign3d-configurator__label">Upload Your Background Wallpaper</label>
-      <input type="file" class="sign3d-configurator__wallpaper-input" data-wallpaper-input accept="image/*">
-      <div class="sign3d-configurator__wallpaper-actions" data-wallpaper-actions hidden>
-        <button type="button" class="sign3d-configurator__wallpaper-btn sign3d-configurator__wallpaper-btn--delete" data-wallpaper-delete-btn>Delete Wallpaper</button>
       </div>
     </div>
 
@@ -188,6 +214,7 @@
           <option
             value="{{ item.label.value }}"
             data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+            data-effect-key="{{ item.effect_key.value | default: 'front_lit' }}"
             {% if forloop.first %}selected{% endif %}>
             {{ item.label.value }}
           </option>

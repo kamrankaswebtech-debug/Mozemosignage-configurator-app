@@ -317,6 +317,11 @@ type = "number_decimal"
 name = "Sort Order"
 type = "number_integer"
 
+[metaobjects.app.illumination_type.fields.effect_key]
+name = "Effect Key"
+description = "Controls exactly how this illumination type renders in the live preview (depth/shadow/glow). Must be exactly one of: front_lit, backlit, front_back_lit, fully_illuminated. Leave empty to default to front_lit."
+type = "single_line_text_field"
+
 [metaobjects.app.sign3d_size]
 name = "3D Sign Size"
 description = "Available size options for 3D illuminated signs"
@@ -407,7 +412,7 @@ description = "Materials, Finish, Mounting, and Add-ons for 3D Illuminated Signs
 
 [metaobjects.app.sign3d_option.fields.category]
 name = "Category"
-description = "Must be exactly one of: material, finish, mounting, addon"
+description = "Must be exactly one of: material, finish, mounting, addon, wallpaper"
 type = "single_line_text_field"
 required = true
 
@@ -424,6 +429,11 @@ type = "number_decimal"
 name = "Is Free"
 description = "Used only when category = addon"
 type = "boolean"
+
+[metaobjects.app.sign3d_option.fields.image]
+name = "Image"
+description = "Used only when category = wallpaper"
+type = "file_reference"
 
 [metaobjects.app.sign3d_option.fields.sort_order]
 name = "Sort Order"
@@ -577,6 +587,11 @@ name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
 type = "single_line_text_field"
 
+[metaobjects.app.neon_quick_symbol.fields.transparent_bg]
+name = "Has White/Solid Background (make transparent)"
+description = "Enable ONLY for icons like a checkered flag that have a solid white area instead of a transparent background — this blends that white area into the picker button's own background instead of showing a white box."
+type = "boolean"
+
 [metaobjects.app.neon_background_image]
 name = "Neon Background Image"
 description = "Room/wall mockup photos shown behind the live preview. First one (lowest sort order) is the default."
@@ -713,6 +728,8 @@ required = true
 name = "Time Slot Interval (minutes)"
 description = "e.g. 60 for hourly slots, 30 for half-hourly slots."
 type = "number_integer"
+
+
 
 [metaobjects.app.infinity_font]
 name = "Infinity Mirror Font"

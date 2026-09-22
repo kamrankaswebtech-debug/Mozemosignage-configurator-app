@@ -26,6 +26,17 @@
     padding: 24px;
     position: sticky;
     top: 20px;
+    transition: background-image 0.3s ease;
+}
+
+.neon-configurator__preview.no-wallpaper {
+    /* A clean, professional dark studio-style fallback — distinct from the 3D
+       Sign's graph-paper grid, per the client's request. Overrides the inline
+       background-image (set via bg-thumb selection/JS) without touching it,
+       so toggling wallpaper back ON instantly restores the previously chosen photo. */
+    background-image:
+        radial-gradient(circle at 50% 38%, rgba(255, 46, 196, 0.10) 0%, transparent 55%),
+        radial-gradient(circle at 50% 100%, #1c1c26 0%, #05050a 75%) !important;
 }
 
 .neon-configurator__bg-thumbs {
@@ -415,21 +426,29 @@
 }
 
 
-.neon-configurator__preview-toggle {
+.neon-configurator__toggle-group {
     position: absolute;
     top: 16px;
     right: 16px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.neon-configurator__toggle-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    z-index: 5;
 }
 
-.neon-configurator__toggle-label {
+.neon-configurator__toggle-text {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    color: #7a7a88;
+    letter-spacing: 0.03em;
+    color: #ffffff;
+    white-space: nowrap;
 }
 
 .neon-configurator__switch {
@@ -501,6 +520,11 @@
     width: 100%;
     padding-bottom: 34px;
     padding-right: 44px;
+}
+
+.neon-configurator__preview-stage.no-measurements .neon-configurator__dim-line,
+.neon-configurator__preview-stage.no-measurements .neon-configurator__selection-box {
+    display: none !important;
 }
 
 .neon-configurator__dim-line {
@@ -825,8 +849,28 @@
 .neon-configurator__symbol-btn img {
     width: 18px;
     height: 18px;
+    /* brightness(0) first forces any colour/greyscale icon down to pure black,
+       then invert(1) flips it to pure white — more reliable than invert(1) alone,
+       which only fully whitens icons that started fully black. */
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+}
+
+.neon-configurator__symbol-btn[data-icon-transparent-bg="true"] img {
+    /* For icons that have a solid white square baked in instead of real alpha
+       transparency (e.g. a checkered flag or a rasterised logo like the TikTok
+       icon): invert(1) first turns "black icon on white square" into "white icon
+       on black square", then mix-blend-mode: screen makes every BLACK pixel
+       blend fully into whatever sits behind it — the button's own dark
+       background — so only the now-white icon shape stays visible. This is a
+       true "make it transparent" illusion that works on any button background
+       colour, without needing to re-export the source file.
+       (mix-blend-mode: multiply, used previously, does the opposite: it keeps
+       black pixels solid and only clears white ones, which made a black icon
+       merge into and disappear against this app's dark buttons.) */
     filter: invert(1);
-    opacity: 0.8;
+    mix-blend-mode: screen;
+    opacity: 1;
 }
 
 .neon-configurator__symbol-btn.is-selected {
@@ -869,6 +913,11 @@
 }
 
 .neon-configurator__preview-inner.is-off .neon-configurator__preview-icon {
+    /* Off = exactly the same treatment as the neon TEXT: drop the glow entirely,
+       keep the icon's normal colour at full opacity — no extra dimming, per the
+       client's request. JS also sets this directly via inline style (authoritative
+       source of truth); this CSS rule is just a backup for the very first paint
+       before JS finishes running. */
     filter: none !important;
     opacity: 1;
 }

@@ -59,13 +59,28 @@
   </svg>
 
   <div class="neon-configurator__preview" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
-    <div class="neon-configurator__preview-toggle">
-      <span class="neon-configurator__toggle-label">OFF</span>
-      <label class="neon-configurator__switch">
-        <input type="checkbox" data-power-toggle checked>
-        <span class="neon-configurator__switch-slider"></span>
-      </label>
-      <span class="neon-configurator__toggle-label">ON</span>
+    <div class="neon-configurator__toggle-group">
+      <div class="neon-configurator__toggle-row">
+        <label class="neon-configurator__switch">
+          <input type="checkbox" data-measurements-toggle checked>
+          <span class="neon-configurator__switch-slider"></span>
+        </label>
+        <span class="neon-configurator__toggle-text" data-measurements-label>Measurements On</span>
+      </div>
+      <div class="neon-configurator__toggle-row">
+        <label class="neon-configurator__switch">
+          <input type="checkbox" data-wallpaper-toggle checked>
+          <span class="neon-configurator__switch-slider"></span>
+        </label>
+        <span class="neon-configurator__toggle-text" data-wallpaper-label>Wallpaper On</span>
+      </div>
+      <div class="neon-configurator__toggle-row">
+        <label class="neon-configurator__switch">
+          <input type="checkbox" data-power-toggle checked>
+          <span class="neon-configurator__switch-slider"></span>
+        </label>
+        <span class="neon-configurator__toggle-text" data-power-label>LED On</span>
+      </div>
     </div>
     <div class="neon-configurator__preview-stage" data-preview-stage>
       <div class="neon-configurator__preview-inner" data-preview-inner>
@@ -165,13 +180,7 @@
       <input type="text" class="neon-configurator__text-input" data-text-input maxlength="50" placeholder="Type your text here">
     </div>
 
-    <div class="neon-configurator__field">
-      <label class="neon-configurator__label" for="neon-rotation-{{ block.id }}">Rotate Your Sign</label>
-      <div class="neon-configurator__rotation-row">
-        <input id="neon-rotation-{{ block.id }}" type="range" class="neon-configurator__rotation" data-rotation-slider min="-180" max="180" step="1" value="0">
-        <span class="neon-configurator__rotation-value" data-rotation-value>0°</span>
-      </div>
-    </div>
+
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">Quick Symbols (optional)</label>
@@ -182,6 +191,7 @@
             class="neon-configurator__symbol-btn"
             data-symbol-url="{{ symbol.icon.value.url }}"
             data-symbol-label="{{ symbol.label.value }}"
+            data-icon-transparent-bg="{{ symbol.transparent_bg.value }}"
             title="{{ symbol.label.value }}"
             aria-label="{{ symbol.label.value }}">
             <img src="{{ symbol.icon.value.url }}" alt="{{ symbol.label.value }}" width="18" height="18" loading="lazy">

@@ -89,6 +89,11 @@ function initConfigurator(root) {
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
     const powerToggle = root.querySelector('[data-power-toggle]');
+    const powerLabel = root.querySelector('[data-power-label]');
+    const measurementsToggle = root.querySelector('[data-measurements-toggle]');
+    const measurementsLabel = root.querySelector('[data-measurements-label]');
+    const wallpaperToggle = root.querySelector('[data-wallpaper-toggle]');
+    const wallpaperLabel = root.querySelector('[data-wallpaper-label]');
     const customSizeSlider = root.querySelector('[data-custom-size-slider]');
     const sliderWidthLabel = root.querySelector('[data-slider-width-value]');
     const sliderHeightLabel = root.querySelector('[data-slider-height-value]');
@@ -699,6 +704,7 @@ function initConfigurator(root) {
         });
 
         if (activeSelectionKind === 'icon') hideSelectionBox();
+        updatePowerState();
     }
 
     function updatePreviewScale() {
@@ -778,11 +784,49 @@ function initConfigurator(root) {
 
     function updatePowerState() {
         if (!previewInner) return;
-        if (powerToggle && !powerToggle.checked) {
-            previewInner.classList.add('is-off');
-        } else {
-            previewInner.classList.remove('is-off');
+        const isOn = !powerToggle || powerToggle.checked;
+        previewInner.classList.toggle('is-off', !isOn);
+        if (powerLabel) powerLabel.textContent = isOn ? 'LED On' : 'LED Off';
+
+        // Defensive redundancy: also set glow directly via inline style on every
+        // symbol icon currently in the preview, so the on/off difference is
+        // guaranteed to apply immediately even for icons added after this toggle
+        // was last changed (e.g. a symbol clicked while LED was already off).
+        if (iconsContainer) {
+            iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((el) => {
+                if (isOn) {
+                    // Written out explicitly (not just cleared to '') so the glow is
+                    // GUARANTEED to render exactly like the text's glow, regardless
+                    // of any other CSS on the page — inline styles set here always win.
+                    el.style.filter = 'drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor)';
+                    el.style.opacity = '1';
+                } else {
+                    // Off = plain colour only, no dimming — matches the text's off state exactly.
+                    el.style.filter = 'none';
+                    el.style.opacity = '1';
+                }
+            });
         }
+    }
+
+    // Measurements toggle: shows/hides the dimension lines and the selection box.
+    function updateMeasurementsState() {
+        if (!previewStage) return;
+        const isOn = !measurementsToggle || measurementsToggle.checked;
+        previewStage.classList.toggle('no-measurements', !isOn);
+        if (measurementsLabel) measurementsLabel.textContent = isOn ? 'Measurements On' : 'Measurements Off';
+        if (!isOn) hideSelectionBox();
+    }
+
+    // Wallpaper toggle: hides the selected background photo behind a clean, professional
+    // gradient fallback. Toggling back ON restores the photo instantly — the inline
+    // background-image set by applyDefaultBackground()/the bg-thumb clicks is never
+    // removed, just visually overridden by CSS while this class is present.
+    function updateWallpaperState() {
+        if (!previewBox) return;
+        const isOn = !wallpaperToggle || wallpaperToggle.checked;
+        previewBox.classList.toggle('no-wallpaper', !isOn);
+        if (wallpaperLabel) wallpaperLabel.textContent = isOn ? 'Wallpaper On' : 'Wallpaper Off';
     }
 
     function calculateTotal() {
@@ -966,6 +1010,12 @@ function initConfigurator(root) {
 
     if (powerToggle) {
         powerToggle.addEventListener('change', updatePowerState);
+    }
+    if (measurementsToggle) {
+        measurementsToggle.addEventListener('change', updateMeasurementsState);
+    }
+    if (wallpaperToggle) {
+        wallpaperToggle.addEventListener('change', updateWallpaperState);
     }
 
     effectModeRadios.forEach((radio) => {
@@ -1166,6 +1216,8 @@ function initConfigurator(root) {
     updatePreviewColour();
     updatePreviewScale();
     updatePowerState();
+    updateMeasurementsState();
+    updateWallpaperState();
     syncShapeSourceStyle();
     updateBackboardPanel();
     syncBackboardStyleCards();

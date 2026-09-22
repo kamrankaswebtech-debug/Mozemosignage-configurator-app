@@ -9,6 +9,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 const SECTIONS = [
     { title: "Illumination Type", path: "/app/3d-signs/illumination-type", description: "Backlit, Frontlit, Front & Backlit, Fully Illuminated 3D Acrylic." },
+    { title: "Wallpapers", path: "/app/3d-signs/wallpapers", description: "Store-front/desk-front background images shown behind the live preview." },
     { title: "Sizes", path: "/app/3d-signs/sizes", description: "Manage 3D sign size options and their pricing." },
     { title: "Materials", path: "/app/3d-signs/materials", description: "Acrylic, Metal Backing, Wood Backing, etc." },
     { title: "Acrylic Thickness", path: "/app/3d-signs/acrylic-thickness", description: "3mm, 5mm, 10mm, etc." },
