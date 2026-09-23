@@ -109,6 +109,209 @@ function initSign3dConfigurator(root) {
     const resetColourBtn = root.querySelector('[data-reset-colour-btn]');
     const resetScaleSizeBtn = root.querySelector('[data-reset-scale-size-btn]');
     const resetFontBtn = root.querySelector('[data-reset-font-btn]');
+
+    // ---- NEW: live-measurement pricing engine (width/letter-height/letter-count/depth,
+    // Indoor/Outdoor, logo upload with live scaling, price breakdown, final review) ----
+    const pricingConfigEl = root.querySelector('[data-sign3d-pricing-config]');
+    let pricingConfig = null;
+    try {
+        pricingConfig = pricingConfigEl ? JSON.parse(pricingConfigEl.textContent) : null;
+    } catch (err) {
+        console.error('3D Sign Configurator: failed to parse pricing config JSON.', err);
+        pricingConfig = null;
+    }
+
+    const modeButtons = root.querySelectorAll('[data-mode-btn]');
+    const modePanels = root.querySelectorAll('[data-mode-panel]');
+    const widthInput = root.querySelector('[data-width-input]');
+    const letterHeightInput = root.querySelector('[data-letter-height-input]');
+    const depthSelect = root.querySelector('[data-depth-select]');
+    const indoorOutdoorRadios = root.querySelectorAll('[data-indoor-outdoor-radio]');
+    const breakdownRows = root.querySelector('[data-breakdown-rows]');
+    const uploadTriggerBtn = root.querySelector('[data-upload-trigger-btn]');
+    const logoUploadInput = root.querySelector('[data-logo-upload-input]');
+    const uploadFilenameEl = root.querySelector('[data-upload-filename]');
+    const reviewBtn = root.querySelector('[data-review-btn]');
+    const reviewModal = root.querySelector('[data-review-modal]');
+    const reviewCloseBtn = root.querySelector('[data-review-close-btn]');
+    const reviewConfirmBtn = root.querySelector('[data-review-confirm-btn]');
+    const reviewSummaryEl = root.querySelector('[data-review-summary]');
+
+    let currentMode = 'text';
+    let logoImg = null;
+    let uploadedLogoUrl = null;
+    let lastReviewData = null;
+
+    function ensureLogoImgElement() {
+        if (logoImg || !previewInner) return;
+        logoImg = document.createElement('img');
+        logoImg.className = 'sign3d-configurator__logo-preview-img';
+        logoImg.alt = 'Your uploaded logo';
+        previewInner.appendChild(logoImg);
+    }
+
+    function findAscendingTier(tiers, key, value) {
+        if (!tiers || !tiers.length) return null;
+        const sorted = tiers.slice().sort((a, b) => a[key] - b[key]);
+        for (const tier of sorted) {
+            if (value <= tier[key]) return tier;
+        }
+        return sorted[sorted.length - 1];
+    }
+
+    function findLetterCountTier(tiers, count) {
+        if (!tiers || !tiers.length) return null;
+        const sorted = tiers.slice().sort((a, b) => a.startsAt - b.startsAt);
+        let applicable = null;
+        sorted.forEach((tier) => {
+            if (tier.startsAt <= count) applicable = tier;
+        });
+        return applicable;
+    }
+
+    // Stacked shadow layers simulate real acrylic/letter depth — more depth (mm) = more
+    // visible extruded "steps" behind the front face. Works for both text (text-shadow)
+    // and the uploaded logo image (drop-shadow filter, built separately below).
+    function buildExtrusionShadow(depthMm) {
+        const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
+        const layers = [];
+        for (let i = 1; i <= steps; i++) {
+            const alpha = (0.28 + (i / steps) * 0.3).toFixed(2);
+            layers.push(i + 'px ' + i + 'px 0 rgba(0,0,0,' + alpha + ')');
+        }
+        return layers.join(', ');
+    }
+
+    function buildExtrusionFilter(depthMm) {
+        const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
+        const layers = [];
+        for (let i = 1; i <= steps; i++) {
+            const alpha = (0.3 + (i / steps) * 0.3).toFixed(2);
+            layers.push('drop-shadow(' + i + 'px ' + i + 'px 0 rgba(0,0,0,' + alpha + '))');
+        }
+        return layers.join(' ');
+    }
+
+    function updateDepthVisual() {
+        const depthOption = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
+        const depthMm = parseFloat(depthOption?.value) || 10;
+        if (previewInnerForLed) {
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', buildExtrusionShadow(depthMm));
+        }
+        if (logoImg) {
+            logoImg.style.filter = buildExtrusionFilter(depthMm);
+        }
+    }
+
+    function updateLogoPreviewSize(widthCm, heightCm) {
+        if (!logoImg) return;
+        const pxWidth = Math.min(280, Math.max(60, widthCm * 1.3));
+        const pxHeight = Math.min(220, Math.max(40, heightCm * 1.3));
+        logoImg.style.width = pxWidth + 'px';
+        logoImg.style.height = pxHeight + 'px';
+        logoImg.style.objectFit = 'contain';
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        modeButtons.forEach((btn) => btn.classList.toggle('is-selected', btn.dataset.modeBtn === mode));
+        modePanels.forEach((panel) => { panel.hidden = panel.dataset.modePanel !== mode; });
+
+        if (mode === 'upload') {
+            if (textFlex) textFlex.style.display = 'none';
+            if (iconsContainer) iconsContainer.style.display = 'none';
+            if (logoImg) logoImg.style.display = uploadedLogoUrl ? 'block' : 'none';
+        } else {
+            if (textFlex) textFlex.style.display = '';
+            if (iconsContainer) iconsContainer.style.display = '';
+            if (logoImg) logoImg.style.display = 'none';
+        }
+
+        const letterHeightLabelEl = letterHeightInput
+            ? letterHeightInput.closest('.sign3d-configurator__field')?.querySelector('.sign3d-configurator__label')
+            : null;
+        if (letterHeightLabelEl) {
+            letterHeightLabelEl.textContent = mode === 'upload' ? '4. Overall Height' : '4. Letter / Element Height';
+        }
+
+        calculateTotal();
+    }
+
+    async function handleLogoUpload(file) {
+        if (!file) return;
+        if (uploadFilenameEl) uploadFilenameEl.textContent = 'Uploading "' + file.name + '"...';
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch('/apps/neon-pricing', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error('Upload failed with status ' + response.status);
+            const data = await response.json();
+            if (data.error || !data.fileUrl) throw new Error(data.error || 'No file URL returned');
+
+            uploadedLogoUrl = data.fileUrl;
+            ensureLogoImgElement();
+            logoImg.src = uploadedLogoUrl;
+            logoImg.style.display = 'block';
+            if (uploadFilenameEl) uploadFilenameEl.textContent = 'Uploaded: ' + file.name;
+            updatePreviewScale();
+            updateDepthVisual();
+        } catch (err) {
+            console.error('3D Sign Configurator: logo upload failed.', err);
+            if (uploadFilenameEl) uploadFilenameEl.textContent = 'Upload failed — please try again.';
+        }
+    }
+
+    function renderBreakdown(lines) {
+        if (!breakdownRows) return;
+        breakdownRows.innerHTML = '';
+        lines.forEach((line) => {
+            const row = document.createElement('div');
+            row.className = 'sign3d-configurator__breakdown-row';
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = line.label + (line.note ? ' ' + line.note : '');
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = line.included ? 'Included' : ('+$' + line.value.toFixed(2));
+            if (line.included) valueSpan.classList.add('is-included');
+            row.appendChild(labelSpan);
+            row.appendChild(valueSpan);
+            breakdownRows.appendChild(row);
+        });
+    }
+
+    function populateReviewSummary() {
+        if (!reviewSummaryEl || !lastReviewData) return;
+        const d = lastReviewData;
+        const rows = [
+            ['Design Source', d.mode === 'upload' ? 'Uploaded Logo/Design' : 'Typed Wording'],
+            ['Overall Width', d.widthCm + ' cm'],
+            [d.mode === 'upload' ? 'Overall Height' : 'Letter Height', d.letterHeightCm + ' cm'],
+        ];
+        if (d.mode === 'text') rows.push(['Letters/Characters', String(d.letterCount)]);
+        rows.push(['Depth/Thickness', d.depthLabel]);
+        rows.push(['Lighting', d.illuminationLabel]);
+        rows.push(['Colour', d.colourName]);
+        rows.push(['Material', d.materialLabel]);
+        rows.push(['Finish', d.finishLabel]);
+        rows.push(['Mounting', d.mountingLabel]);
+        if (d.addonLabels.length) rows.push(['Add-ons', d.addonLabels.join(', ')]);
+        rows.push(['Construction', d.isOutdoor ? 'Outdoor' : 'Indoor']);
+        rows.push(['Total Price', '$' + d.total.toFixed(2)]);
+
+        reviewSummaryEl.innerHTML = rows.map((r) =>
+            '<div class="sign3d-configurator__review-row"><span>' + r[0] + '</span><strong>' + r[1] + '</strong></div>'
+        ).join('');
+    }
+
+    function openReviewModal() {
+        populateReviewSummary();
+        if (reviewModal) reviewModal.hidden = false;
+    }
+
+    function closeReviewModal() {
+        if (reviewModal) reviewModal.hidden = true;
+    }
+    // ---- END NEW state/helpers ----
+
     let historyStack = [];
     let historyIndex = -1;
     let groupOffsetX = 0;
@@ -444,15 +647,18 @@ function initSign3dConfigurator(root) {
     }
 
     function updatePreviewScale() {
-        const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
-        const widthCm = parseFloat(sizeOption?.value) || 60;
-        const heightCm = parseFloat(sizeOption?.dataset.height) || Math.round(widthCm / 2.6);
+        const widthCm = parseFloat(widthInput?.value) || 100;
+        const heightCm = parseFloat(letterHeightInput?.value) || 25;
 
-        baseFontSize = Math.min(80, Math.max(20, widthCm * 0.4));
+        // Font size now driven directly by the actual Letter Height the customer enters —
+        // more accurate than the old width-based guess, and reacts live as they type.
+        baseFontSize = Math.min(160, Math.max(16, heightCm * 2.2));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
 
         if (widthLabel) widthLabel.textContent = widthCm + ' cm';
         if (heightLabel) heightLabel.textContent = heightCm + ' cm';
+
+        updateLogoPreviewSize(widthCm, heightCm);
     }
 
     let measurementsVisible = true;
@@ -531,18 +737,137 @@ function initSign3dConfigurator(root) {
     }
 
     function calculateTotal() {
-        let total = 0;
-        const selects = [illuminationSelect, sizeSelect, materialSelect, thicknessSelect, finishSelect, mountingSelect];
-        selects.forEach((select) => {
-            const option = select.options[select.selectedIndex];
-            total += parseFloat(option?.dataset.price) || 0;
-        });
-        total += selectedColourPrice;
+        const config = pricingConfig || { widthTiers: [], letterHeightTiers: [], letterCountTiers: [], depthTiers: [], settings: {} };
+        const settings = config.settings || {};
+
+        const widthCm = parseFloat(widthInput?.value) || 0;
+        const letterHeightCm = parseFloat(letterHeightInput?.value) || 0;
+        const isOutdoor = !!(indoorOutdoorRadios && Array.from(indoorOutdoorRadios).find((r) => r.checked && r.value === 'outdoor'));
+
+        const widthTier = findAscendingTier(config.widthTiers, 'width', widthCm);
+        const basePrice = widthTier ? Number(widthTier.price) || 0 : 0;
+        const baseLabel = widthTier ? widthTier.label : 'Base price';
+
+        const letterHeightTier = findAscendingTier(config.letterHeightTiers, 'height', letterHeightCm);
+        const letterHeightAdjustment = letterHeightTier ? Number(letterHeightTier.adjustment) || 0 : 0;
+
+        let letterCountSurcharge = 0;
+        let letterCountLabel = '';
+        let letterCount = 0;
+        if (currentMode === 'text') {
+            letterCount = (textInput.value || '').replace(/\s/g, '').length;
+            const includedLetters = Number(settings.includedLetters) || 20;
+            if (letterCount > includedLetters) {
+                const countTier = findLetterCountTier(config.letterCountTiers, letterCount);
+                letterCountSurcharge = countTier ? Number(countTier.surcharge) || 0 : 0;
+                letterCountLabel = countTier ? countTier.label : '';
+            }
+        }
+
+        const depthOption = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
+        const depthSurcharge = parseFloat(depthOption?.dataset.price) || 0;
+        const depthLabel = depthOption?.dataset.label || (depthOption ? depthOption.textContent.trim() : 'Standard');
+
+        let illuminationPrice = 0;
+        let illuminationLabel = '';
+        if (illuminationSelect) {
+            const opt = illuminationSelect.options[illuminationSelect.selectedIndex];
+            illuminationPrice = parseFloat(opt?.dataset.price) || 0;
+            illuminationLabel = opt ? opt.textContent.trim() : '';
+        }
+
+        let materialPrice = 0;
+        let materialLabel = '';
+        if (materialSelect) {
+            const opt = materialSelect.options[materialSelect.selectedIndex];
+            materialPrice = parseFloat(opt?.dataset.price) || 0;
+            materialLabel = opt ? opt.textContent.trim() : '';
+        }
+
+        let finishPrice = 0;
+        let finishLabel = '';
+        if (finishSelect) {
+            const opt = finishSelect.options[finishSelect.selectedIndex];
+            finishPrice = parseFloat(opt?.dataset.price) || 0;
+            finishLabel = opt ? opt.textContent.trim() : '';
+        }
+
+        let mountingPrice = 0;
+        let mountingLabel = '';
+        if (mountingSelect) {
+            const opt = mountingSelect.options[mountingSelect.selectedIndex];
+            mountingPrice = parseFloat(opt?.dataset.price) || 0;
+            mountingLabel = opt ? opt.textContent.trim() : '';
+        }
+
+        // Backing panel — calculated from real width x height area, not one flat price
+        // for every size, per the client's explicit instruction. Skipped only when the
+        // selected Mounting option is literally "No Backing Panel".
+        let panelSurcharge = 0;
+        const panelRate = Number(settings.panelRate) || 0;
+        if (mountingLabel && mountingLabel.toLowerCase() !== 'no backing panel' && widthCm > 0 && letterHeightCm > 0) {
+            const areaSqm = (widthCm / 100) * (letterHeightCm / 100);
+            panelSurcharge = Math.round(areaSqm * panelRate * 100) / 100;
+        }
+
+        let addonsTotal = 0;
+        const addonLabels = [];
         addonCheckboxes.forEach((checkbox) => {
-            if (checkbox.checked) total += parseFloat(checkbox.dataset.price) || 0;
+            if (checkbox.checked) {
+                addonsTotal += parseFloat(checkbox.dataset.price) || 0;
+                const lbl = checkbox.closest('label')?.querySelector('span')?.textContent.trim();
+                if (lbl) addonLabels.push(lbl);
+            }
         });
+
+        const subtotalBeforeOutdoor = basePrice + letterHeightAdjustment + letterCountSurcharge + depthSurcharge
+            + illuminationPrice + materialPrice + finishPrice + mountingPrice + panelSurcharge + addonsTotal;
+
+        // Outdoor = +15% of the BASE width price only (matches the client's worked examples
+        // exactly: $999 -> $1199, $1599 -> $1839, $2199 -> $2529), with a $ minimum floor.
+        let outdoorSurcharge = 0;
+        if (isOutdoor) {
+            const pct = Number(settings.outdoorPercent) || 0;
+            const min = Number(settings.outdoorMin) || 0;
+            outdoorSurcharge = Math.max(basePrice * (pct / 100), min);
+            outdoorSurcharge = Math.round(outdoorSurcharge * 100) / 100;
+        }
+
+        const total = subtotalBeforeOutdoor + outdoorSurcharge;
+
+        // Colour is intentionally excluded from pricing entirely — customer's free choice,
+        // per the client's explicit "colour never changes price" instruction.
+        const lines = [];
+        lines.push({ label: baseLabel, value: basePrice, included: false });
+        lines.push({ label: 'Letter height (' + letterHeightCm + ' cm)', value: letterHeightAdjustment, included: letterHeightAdjustment === 0 });
+        if (currentMode === 'text') {
+            lines.push({
+                label: letterCountSurcharge > 0 ? ('Letters: ' + letterCount + ' (' + letterCountLabel + ')') : ('Letters: ' + letterCount + ' (included)'),
+                value: letterCountSurcharge,
+                included: letterCountSurcharge === 0
+            });
+        }
+        lines.push({ label: 'Depth: ' + depthLabel, value: depthSurcharge, included: depthSurcharge === 0 });
+        lines.push({ label: 'Lighting: ' + illuminationLabel, value: illuminationPrice, included: illuminationPrice === 0 });
+        lines.push({ label: 'Material: ' + materialLabel, value: materialPrice, included: materialPrice === 0 });
+        lines.push({ label: 'Finish: ' + finishLabel, value: finishPrice, included: finishPrice === 0 });
+        lines.push({ label: 'Mounting: ' + mountingLabel, value: mountingPrice, included: mountingPrice === 0 });
+        if (panelSurcharge > 0) lines.push({ label: 'Backing panel (by area)', value: panelSurcharge, included: false });
+        addonLabels.forEach((lbl) => lines.push({ label: lbl, value: 0, included: true }));
+        lines.push({ label: 'Colour', value: 0, included: true, note: '(no surcharge)' });
+        lines.push({ label: isOutdoor ? 'Outdoor construction' : 'Indoor', value: outdoorSurcharge, included: !isOutdoor });
+        lines.push({ label: 'Standard delivery (Australia-wide)', value: 0, included: true });
+
+        renderBreakdown(lines);
+
         totalPriceEl.textContent = '$' + total.toFixed(2);
         currentTotal = total;
+
+        lastReviewData = {
+            mode: currentMode, widthCm, letterHeightCm, letterCount, depthLabel, illuminationLabel,
+            materialLabel, finishLabel, mountingLabel, isOutdoor, addonLabels,
+            colourName: colourNameLabel ? colourNameLabel.textContent.trim() : '', total
+        };
     }
 
     let textHistoryTimer = null;
@@ -651,6 +976,50 @@ function initSign3dConfigurator(root) {
         checkbox.addEventListener('change', calculateTotal);
     });
 
+    // ---- NEW: measurement / mode / upload / review event bindings ----
+    modeButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setMode(btn.dataset.modeBtn));
+    });
+
+    if (widthInput) {
+        widthInput.addEventListener('input', () => { updatePreviewScale(); calculateTotal(); });
+    }
+    if (letterHeightInput) {
+        letterHeightInput.addEventListener('input', () => { updatePreviewScale(); calculateTotal(); });
+    }
+    if (depthSelect) {
+        depthSelect.addEventListener('change', () => { updateDepthVisual(); calculateTotal(); });
+    }
+    indoorOutdoorRadios.forEach((radio) => {
+        radio.addEventListener('change', calculateTotal);
+    });
+    if (textInput) {
+        textInput.addEventListener('input', calculateTotal);
+    }
+
+    if (uploadTriggerBtn && logoUploadInput) {
+        uploadTriggerBtn.addEventListener('click', () => logoUploadInput.click());
+        logoUploadInput.addEventListener('change', () => {
+            const file = logoUploadInput.files && logoUploadInput.files[0];
+            if (file) handleLogoUpload(file);
+        });
+    }
+
+    if (reviewBtn) reviewBtn.addEventListener('click', openReviewModal);
+    if (reviewCloseBtn) reviewCloseBtn.addEventListener('click', closeReviewModal);
+    if (reviewModal) {
+        reviewModal.addEventListener('click', (event) => {
+            if (event.target === reviewModal) closeReviewModal();
+        });
+    }
+    if (reviewConfirmBtn) {
+        reviewConfirmBtn.addEventListener('click', () => {
+            closeReviewModal();
+            if (addToCartBtn) addToCartBtn.click();
+        });
+    }
+    // ---- END NEW bindings ----
+
     if (addToCartBtn) {
         addToCartBtn.addEventListener('click', async () => {
             const variantId = addToCartBtn.dataset.variantId;
@@ -665,28 +1034,42 @@ function initSign3dConfigurator(root) {
                 .map((checkbox) => checkbox.closest('label').querySelector('span').textContent.trim())
                 .join(', ');
 
-            const sizeOptionForBlueprint = sizeSelect.options[sizeSelect.selectedIndex];
-            const blueprintWidthCm = parseFloat(sizeOptionForBlueprint?.value) || '';
-            const blueprintHeightCm = parseFloat(sizeOptionForBlueprint?.dataset.height) || '';
+            addToCartBtn.disabled = true;
+            setButtonLoadingText(addToCartBtn, 'Syncing price...');
+
+            // Defensive: if Material/Finish/Mounting/Illumination have no options saved yet
+            // in Admin (data not entered), don't crash the whole click — fall back to
+            // "Standard" so Add to Cart still works while the developer finishes adding data.
+            const getSelectedOptionText = (select, fallback) => {
+                if (!select) return fallback;
+                const opt = select.options[select.selectedIndex];
+                return opt ? opt.textContent.trim() : fallback;
+            };
+
+            const blueprintWidthCm = parseFloat(widthInput?.value) || '';
+            const blueprintHeightCm = parseFloat(letterHeightInput?.value) || '';
+            const isOutdoorForCart = !!(indoorOutdoorRadios && Array.from(indoorOutdoorRadios).find((r) => r.checked && r.value === 'outdoor'));
+            const depthOptionForCart = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
 
             const properties = {
-                'Custom Text': textInput.value.trim() || 'Your Brand',
-                'Illumination Type': illuminationSelect.options[illuminationSelect.selectedIndex].textContent.trim(),
-                'Size': sizeSelect.options[sizeSelect.selectedIndex].textContent.trim(),
-                'Material': materialSelect.options[materialSelect.selectedIndex].textContent.trim(),
-                'Acrylic Thickness': thicknessSelect.options[thicknessSelect.selectedIndex].textContent.trim(),
-                'Front Colour': colourNameLabel.textContent.trim(),
-                'Finish': finishSelect.options[finishSelect.selectedIndex].textContent.trim(),
-                'Mounting': mountingSelect.options[mountingSelect.selectedIndex].textContent.trim(),
+                'Design Source': currentMode === 'upload' ? 'Uploaded Logo/Design' : 'Typed Wording',
+                'Custom Text': currentMode === 'text' ? (textInput.value.trim() || 'Your Brand') : 'N/A (logo upload)',
+                'Uploaded Logo URL': uploadedLogoUrl || 'N/A',
+                'Illumination Type': getSelectedOptionText(illuminationSelect, 'Standard'),
+                'Overall Width': blueprintWidthCm + ' cm',
+                'Overall / Letter Height': blueprintHeightCm + ' cm',
+                'Depth / Thickness': depthOptionForCart ? depthOptionForCart.textContent.trim() : 'Standard',
+                'Material': getSelectedOptionText(materialSelect, 'Standard'),
+                'Front Colour': colourNameLabel ? colourNameLabel.textContent.trim() : 'Default',
+                'Finish': getSelectedOptionText(finishSelect, 'Standard'),
+                'Mounting': getSelectedOptionText(mountingSelect, 'Standard'),
                 'Add-ons': selectedAddons || 'None',
+                'Construction': isOutdoorForCart ? 'Outdoor' : 'Indoor',
                 'Symbol Position': currentSymbolPosition.charAt(0).toUpperCase() + currentSymbolPosition.slice(1),
                 'Configured Total': '$' + currentTotal.toFixed(2),
                 '_blueprint_width_cm': blueprintWidthCm,
                 '_blueprint_height_cm': blueprintHeightCm
             };
-
-            addToCartBtn.disabled = true;
-            setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
             try {
                 const productId = addToCartBtn.dataset.productId;
@@ -757,6 +1140,8 @@ function initSign3dConfigurator(root) {
     if (resetScaleSizeBtn) resetScaleSizeBtn.addEventListener('click', resetScaleAndSizeToDefault);
     if (resetFontBtn) resetFontBtn.addEventListener('click', resetFontToDefault);
 
+    ensureLogoImgElement();
+    setMode('text');
     updatePreviewText();
     updatePreviewFont();
     updatePreviewColour();
@@ -764,6 +1149,7 @@ function initSign3dConfigurator(root) {
     updateLedState();
     updateSymbolPositionClass();
     updateIlluminationEffect();
+    updateDepthVisual();
     applyWallpaperBackground();
     calculateTotal();
     pushHistory();

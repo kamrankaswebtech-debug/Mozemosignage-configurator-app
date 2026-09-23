@@ -412,9 +412,14 @@ description = "Materials, Finish, Mounting, and Add-ons for 3D Illuminated Signs
 
 [metaobjects.app.sign3d_option.fields.category]
 name = "Category"
-description = "Must be exactly one of: material, finish, mounting, addon, wallpaper"
+description = "One of: material, finish, mounting, addon, wallpaper, width_tier, letter_height_tier, letter_count_tier, depth_tier, pricing_settings"
 type = "single_line_text_field"
 required = true
+
+[metaobjects.app.sign3d_option.fields.threshold_value]
+name = "Threshold Value"
+description = "Tier categories only. width/letter_height/depth tier = cm value. letter_count_tier = min letter count. Empty for other categories."
+type = "number_decimal"
 
 [metaobjects.app.sign3d_option.fields.label]
 name = "Label"
@@ -438,6 +443,36 @@ type = "file_reference"
 [metaobjects.app.sign3d_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+[metaobjects.app.sign3d_option.fields.outdoor_surcharge_percent]
+name = "Outdoor Surcharge (%)"
+description = "category=pricing_settings only. e.g. 15 = +15% for Outdoor."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.outdoor_minimum_surcharge]
+name = "Outdoor Minimum Surcharge ($)"
+description = "category=pricing_settings only. Minimum $ surcharge for Outdoor."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.included_letters_count]
+name = "Included Letters Count"
+description = "category=pricing_settings only. Letters included in base price, e.g. 20. Applies only in Type Wording mode."
+type = "number_integer"
+
+[metaobjects.app.sign3d_option.fields.panel_rate_per_sqm]
+name = "Backing Panel Rate (per sqm)"
+description = "category=pricing_settings only. e.g. 70 for $70 per square metre panel."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.base_letter_height_cm]
+name = "Base Letter Height (cm)"
+description = "category=pricing_settings only. Height included at $0, e.g. 25."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.base_depth_tier_label]
+name = "Base Depth Tier Label"
+description = "category=pricing_settings only. Must match the depth_tier entry's Label that is standard/included."
+type = "single_line_text_field"
 
 [metaobjects.app.uv_size]
 name = "UV Sign Size"
@@ -1052,3 +1087,6 @@ type = "number_decimal"
 [metaobjects.app.lightbox_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+
+

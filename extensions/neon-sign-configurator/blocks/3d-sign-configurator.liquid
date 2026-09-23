@@ -123,6 +123,77 @@
 
   <div class="sign3d-configurator__panel">
 
+    {% comment %} Pricing config for the new live-measurement engine, read by JS. {% endcomment %}
+    <script type="application/json" data-sign3d-pricing-config>
+    {
+      "widthTiers": [
+        {% assign sign3d_wt_i = 0 %}
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "width_tier" %}
+            {% if sign3d_wt_i > 0 %},{% endif %}
+            { "width": {{ item.threshold_value.value | default: 0 }}, "price": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
+            {% assign sign3d_wt_i = sign3d_wt_i | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      ],
+      "letterHeightTiers": [
+        {% assign sign3d_lh_i = 0 %}
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "letter_height_tier" %}
+            {% if sign3d_lh_i > 0 %},{% endif %}
+            { "height": {{ item.threshold_value.value | default: 0 }}, "adjustment": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
+            {% assign sign3d_lh_i = sign3d_lh_i | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      ],
+      "letterCountTiers": [
+        {% assign sign3d_lc_i = 0 %}
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "letter_count_tier" %}
+            {% if sign3d_lc_i > 0 %},{% endif %}
+            { "startsAt": {{ item.threshold_value.value | default: 0 }}, "surcharge": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
+            {% assign sign3d_lc_i = sign3d_lc_i | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      ],
+      "depthTiers": [
+        {% assign sign3d_dt_i = 0 %}
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "depth_tier" %}
+            {% if sign3d_dt_i > 0 %},{% endif %}
+            { "depth": {{ item.threshold_value.value | default: 0 }}, "surcharge": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
+            {% assign sign3d_dt_i = sign3d_dt_i | plus: 1 %}
+          {% endif %}
+        {% endfor %}
+      ],
+      "settings": {
+        {% assign sign3d_pricing_row = nil %}
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "pricing_settings" %}
+            {% assign sign3d_pricing_row = item %}
+            {% break %}
+          {% endif %}
+        {% endfor %}
+        "outdoorPercent": {{ sign3d_pricing_row.outdoor_surcharge_percent.value | default: 15 }},
+        "outdoorMin": {{ sign3d_pricing_row.outdoor_minimum_surcharge.value | default: 200 }},
+        "includedLetters": {{ sign3d_pricing_row.included_letters_count.value | default: 20 }},
+        "panelRate": {{ sign3d_pricing_row.panel_rate_per_sqm.value | default: 70 }},
+        "baseLetterHeight": {{ sign3d_pricing_row.base_letter_height_cm.value | default: 25 }},
+        "baseDepthLabel": {{ sign3d_pricing_row.base_depth_tier_label.value | default: "" | json }}
+      }
+    }
+    </script>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">How would you like to start?</label>
+      <div class="sign3d-configurator__mode-toggle" data-mode-toggle>
+        <button type="button" class="sign3d-configurator__mode-btn is-selected" data-mode-btn="text">Type Wording</button>
+        <button type="button" class="sign3d-configurator__mode-btn" data-mode-btn="upload">Upload Logo / Design</button>
+      </div>
+    </div>
+
+    <div data-mode-panel="text">
+
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">1. Enter Your Text</label>
       <input type="text" class="sign3d-configurator__text-input" data-text-input maxlength="30" placeholder="Type your business name / text">
@@ -195,6 +266,20 @@
       </select>
     </div>
 
+    </div>
+
+    <div data-mode-panel="upload" hidden>
+      <div class="sign3d-configurator__field">
+        <label class="sign3d-configurator__label">1. Upload Your Logo / Design</label>
+        <div class="sign3d-configurator__upload-box" data-upload-box>
+          <input type="file" accept="image/*,.pdf,.ai,.eps" data-logo-upload-input hidden>
+          <button type="button" class="sign3d-configurator__upload-btn" data-upload-trigger-btn>Click to upload or drag and drop</button>
+          <p class="sign3d-configurator__upload-hint">PNG, JPG, PDF, AI, EPS. Max 20MB.</p>
+          <p class="sign3d-configurator__upload-filename" data-upload-filename></p>
+        </div>
+      </div>
+    </div>
+
     <style>
     {% for font in metaobjects["app--418838118401--neon_font"].values %}
       {% if font.font_file.value.url %}
@@ -222,8 +307,8 @@
       </select>
     </div>
 
-    <div class="sign3d-configurator__field">
-      <label class="sign3d-configurator__label">3. Choose Size</label>
+    <div class="sign3d-configurator__field" hidden data-legacy-size-field>
+      <label class="sign3d-configurator__label">3. Choose Size (legacy, hidden — kept for compatibility)</label>
       <select class="sign3d-configurator__select" data-size-select>
         {% for item in metaobjects["app--418838118401--sign3d_size"].values %}
           <option
@@ -235,6 +320,53 @@
           </option>
         {% endfor %}
       </select>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">3. Overall Width / Length</label>
+      <div class="sign3d-configurator__measure-row">
+        <input type="number" min="1" step="0.5" class="sign3d-configurator__text-input" data-width-input placeholder="e.g. 200" value="100">
+        <span class="sign3d-configurator__measure-unit">cm</span>
+      </div>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">4. Letter / Element Height</label>
+      <div class="sign3d-configurator__measure-row">
+        <input type="number" min="1" step="0.5" class="sign3d-configurator__text-input" data-letter-height-input placeholder="e.g. 25" value="25">
+        <span class="sign3d-configurator__measure-unit">cm</span>
+      </div>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">5. Depth / Thickness</label>
+      <select class="sign3d-configurator__select" data-depth-select>
+        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
+          {% if item.category.value == "depth_tier" %}
+            <option
+              value="{{ item.threshold_value.value | default: 0 }}"
+              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
+              data-label="{{ item.label.value }}"
+              {% if forloop.first %}selected{% endif %}>
+              {{ item.label.value }}
+            </option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="sign3d-configurator__field">
+      <label class="sign3d-configurator__label">6. Indoor or Outdoor</label>
+      <div class="sign3d-configurator__symbol-position-options">
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="indoor" checked>
+          <span>Indoor</span>
+        </label>
+        <label class="sign3d-configurator__symbol-position-option">
+          <input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor">
+          <span>Outdoor</span>
+        </label>
+      </div>
     </div>
 
     <div class="sign3d-configurator__field">
@@ -336,15 +468,34 @@
       {% endfor %}
     </div>
 
+    <div class="sign3d-configurator__breakdown" data-price-breakdown>
+      <p class="sign3d-configurator__breakdown-title">Price Breakdown</p>
+      <div class="sign3d-configurator__breakdown-rows" data-breakdown-rows></div>
+    </div>
+
     <div class="sign3d-configurator__price-box">
       <span class="sign3d-configurator__price-label">Total Price</span>
       <span class="sign3d-configurator__price-value" data-total-price>$0.00</span>
+    </div>
+
+    <p class="sign3d-configurator__delivery-note">FREE STANDARD DELIVERY AUSTRALIA-WIDE. Oversized/commercial installations may require a custom freight quotation.</p>
+
+    <button type="button" class="sign3d-configurator__review-btn" data-review-btn>Review Final Design &amp; Price</button>
+
+    <div class="sign3d-configurator__review-modal" data-review-modal hidden>
+      <div class="sign3d-configurator__review-modal-inner">
+        <button type="button" class="sign3d-configurator__review-close" data-review-close-btn aria-label="Close">&times;</button>
+        <h3>Review Your Configuration</h3>
+        <div class="sign3d-configurator__review-summary" data-review-summary></div>
+        <button type="button" class="sign3d-configurator__add-to-cart" data-review-confirm-btn>Confirm &amp; Add to Cart</button>
+      </div>
     </div>
 
     <button
       type="button"
       class="sign3d-configurator__add-to-cart"
       data-add-to-cart
+      hidden
       data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
       data-product-id="{{ product.id }}">
       Add to Cart

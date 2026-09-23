@@ -135,9 +135,11 @@
     transition: text-shadow 0.3s ease, filter 0.3s ease;
 }
 
-/* LED OFF (any illumination type) — flat, unlit, no depth or glow. */
+/* LED OFF (any illumination type) — flat, unlit, but STILL shows real physical depth via
+   the extrusion shadow driven by the Depth/Thickness selection. This matches the client's
+   reference (a plain white 3D acrylic sign with no lighting still visibly has depth). */
 .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
-    text-shadow: none;
+    text-shadow: var(--sign3d-extrusion-shadow, none);
 }
 
 .sign3d-configurator__preview-inner.led-off .sign3d-configurator__preview-icon {
@@ -154,7 +156,8 @@
         2px 2px 0 rgba(0, 0, 0, 0.45),
         3px 3px 0 rgba(0, 0, 0, 0.35),
         0 0 8px currentColor,
-        0 0 18px currentColor;
+        0 0 18px currentColor,
+        var(--sign3d-extrusion-shadow, none);
 }
 
 .sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__preview-icon {
@@ -170,7 +173,8 @@
         0 0 12px currentColor,
         0 0 28px currentColor,
         0 0 50px currentColor,
-        0 0 80px currentColor;
+        0 0 80px currentColor,
+        var(--sign3d-extrusion-shadow, none);
 }
 
 .sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__preview-icon {
@@ -187,7 +191,8 @@
         0 0 6px #ffffff,
         0 0 16px currentColor,
         0 0 34px currentColor,
-        0 0 60px currentColor;
+        0 0 60px currentColor,
+        var(--sign3d-extrusion-shadow, none);
 }
 
 .sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__preview-icon {
@@ -209,7 +214,8 @@
         0 0 10px #ffffff,
         0 0 24px currentColor,
         0 0 46px currentColor,
-        0 0 75px currentColor;
+        0 0 75px currentColor,
+        var(--sign3d-extrusion-shadow, none);
 }
 
 .sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__preview-icon {
@@ -804,6 +810,184 @@
     mask-position: center;
     -webkit-mask-size: contain;
     mask-size: contain;
+}
+
+.sign3d-configurator__mode-toggle {
+    display: flex;
+    gap: 8px;
+}
+
+.sign3d-configurator__mode-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #b8b8c4;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.sign3d-configurator__mode-btn.is-selected {
+    border-color: #ff2ec4;
+    color: #ffffff;
+    background: linear-gradient(90deg, rgba(255, 46, 196, 0.25), rgba(122, 0, 255, 0.25));
+}
+
+.sign3d-configurator__upload-box {
+    border: 2px dashed #2c2c38;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+.sign3d-configurator__upload-btn {
+    background: none;
+    border: none;
+    color: #00d4ff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.sign3d-configurator__upload-hint {
+    font-size: 11px;
+    color: #7a7a88;
+    margin: 6px 0 0;
+}
+
+.sign3d-configurator__upload-filename {
+    font-size: 12px;
+    color: #b8b8c4;
+    margin: 8px 0 0;
+    word-break: break-all;
+}
+
+.sign3d-configurator__measure-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sign3d-configurator__measure-row .sign3d-configurator__text-input {
+    flex: 1;
+}
+
+.sign3d-configurator__measure-unit {
+    font-size: 13px;
+    color: #7a7a88;
+    font-weight: 600;
+}
+
+.sign3d-configurator__breakdown {
+    border: 1px solid #2c2c38;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 4px;
+}
+
+.sign3d-configurator__breakdown-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #b8b8c4;
+    margin: 0 0 8px;
+}
+
+.sign3d-configurator__breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12.5px;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+    color: #e4e4ec;
+}
+
+.sign3d-configurator__breakdown-row:last-child {
+    border-bottom: none;
+}
+
+.sign3d-configurator__breakdown-row .is-included {
+    color: #7a7a88;
+}
+
+.sign3d-configurator__delivery-note {
+    font-size: 11px;
+    color: #7a7a88;
+    margin: 4px 0 0;
+    line-height: 1.4;
+}
+
+.sign3d-configurator__review-btn {
+    width: 100%;
+    padding: 12px;
+    margin-top: 8px;
+    border: 1px solid #00d4ff;
+    border-radius: 8px;
+    background: transparent;
+    color: #00d4ff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.sign3d-configurator__review-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    padding: 20px;
+}
+
+.sign3d-configurator__review-modal[hidden] {
+    display: none;
+}
+
+.sign3d-configurator__review-modal-inner {
+    background: #0a0a0f;
+    border: 1px solid #2c2c38;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    color: #ffffff;
+}
+
+.sign3d-configurator__review-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #b8b8c4;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sign3d-configurator__review-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sign3d-configurator__logo-preview-img {
+    display: none;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 @media (max-width: 768px) {
