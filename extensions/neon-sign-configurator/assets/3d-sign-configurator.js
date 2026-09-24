@@ -90,6 +90,8 @@ function initSign3dConfigurator(root) {
     const previewInner = root.querySelector('[data-preview-inner]');
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
+    const widthDimLine = root.querySelector('.sign3d-configurator__dim-line--width');
+    const heightDimLine = root.querySelector('.sign3d-configurator__dim-line--height');
     const textFlex = root.querySelector('[data-text-flex]');
     const selectionBox = root.querySelector('[data-selection-box]');
     const previewBox = root.querySelector('[data-preview-box]');
@@ -234,7 +236,9 @@ function initSign3dConfigurator(root) {
             letterHeightLabelEl.textContent = mode === 'upload' ? '4. Overall Height' : '4. Letter / Element Height';
         }
 
+        hideSelectionBox();
         calculateTotal();
+        updateDimensionLines();
     }
 
     async function handleLogoUpload(file) {
@@ -631,6 +635,7 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewText() {
         renderLetters();
+        updateDimensionLines();
     }
 
     function updatePreviewColour() {
@@ -644,6 +649,7 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewFont() {
         if (fontSelect && textFlex) textFlex.style.fontFamily = fontSelect.value;
+        updateDimensionLines();
     }
 
     function updatePreviewScale() {
@@ -659,6 +665,60 @@ function initSign3dConfigurator(root) {
         if (heightLabel) heightLabel.textContent = heightCm + ' cm';
 
         updateLogoPreviewSize(widthCm, heightCm);
+        updateDimensionLines();
+    }
+
+    // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign content
+    // (letters/icons, or the uploaded logo) — NOT previewInner, which is deliberately
+    // width:100% in the CSS and therefore always reports the full stage width no matter
+    // how short the customer's text is. Measuring the real letter/icon/logo elements and
+    // taking the union of their boxes gives the TRUE visual width/height, so the line
+    // grows/shrinks exactly with the text — matches the LED Neon configurator's behaviour.
+    function getSignContentRect() {
+        let minLeft = Infinity, minTop = Infinity, maxRight = -Infinity, maxBottom = -Infinity;
+        const candidates = [];
+        if (currentMode === 'upload') {
+            if (logoImg && logoImg.style.display !== 'none' && uploadedLogoUrl) candidates.push(logoImg);
+        } else {
+            if (textFlex) candidates.push(...Array.from(textFlex.children));
+            if (iconsContainer) candidates.push(...Array.from(iconsContainer.children));
+        }
+        candidates.forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (!r.width && !r.height) return;
+            minLeft = Math.min(minLeft, r.left);
+            minTop = Math.min(minTop, r.top);
+            maxRight = Math.max(maxRight, r.right);
+            maxBottom = Math.max(maxBottom, r.bottom);
+        });
+        if (minLeft === Infinity) return null;
+        return { left: minLeft, top: minTop, right: maxRight, bottom: maxBottom, width: maxRight - minLeft, height: maxBottom - minTop };
+    }
+
+    function updateDimensionLines() {
+        if (!previewStage) return;
+        const stageRect = previewStage.getBoundingClientRect();
+        const contentRect = getSignContentRect();
+        if (!contentRect || !contentRect.width || !contentRect.height) return;
+
+        if (widthDimLine) {
+            widthDimLine.style.left = (contentRect.left - stageRect.left) + 'px';
+            widthDimLine.style.width = contentRect.width + 'px';
+            widthDimLine.style.top = (contentRect.bottom - stageRect.top + 14) + 'px';
+        }
+        if (heightDimLine) {
+            heightDimLine.style.top = (contentRect.top - stageRect.top) + 'px';
+            heightDimLine.style.height = contentRect.height + 'px';
+            heightDimLine.style.left = (contentRect.right - stageRect.left + 14) + 'px';
+        }
+    }
+
+    let dimResizeObserver = null;
+    function setupDimensionObserver() {
+        if (!previewInner || typeof ResizeObserver === 'undefined') return;
+        dimResizeObserver = new ResizeObserver(() => updateDimensionLines());
+        dimResizeObserver.observe(previewInner);
+        window.addEventListener('resize', updateDimensionLines);
     }
 
     let measurementsVisible = true;
@@ -1154,4 +1214,6 @@ function initSign3dConfigurator(root) {
     calculateTotal();
     pushHistory();
     updateUndoRedoButtons();
+    setupDimensionObserver();
+    updateDimensionLines();
 }

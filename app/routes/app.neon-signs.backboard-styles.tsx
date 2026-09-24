@@ -11,6 +11,7 @@ type StyleEntry = {
     extraPrice: string;
     sortOrder: string;
     visibility: string;
+    previewImageUrl: string | null;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -19,14 +20,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         `#graphql
     query ListBackboardStyles {
       metaobjects(type: "$app:backboard_style", first: 100) {
-        edges { node { id fields { key value } } }
+        edges {
+          node {
+            id
+            fields {
+              key
+              value
+              reference {
+                ... on MediaImage { image { url } }
+              }
+            }
+          }
+        }
       }
     }`
     );
     const data = await response.json();
     const styles: StyleEntry[] = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
-        edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
+        let previewImageUrl: string | null = null;
+        edge.node.fields.forEach((x: any) => {
+            f[x.key] = x.value;
+            if (x.key === "preview_image" && x.reference?.image?.url) {
+                previewImageUrl = x.reference.image.url;
+            }
+        });
         return {
             id: edge.node.id,
             label: f.label || "",
@@ -34,11 +52,84 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             extraPrice: f.extra_price_decimal || "0",
             sortOrder: f.sort_order || "0",
             visibility: f.visibility || "both",
+            previewImageUrl,
         };
     });
     styles.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
     return { styles };
 };
+
+// Uploads a merchant-picked image (Admin side) via Shopify's standard
+// stagedUploadsCreate -> direct upload -> fileCreate flow — same proven pattern
+// already used elsewhere in this app (Neon Font uploads, Quick Symbol icons).
+// Returns the file's GID, which is what a file_reference metaobject field value
+// must be set to (not a URL).
+async function uploadPreviewImage(admin: any, file: File): Promise<string> {
+    const stagedResponse = await admin.graphql(
+        `#graphql
+    mutation StagedUploadsCreate($input: [StagedUploadInput!]!) {
+      stagedUploadsCreate(input: $input) {
+        stagedTargets { url resourceUrl parameters { name value } }
+        userErrors { field message }
+      }
+    }`,
+        {
+            variables: {
+                input: [
+                    {
+                        filename: file.name,
+                        mimeType: file.type || "image/png",
+                        httpMethod: "POST",
+                        resource: "FILE",
+                    },
+                ],
+            },
+        }
+    );
+    const stagedData = await stagedResponse.json();
+    const stagedErrors = stagedData.data?.stagedUploadsCreate?.userErrors;
+    if (stagedErrors?.length) throw new Error(stagedErrors[0].message);
+
+    const target = stagedData.data?.stagedUploadsCreate?.stagedTargets?.[0];
+    if (!target) throw new Error("Could not get an upload target");
+
+    const uploadForm = new FormData();
+    target.parameters.forEach((param: { name: string; value: string }) => {
+        uploadForm.append(param.name, param.value);
+    });
+    uploadForm.append("file", file);
+
+    const uploadResponse = await fetch(target.url, { method: "POST", body: uploadForm });
+    if (!uploadResponse.ok) throw new Error("File upload to storage failed");
+
+    const fileCreateResponse = await admin.graphql(
+        `#graphql
+    mutation FileCreate($files: [FileCreateInput!]!) {
+      fileCreate(files: $files) {
+        files { id fileStatus ... on MediaImage { image { url } } }
+        userErrors { field message }
+      }
+    }`,
+        {
+            variables: {
+                files: [
+                    {
+                        originalSource: target.resourceUrl,
+                        contentType: (file.type || "").startsWith("image/") ? "IMAGE" : "FILE",
+                    },
+                ],
+            },
+        }
+    );
+    const fileCreateData = await fileCreateResponse.json();
+    const fileCreateErrors = fileCreateData.data?.fileCreate?.userErrors;
+    if (fileCreateErrors?.length) throw new Error(fileCreateErrors[0].message);
+
+    const createdFile = fileCreateData.data?.fileCreate?.files?.[0];
+    if (!createdFile?.id) throw new Error("File registration failed");
+
+    return createdFile.id;
+}
 
 export const action = async ({ request }: ActionFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
@@ -52,6 +143,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
         { key: "visibility", value: String(formData.get("visibility") || "both") },
     ];
+
+    // Handle image: a new file takes priority; otherwise a "remove image" checkbox
+    // clears it; otherwise the field is left untouched (existing image stays as-is).
+    const imageFile = formData.get("previewImage");
+    const removeImage = formData.get("removeImage") === "on";
+
+    if (imageFile instanceof File && imageFile.size > 0) {
+        try {
+            const fileGid = await uploadPreviewImage(admin, imageFile);
+            fields.push({ key: "preview_image", value: fileGid });
+        } catch (err: any) {
+            console.error("Backboard Styles: image upload failed", err);
+            return { error: err?.message || "Image upload failed" };
+        }
+    } else if (removeImage) {
+        fields.push({ key: "preview_image", value: "" });
+    }
 
     if (intent === "create") {
         const response = await admin.graphql(
@@ -127,25 +235,36 @@ export default function BackboardStylesPage() {
         <s-page heading="Backboard Styles">
             <s-section heading="Add New Style">
                 <s-link href="/app/neon-signs">← Back to Neon Signs</s-link>
-                <fetcher.Form method="post">
+                <s-paragraph>
+                    Uploading a Preview Image here makes the storefront show that real photo on this
+                    style's selection card instead of the plain "Hello" text mockup — matches the
+                    reference site's look, fully dynamic per style.
+                </s-paragraph>
+                <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
-                    <s-stack direction="inline" gap="base">
-                        <input type="text" name="label" placeholder="Label (e.g. Cut Around)" required />
-                        <select name="shapeType" defaultValue="rectangle" required>
-                            <option value="rectangle">Rectangle</option>
-                            <option value="cut-around">Cut Around</option>
-                            <option value="cut-to-letter">Cut to Letter</option>
-                            <option value="naked">Naked (No Backboard)</option>
-                            <option value="open-box">Open Box</option>
-                            <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
-                        </select>
-                        <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
-                        <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={styles.length + 1} />
-                        <select name="visibility" defaultValue="both">
-                            <option value="both">Both (Neon + 3D)</option>
-                            <option value="neon_only">Neon Only</option>
-                            <option value="3d_only">3D Only</option>
-                        </select>
+                    <s-stack direction="block" gap="base">
+                        <s-stack direction="inline" gap="base">
+                            <input type="text" name="label" placeholder="Label (e.g. Cut Around)" required />
+                            <select name="shapeType" defaultValue="rectangle" required>
+                                <option value="rectangle">Rectangle</option>
+                                <option value="cut-around">Cut Around</option>
+                                <option value="cut-to-letter">Cut to Letter</option>
+                                <option value="naked">Naked (No Backboard)</option>
+                                <option value="open-box">Open Box</option>
+                                <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
+                            </select>
+                            <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
+                            <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={styles.length + 1} />
+                            <select name="visibility" defaultValue="both">
+                                <option value="both">Both (Neon + 3D)</option>
+                                <option value="neon_only">Neon Only</option>
+                                <option value="3d_only">3D Only</option>
+                            </select>
+                        </s-stack>
+                        <label>
+                            Preview Image (optional — shown on the style's selection card)
+                            <input type="file" name="previewImage" accept="image/*" />
+                        </label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Style</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -155,6 +274,7 @@ export default function BackboardStylesPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
+                            <th style={{ padding: "8px" }}>Image</th>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Shape Type</th>
                             <th style={{ padding: "8px" }}>Extra Price</th>
@@ -166,34 +286,57 @@ export default function BackboardStylesPage() {
                         {styles.map((s) => (
                             <tr key={s.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === s.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
-                                        <fetcher.Form method="post">
+                                    <td colSpan={6} style={{ padding: "8px" }}>
+                                        <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={s.id} />
-                                            <s-stack direction="inline" gap="base">
-                                                <input type="text" name="label" defaultValue={s.label} required />
-                                                <select name="shapeType" defaultValue={s.shapeType} required>
-                                                    <option value="rectangle">Rectangle</option>
-                                                    <option value="cut-around">Cut Around</option>
-                                                    <option value="cut-to-letter">Cut to Letter</option>
-                                                    <option value="naked">Naked (No Backboard)</option>
-                                                    <option value="open-box">Open Box</option>
-                                                    <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
-                                                </select>
-                                                <input type="number" step="0.01" name="extraPrice" defaultValue={s.extraPrice} />
-                                                <input type="number" name="sortOrder" defaultValue={s.sortOrder} />
-                                                <select name="visibility" defaultValue={s.visibility}>
-                                                    <option value="both">Both (Neon + 3D)</option>
-                                                    <option value="neon_only">Neon Only</option>
-                                                    <option value="3d_only">3D Only</option>
-                                                </select>
-                                                <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
-                                                <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
+                                            <s-stack direction="block" gap="base">
+                                                <s-stack direction="inline" gap="base">
+                                                    <input type="text" name="label" defaultValue={s.label} required />
+                                                    <select name="shapeType" defaultValue={s.shapeType} required>
+                                                        <option value="rectangle">Rectangle</option>
+                                                        <option value="cut-around">Cut Around</option>
+                                                        <option value="cut-to-letter">Cut to Letter</option>
+                                                        <option value="naked">Naked (No Backboard)</option>
+                                                        <option value="open-box">Open Box</option>
+                                                        <option value="acrylic-stand-middle">Acrylic Stand (Middle)</option>
+                                                    </select>
+                                                    <input type="number" step="0.01" name="extraPrice" defaultValue={s.extraPrice} />
+                                                    <input type="number" name="sortOrder" defaultValue={s.sortOrder} />
+                                                    <select name="visibility" defaultValue={s.visibility}>
+                                                        <option value="both">Both (Neon + 3D)</option>
+                                                        <option value="neon_only">Neon Only</option>
+                                                        <option value="3d_only">3D Only</option>
+                                                    </select>
+                                                </s-stack>
+                                                {s.previewImageUrl && (
+                                                    <s-stack direction="inline" gap="tight" alignItems="center">
+                                                        <img src={s.previewImageUrl} alt={s.label} width="60" height="45" style={{ objectFit: "contain", background: "#111", borderRadius: "4px" }} />
+                                                        <label>
+                                                            <input type="checkbox" name="removeImage" /> Remove current image
+                                                        </label>
+                                                    </s-stack>
+                                                )}
+                                                <label>
+                                                    {s.previewImageUrl ? "Replace Image (optional)" : "Add Preview Image (optional)"}
+                                                    <input type="file" name="previewImage" accept="image/*" />
+                                                </label>
+                                                <s-stack direction="inline" gap="tight">
+                                                    <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
+                                                    <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
+                                                </s-stack>
                                             </s-stack>
                                         </fetcher.Form>
                                     </td>
                                 ) : (
                                     <>
+                                        <td style={{ padding: "8px" }}>
+                                            {s.previewImageUrl ? (
+                                                <img src={s.previewImageUrl} alt={s.label} width="50" height="38" style={{ objectFit: "contain", background: "#111", borderRadius: "4px" }} />
+                                            ) : (
+                                                <span style={{ fontSize: "11px", color: "#8a8a8a" }}>No image</span>
+                                            )}
+                                        </td>
                                         <td style={{ padding: "8px" }}>{s.label}</td>
                                         <td style={{ padding: "8px" }}>{s.shapeType}</td>
                                         <td style={{ padding: "8px" }}>${s.extraPrice}</td>

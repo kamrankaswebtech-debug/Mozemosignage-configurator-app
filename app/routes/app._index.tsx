@@ -1,35 +1,50 @@
+import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+// Real SVG icons (Shopify's Polaris <s-icon> set) instead of emoji — matches
+// the professional look requested, no custom SVG files to host/maintain.
 const CONFIGURATOR_SOURCES = [
-  { title: "Neon Signs Configurator", path: "/app/neon-signs", types: ["neon_font", "neon_colour", "sign_size", "signage_addon"], icon: "💡", color: "#ff2ec4" },
-  { title: "3D Illuminated Signs", path: "/app/3d-signs", types: ["sign3d_size", "sign3d_front_colour", "sign3d_option"], icon: "🔤", color: "#00d4ff" },
-  { title: "Acrylic Neon Bonnet", path: "/app/acrylic-bonnet", types: ["bonnet_option"], icon: "🪞", color: "#ff8a3d" },
-  { title: "Lightbox Range", path: "/app/lightbox", types: ["lightbox_option"], icon: "📦", color: "#7a00ff" },
-  { title: "UV Graphic LED Signs", path: "/app/uv-graphic-led", types: ["uv_size", "uv_material", "uv_finish", "uv_led_colour", "uv_addon"], icon: "🎨", color: "#00e0a4" },
-  { title: "UV Graphic Signs (No LED)", path: "/app/uv-graphic-no-led", types: ["uv_size", "uv_material", "uv_finish", "uv_addon"], icon: "🖼️", color: "#ffd23d" },
-  { title: "Infinity Mirror Signs", path: "/app/infinity-mirror", types: ["infinity_font", "infinity_size", "infinity_colour", "infinity_frame_finish", "infinity_mounting", "infinity_addon"], icon: "♾️", color: "#ff4d8d" },
-  { title: "Event Marquee Signs", path: "/app/event-marquee", types: ["event_marquee_option"], icon: "✨", color: "#ffb03d" },
-  { title: "Bulk & Bundle Deals", path: "/app/bundle-deals", types: ["bundle_option"], icon: "🎁", color: "#4dd4ff" },
+  { title: "Neon Signs Configurator", path: "/app/neon-signs", types: ["neon_font", "neon_colour", "sign_size", "signage_addon"], icon: "lightbulb", color: "#ff2ec4" },
+  { title: "3D Illuminated Signs", path: "/app/3d-signs", types: ["sign3d_size", "sign3d_front_colour", "sign3d_option"], icon: "text-font", color: "#00d4ff" },
+  { title: "Acrylic Neon Bonnet", path: "/app/acrylic-bonnet", types: ["bonnet_option"], icon: "image-alt", color: "#ff8a3d" },
+  { title: "Lightbox Range", path: "/app/lightbox", types: ["lightbox_option"], icon: "package", color: "#7a00ff" },
+  { title: "UV Graphic LED Signs", path: "/app/uv-graphic-led", types: ["uv_size", "uv_material", "uv_finish", "uv_led_colour", "uv_addon"], icon: "paint-brush-flat", color: "#00e0a4" },
+  { title: "UV Graphic Signs (No LED)", path: "/app/uv-graphic-no-led", types: ["uv_size", "uv_material", "uv_finish", "uv_addon"], icon: "image", color: "#ffd23d" },
+  { title: "Infinity Mirror Signs", path: "/app/infinity-mirror", types: ["infinity_font", "infinity_size", "infinity_colour", "infinity_frame_finish", "infinity_mounting", "infinity_addon"], icon: "refresh", color: "#ff4d8d" },
+  { title: "Event Marquee Signs", path: "/app/event-marquee", types: ["event_marquee_option"], icon: "star-filled", color: "#ffb03d" },
+  { title: "Bulk & Bundle Deals", path: "/app/bundle-deals", types: ["bundle_option"], icon: "gift-card", color: "#4dd4ff" },
 ];
+
+function toYoutubeEmbedUrl(url: string) {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{6,})/);
+  const id = match ? match[1] : "";
+  return id ? `https://www.youtube.com/embed/${id}?rel=0` : url;
+}
+
+function toVimeoEmbedUrl(url: string) {
+  const match = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  const id = match ? match[1] : "";
+  return id ? `https://player.vimeo.com/video/${id}` : url;
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  // ---- Single combined GraphQL request (aliases) instead of 11+ sequential round-trips.
-  // This is what was causing the embedded session token to expire mid-navigation and
-  // bounce to the OAuth/login screen — a slow loader outruns the short-lived token. ----
   const uniqueTypes = Array.from(new Set(CONFIGURATOR_SOURCES.flatMap((c) => c.types)));
   const aliasFor = (type: string) => `t_${type}`;
 
   const queryParts = uniqueTypes.map((type) => {
     if (type === "sign3d_option") {
-      // Needs field values (not just id) so we can also break down width_tier /
-      // pricing_settings for the checklist below, without a second query.
       return `${aliasFor(type)}: metaobjects(type: "$app:${type}", first: 250) { edges { node { id fields { key value } } } }`;
+    }
+    if (type === "signage_addon") {
+      // Needs field values + video file reference (not just id) so we can also pull
+      // out the demo_video entries below, without a second GraphQL round-trip.
+      return `${aliasFor(type)}: metaobjects(type: "$app:${type}", first: 250) { edges { node { id fields { key value reference { ... on Video { sources { url } } } } } } }`;
     }
     return `${aliasFor(type)}: metaobjects(type: "$app:${type}", first: 250) { edges { node { id } } }`;
   });
@@ -72,9 +87,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const hasInstallationSettings = (gqlData.installationSettings?.edges?.length || 0) > 0;
   const hasWallpapers = (gqlData.wallpapers?.edges?.length || 0) > 0;
 
-  // ---- NEW: live theme detection + real "Open Theme Editor" deep links.
-  // mainThemeName/Id come straight from the Admin API (read_themes scope, already
-  // granted) — nothing here is hardcoded or guessed. ----
   const mainThemeNode = gqlData.mainTheme?.nodes?.[0] || null;
   const mainThemeName = mainThemeNode?.name || null;
   const mainThemeNumericId = mainThemeNode?.id ? mainThemeNode.id.split("/").pop() : null;
@@ -84,7 +96,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     : null;
   const themeEditorProductTemplateUrl = themeEditorUrl ? `${themeEditorUrl}?template=product` : null;
 
-  // Break down sign3d_option (already fetched with fields) for the pricing checklist item.
   const sign3dNodes = gqlData[aliasFor("sign3d_option")]?.edges || [];
   let widthTierCount = 0;
   let hasPricingSettings = false;
@@ -94,6 +105,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (category === "pricing_settings") hasPricingSettings = true;
   });
   const has3dPricingConfigured = widthTierCount > 0 && hasPricingSettings;
+
+  // ---- NEW: Demo videos, reusing signage_addon via category = "demo_video" —
+  // no new metaobject definition needed (store is at the 32-definition cap). ----
+  const signageAddonNodes = gqlData[aliasFor("signage_addon")]?.edges || [];
+  const demoVideos = signageAddonNodes
+    .map((edge: any) => {
+      const f: Record<string, string> = {};
+      let videoFileUrl: string | null = null;
+      edge.node.fields.forEach((x: any) => {
+        f[x.key] = x.value;
+        if (x.key === "video_file" && x.reference?.sources?.[0]?.url) {
+          videoFileUrl = x.reference.sources[0].url;
+        }
+      });
+      return {
+        id: edge.node.id,
+        category: f.category || "",
+        title: f.label || "Demo video",
+        sourceType: f.video_source_type || "youtube",
+        videoUrl: f.video_url || "",
+        videoFileUrl,
+        sortOrder: Number(f.sort_order) || 0,
+      };
+    })
+    .filter((v: any) => v.category === "demo_video")
+    .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
 
   const hasCompletedOrder = recentBlueprints.length > 0;
   const newOrdersLast7Days = new Set(last7DaysBlueprints.map((b) => b.shopifyOrderId)).size;
@@ -120,6 +157,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     mainThemeName,
     themeEditorUrl,
     themeEditorProductTemplateUrl,
+    demoVideos,
   };
 };
 
@@ -135,6 +173,46 @@ function formatStatus(rawStatus: string | null) {
   return map[rawStatus] || rawStatus;
 }
 
+function DemoVideoPlayer({ video }: { video: any }) {
+  if (video.sourceType === "youtube" && video.videoUrl) {
+    return (
+      <iframe
+        width="100%"
+        height="420"
+        src={toYoutubeEmbedUrl(video.videoUrl)}
+        title={video.title}
+        style={{ border: "none", borderRadius: "8px" }}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      ></iframe>
+    );
+  }
+  if (video.sourceType === "vimeo" && video.videoUrl) {
+    return (
+      <iframe
+        width="100%"
+        height="420"
+        src={toVimeoEmbedUrl(video.videoUrl)}
+        title={video.title}
+        style={{ border: "none", borderRadius: "8px" }}
+        allow="autoplay; fullscreen; picture-in-picture"
+        allowFullScreen
+      ></iframe>
+    );
+  }
+  if (video.videoFileUrl) {
+    return (
+      // Native <video controls> in modern Chrome/Edge/Safari already includes
+      // play/pause, seek, volume, fullscreen AND a playback-speed option —
+      // no extra JS player library needed for the "YouTube-like controls" ask.
+      <video width="100%" height="420" controls playsInline style={{ borderRadius: "8px", background: "#000" }}>
+        <source src={video.videoFileUrl} />
+      </video>
+    );
+  }
+  return <s-paragraph>This video isn't ready yet — check back in a moment, or re-upload it in Settings.</s-paragraph>;
+}
+
 export default function Dashboard() {
   const {
     configurators,
@@ -146,7 +224,11 @@ export default function Dashboard() {
     mainThemeName,
     themeEditorUrl,
     themeEditorProductTemplateUrl,
+    demoVideos,
   } = useLoaderData<typeof loader>();
+
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const activeVideo = demoVideos[activeVideoIndex];
 
   return (
     <s-page heading="Mozemo Signage Configurator">
@@ -204,7 +286,7 @@ export default function Dashboard() {
               style={{ borderTop: `3px solid ${c.color}` }}
             >
               <s-stack direction="inline" gap="tight" alignItems="center">
-                <span style={{ fontSize: "20px" }}>{c.icon}</span>
+                <s-icon type={c.icon} size="small"></s-icon>
                 <s-heading>{c.title}</s-heading>
               </s-stack>
               <s-paragraph>
@@ -261,6 +343,34 @@ export default function Dashboard() {
             <s-button href={themeEditorUrl} target="_blank" variant="primary">
               Open Theme Editor →
             </s-button>
+          </>
+        )}
+
+        {demoVideos.length > 0 && (
+          <>
+            <s-button command="--show" commandFor="demo-videos-modal" variant="secondary">
+              See how to add a configurator block to your theme →
+            </s-button>
+
+            <s-modal id="demo-videos-modal" heading="Adding a Configurator Block to Your Theme" size="large">
+              {demoVideos.length > 1 && (
+                <s-stack direction="inline" gap="tight" style={{ marginBottom: "12px" }}>
+                  {demoVideos.map((v: any, i: number) => (
+                    <s-button
+                      key={v.id}
+                      variant={i === activeVideoIndex ? "primary" : "tertiary"}
+                      onClick={() => setActiveVideoIndex(i)}
+                    >
+                      {v.title}
+                    </s-button>
+                  ))}
+                </s-stack>
+              )}
+              {activeVideo && <DemoVideoPlayer video={activeVideo} />}
+              <s-button slot="secondary-actions" command="--hide" commandFor="demo-videos-modal" variant="tertiary">
+                Close
+              </s-button>
+            </s-modal>
           </>
         )}
       </s-section>

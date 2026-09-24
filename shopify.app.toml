@@ -270,13 +270,28 @@ type = "number_integer"
 
 [metaobjects.app.signage_addon.fields.category]
 name = "Category"
-description = "Controls which admin page/storefront section this entry belongs to. Must be exactly one of: addon, neon_type, outdoor_thickness, size_visibility. Leave empty for addon (default, backward compatible)."
+description = "One of: addon, neon_type, outdoor_thickness, size_visibility, demo_video. Leave empty for addon (default)."
 type = "single_line_text_field"
 
 [metaobjects.app.signage_addon.fields.type_key]
 name = "Type Key"
 description = "Only used for category = neon_type (must be exactly 'indoor' or 'outdoor') or category = size_visibility (must be exactly one of: choose_size_indoor, choose_size_outdoor, custom_slider_indoor, custom_slider_outdoor). Leave empty for other categories."
 type = "single_line_text_field"
+
+[metaobjects.app.signage_addon.fields.video_source_type]
+name = "Demo Video Source Type"
+description = "category=demo_video only. Must be exactly one of: youtube, vimeo, upload"
+type = "single_line_text_field"
+
+[metaobjects.app.signage_addon.fields.video_url]
+name = "Demo Video URL"
+description = "category=demo_video only. Used when source type is youtube or vimeo."
+type = "single_line_text_field"
+
+[metaobjects.app.signage_addon.fields.video_file]
+name = "Demo Video File"
+description = "category=demo_video only. Used when source type is upload."
+type = "file_reference"
 
 [metaobjects.app.power_adapter]
 name = "Power Adapter"

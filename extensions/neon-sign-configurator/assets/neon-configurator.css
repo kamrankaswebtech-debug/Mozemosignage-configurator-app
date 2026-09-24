@@ -2,22 +2,25 @@
 
 .neon-configurator {
     display: grid;
-    grid-template-columns: 1.2fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
     align-items: start;
-    gap: 32px;
+    gap: 0;
     background: #0a0a0f;
     border-radius: 16px;
-    padding: 24px;
+    padding: 0;
     color: #ffffff;
     font-family: inherit;
 }
 
 .neon-configurator__preview {
+    grid-column: 1;
+    grid-row: 1;
     background-color: #000000;
     background-size: cover;
     background-position: center;
-    border-radius: 12px;
-    min-height: 320px;
+    border-radius: 0;
+    min-height: 420px;
     max-height: calc(100vh - 40px);
     display: flex;
     flex-direction: column;
@@ -26,6 +29,9 @@
     padding: 24px;
     position: sticky;
     top: 20px;
+    z-index: 1;
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
     transition: background-image 0.3s ease;
 }
 
@@ -40,11 +46,15 @@
 }
 
 .neon-configurator__bg-thumbs {
+    position: absolute;
+    /* right: 20px; */
+    left: 44px;
+    bottom: 20px;
+    z-index: 3;
     display: flex;
     gap: 8px;
-    margin-top: 14px;
     overflow-x: auto;
-    max-width: 100%;
+    max-width: calc(100% - 40px);
     padding-bottom: 2px;
 }
 
@@ -429,11 +439,11 @@
 .neon-configurator__toggle-group {
     position: absolute;
     top: 16px;
-    right: 16px;
+    left: 16px;
     z-index: 5;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 8px;
 }
 
@@ -518,8 +528,14 @@
     justify-content: center;
     flex: 1;
     width: 100%;
-    padding-bottom: 34px;
-    padding-right: 44px;
+    box-sizing: border-box;
+    /* Right padding reserves space so the sign/text never renders underneath the
+       floating options panel (panel max-width is 35% — keep these in sync if the
+       panel's max-width is ever changed). Extra +96px leaves room for the height
+       dimension line + its rotated label. This bounded width is also what makes
+       long text WRAP to a new line instead of overflowing edge-to-edge. */
+    padding: 40px 24px 56px 24px;
+    padding-right: calc(35% + 96px);
 }
 
 .neon-configurator__preview-stage.no-measurements .neon-configurator__dim-line,
@@ -536,9 +552,6 @@
 }
 
 .neon-configurator__dim-line--width {
-    left: 8%;
-    right: 44px;
-    bottom: 6px;
     height: 1px;
     border-top: 1px solid #ff2ec4;
 }
@@ -562,9 +575,6 @@
 }
 
 .neon-configurator__dim-line--height {
-    top: 8%;
-    bottom: 40px;
-    right: 12px;
     width: 1px;
     border-left: 1px solid #ff2ec4;
 }
@@ -701,9 +711,22 @@
 }
 
 .neon-configurator__panel {
+    grid-column: 1;
+    grid-row: 1;
     display: flex;
     flex-direction: column;
     gap: 18px;
+    position: relative;
+    z-index: 2;
+    justify-self: end;
+    align-self: start;
+    width: 100%;
+    max-width: 35%;
+    margin: 24px 24px 24px 0;
+    background: rgba(10, 10, 15, 0.92);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
 }
 
 .neon-configurator__label {
@@ -1228,6 +1251,42 @@
 
 @media (max-width: 768px) {
     .neon-configurator {
-        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
     }
+
+    .neon-configurator__preview {
+        position: relative;
+        top: auto;
+    }
+
+    .neon-configurator__panel {
+        grid-row: 2;
+        justify-self: stretch;
+        align-self: start;
+        max-width: 100%;
+        margin: 16px;
+    }
+
+    .neon-configurator__preview-stage {
+        padding-right: 24px;
+    }
+}
+
+.neon-configurator__panel {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: relative;
+    z-index: 2;
+    justify-self: end;
+    align-self: start;
+    width: 100%;
+    max-width: 35%;
+    margin: 24px 24px 24px 0;
+    background: rgba(10, 10, 15, 0.92);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
 }

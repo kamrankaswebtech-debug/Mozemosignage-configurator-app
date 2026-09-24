@@ -88,6 +88,8 @@ function initConfigurator(root) {
     const previewStage = root.querySelector('[data-preview-stage]');
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
+    const widthDimLine = root.querySelector('.neon-configurator__dim-line--width');
+    const heightDimLine = root.querySelector('.neon-configurator__dim-line--height');
     const powerToggle = root.querySelector('[data-power-toggle]');
     const powerLabel = root.querySelector('[data-power-label]');
     const measurementsToggle = root.querySelector('[data-measurements-toggle]');
@@ -746,6 +748,39 @@ function initConfigurator(root) {
         currentHeightCm = Math.round(heightValue * cmFactor * 10) / 10;
     }
 
+    // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign box
+    // (previewInner) instead of a fixed CSS position — so the width line grows/shrinks
+    // exactly with the customer's real text length (including after wrapping to a new
+    // line), and the height line reflects the real rendered height instead of a fixed
+    // oversized line. Driven by a ResizeObserver on previewInner so it stays correct
+    // automatically for every cause of a size change (typing, font, wrap, backboard
+    // style/padding, size slider) without needing a manual call at every call site.
+    function updateDimensionLines() {
+        if (!previewStage || !previewInner) return;
+        const stageRect = previewStage.getBoundingClientRect();
+        const innerRect = previewInner.getBoundingClientRect();
+        if (!innerRect.width || !innerRect.height) return;
+
+        if (widthDimLine) {
+            widthDimLine.style.left = (innerRect.left - stageRect.left) + 'px';
+            widthDimLine.style.width = innerRect.width + 'px';
+            widthDimLine.style.top = (innerRect.bottom - stageRect.top + 14) + 'px';
+        }
+        if (heightDimLine) {
+            heightDimLine.style.top = (innerRect.top - stageRect.top) + 'px';
+            heightDimLine.style.height = innerRect.height + 'px';
+            heightDimLine.style.left = (innerRect.right - stageRect.left + 14) + 'px';
+        }
+    }
+
+    let dimResizeObserver = null;
+    function setupDimensionObserver() {
+        if (!previewInner || typeof ResizeObserver === 'undefined') return;
+        dimResizeObserver = new ResizeObserver(() => updateDimensionLines());
+        dimResizeObserver.observe(previewInner);
+        window.addEventListener('resize', updateDimensionLines);
+    }
+
     function updateBackboardPanel() {
         if (!previewInner) return;
 
@@ -1225,4 +1260,6 @@ function initConfigurator(root) {
     updateOutdoorThicknessVisibility();
     updateSizeFieldsVisibility();
     calculateTotal();
+    setupDimensionObserver();
+    updateDimensionLines();
 }
