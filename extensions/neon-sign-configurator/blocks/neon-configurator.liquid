@@ -1,6 +1,5 @@
 {% comment %} Mozemo Signage - Live Neon Sign Configurator {% endcomment %}
 
-{% comment %} Installation access moved to the very top of the file, and uses a for-loop instead of ".values.first" — the .first accessor was unreliable once many other metaobject types were accessed later in this same template, silently returning an empty value instead of the real object. A for-loop always resolves correctly. {% endcomment %}
 {% assign install_settings = nil %}
 {% for entry in metaobjects["app--418838118401--installation_settings"].values %}
   {% assign install_settings = entry %}
@@ -9,10 +8,8 @@
 
 {% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
 
-{% comment %} Neon Type / Outdoor Thickness / Size Visibility — all reuse the signage_addon metaobject via "category", no new metaobject definition needed. {% endcomment %}
 {% assign neon_type_count = 0 %}
 {% assign neon_type_first_key = "" %}
-{% assign outdoor_thickness_count = 0 %}
 {% assign show_choose_size_indoor = true %}
 {% assign show_choose_size_outdoor = true %}
 {% assign show_slider_indoor = true %}
@@ -21,9 +18,6 @@
   {% if item.category.value == "neon_type" %}
     {% assign neon_type_count = neon_type_count | plus: 1 %}
     {% if neon_type_first_key == "" %}{% assign neon_type_first_key = item.type_key.value %}{% endif %}
-  {% endif %}
-  {% if item.category.value == "outdoor_thickness" %}
-    {% assign outdoor_thickness_count = outdoor_thickness_count | plus: 1 %}
   {% endif %}
   {% if item.category.value == "size_visibility" %}
     {% if item.type_key.value == "choose_size_indoor" %}{% assign show_choose_size_indoor = item.is_free.value %}{% endif %}
@@ -38,22 +32,28 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <filter id="moz-outline-loose-{{ block.id }}" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
-        <!-- Two dilates instead of one = independent GAP (inner radius) + THICKNESS (outer minus inner),
-             instead of one number controlling both. Used by Cut Around / Acrylic Stand — a slightly
-             looser gap, matching the client's reference PDFs. -->
         <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="inner-dilate"/>
         <feMorphology in="SourceAlpha" operator="dilate" radius="10.5" result="outer-dilate"/>
         <feComposite in="outer-dilate" in2="inner-dilate" operator="out" result="ring"/>
-        <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
+        <feFlood flood-color="var(--moz-backboard-color, #9a9a9a)" result="flood-colour"/>
         <feComposite in="flood-colour" in2="ring" operator="in"/>
       </filter>
       <filter id="moz-outline-tight-{{ block.id }}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-        <!-- Used by Cut to Letter — a tighter gap that hugs the letters closer. -->
         <feMorphology in="SourceAlpha" operator="dilate" radius="5" result="inner-dilate"/>
         <feMorphology in="SourceAlpha" operator="dilate" radius="7" result="outer-dilate"/>
         <feComposite in="outer-dilate" in2="inner-dilate" operator="out" result="ring"/>
-        <feFlood flood-color="var(--moz-backboard-color, #e8e8e8)" result="flood-colour"/>
+        <feFlood flood-color="var(--moz-backboard-color, #9a9a9a)" result="flood-colour"/>
         <feComposite in="flood-colour" in2="ring" operator="in"/>
+      </filter>
+      <filter id="moz-solid-fill-loose-{{ block.id }}" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="10.5" result="outer-dilate"/>
+        <feFlood flood-color="var(--moz-backboard-color, #000000)" result="flood-colour"/>
+        <feComposite in="flood-colour" in2="outer-dilate" operator="in"/>
+      </filter>
+      <filter id="moz-solid-fill-tight-{{ block.id }}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="7" result="outer-dilate"/>
+        <feFlood flood-color="var(--moz-backboard-color, #000000)" result="flood-colour"/>
+        <feComposite in="flood-colour" in2="outer-dilate" operator="in"/>
       </filter>
     </defs>
   </svg>
@@ -89,10 +89,15 @@
         <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--bl"></span>
         <span class="neon-configurator__corner-clamp neon-configurator__corner-clamp--br"></span>
         <div class="neon-configurator__text-wrap" data-text-wrap>
-          <div class="neon-configurator__shape-source" data-shape-source aria-hidden="true"></div>
-          <div class="neon-configurator__text-flex" data-text-flex></div>
+          <div class="neon-configurator__shape-source" data-shape-source aria-hidden="true">
+            <div class="neon-configurator__shape-text" data-shape-text></div>
+            <span class="neon-configurator__shape-icons" data-shape-icons></span>
+          </div>
+          <div class="neon-configurator__content-flex" data-content-flex>
+            <div class="neon-configurator__text-flex" data-text-flex></div>
+            <span class="neon-configurator__preview-icons" data-preview-icons></span>
+          </div>
         </div>
-        <span class="neon-configurator__preview-icons" data-preview-icons></span>
         <div class="neon-configurator__selection-box" data-selection-box hidden>
           <div class="neon-configurator__move-badge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>
@@ -110,7 +115,6 @@
       <div class="neon-configurator__dim-line neon-configurator__dim-line--height">
         <span class="neon-configurator__dim-label" data-height-label>0 cm</span>
       </div>
-
       <div class="neon-configurator__letter-popup" data-letter-popup hidden>
         <p class="neon-configurator__letter-popup-title" data-letter-popup-title>Set colour for</p>
         <div class="neon-configurator__letter-popup-swatches" data-letter-popup-swatches></div>
@@ -121,12 +125,7 @@
     {% if bg_images.size > 0 %}
       <div class="neon-configurator__bg-thumbs" data-bg-thumbs>
         {% for bg in bg_images %}
-          <button
-            type="button"
-            class="neon-configurator__bg-thumb{% if forloop.first %} is-selected{% endif %}"
-            data-bg-url="{{ bg.image.value | image_url }}"
-            title="{{ bg.label.value }}"
-            aria-label="{{ bg.label.value }}">
+          <button type="button" class="neon-configurator__bg-thumb{% if forloop.first %} is-selected{% endif %}" data-bg-url="{{ bg.image.value | image_url }}" title="{{ bg.label.value }}" aria-label="{{ bg.label.value }}">
             <img src="{{ bg.image.value | image_url: width: 120 }}" alt="{{ bg.label.value }}" width="60" height="45" loading="lazy">
           </button>
         {% endfor %}
@@ -136,145 +135,82 @@
 
   <div class="neon-configurator__panel">
 
-    {% if neon_type_count > 0 %}
-    <div class="neon-configurator__field" data-neon-type-field>
-      <label class="neon-configurator__label">Choose Neon Type</label>
-      <div class="neon-configurator__neon-type-cards" data-neon-type-cards>
-        {% for item in metaobjects["app--418838118401--signage_addon"].values %}
-          {% if item.category.value == "neon_type" %}
-            <button
-              type="button"
-              class="neon-configurator__neon-type-card{% if item.type_key.value == neon_type_first_key %} is-selected{% endif %}"
-              data-neon-type-key="{{ item.type_key.value }}"
-              data-neon-type-price="{{ item.extra_price_decimal.value | default: 0 }}"
-              data-neon-type-label="{{ item.label.value }}">
-              <span class="neon-configurator__neon-type-icon neon-configurator__neon-type-icon--{{ item.type_key.value }}"></span>
-              <span class="neon-configurator__neon-type-label">{{ item.label.value }}</span>
-              {% if item.extra_price_decimal.value != blank and item.extra_price_decimal.value != 0 %}
-                <span class="neon-configurator__neon-type-price">+${{ item.extra_price_decimal.value }}</span>
-              {% endif %}
-            </button>
-          {% endif %}
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    {% if outdoor_thickness_count > 0 %}
-    <div class="neon-configurator__field" data-outdoor-thickness-field hidden>
-      <label class="neon-configurator__label">Outdoor Thickness</label>
-      <select class="neon-configurator__select" data-outdoor-thickness-select>
-        {% for item in metaobjects["app--418838118401--signage_addon"].values %}
-          {% if item.category.value == "outdoor_thickness" %}
-            <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}">
-              {{ item.label.value }}
-            </option>
-          {% endif %}
-        {% endfor %}
-      </select>
-    </div>
-    {% endif %}
+    {% comment %} Font + Symbol data as compact JSON — JS builds the cards/buttons, keeps this .liquid file small (100KB extension-wide cap). {% endcomment %}
+    <script type="application/json" data-neon-fonts-data>
+    [
+      {% assign nf_i = 0 %}
+      {% for font in metaobjects["app--418838118401--neon_font"].values %}
+        {% if font.font_file.value.url %}{% assign fv = "moz-font-" | append: font.system.handle %}{% else %}{% assign fv = font.css_font_family.value %}{% endif %}
+        {% if nf_i > 0 %},{% endif %}
+        {"value":{{ fv | json }},"name":{{ font.name.value | json }},"isNew":{{ font.is_new.value | default: false }},"previewImage":{{ font.preview_image.value | image_url: width: 200 | default: "" | json }}}
+        {% assign nf_i = nf_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
+    <script type="application/json" data-neon-symbols-data>
+    [
+      {% assign ns_i = 0 %}
+      {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
+        {% if ns_i > 0 %},{% endif %}
+        {"url":{{ symbol.icon.value.url | json }},"label":{{ symbol.label.value | json }},"transparentBg":{{ symbol.transparent_bg.value | default: false }}}
+        {% assign ns_i = ns_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">1. Enter Your Text</label>
       <input type="text" class="neon-configurator__text-input" data-text-input maxlength="50" placeholder="Type your text here">
     </div>
 
-
-
-    <div class="neon-configurator__field">
-      <label class="neon-configurator__label">Quick Symbols (optional)</label>
-      <div class="neon-configurator__symbols" data-symbol-buttons>
-        {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
-          <button
-            type="button"
-            class="neon-configurator__symbol-btn"
-            data-symbol-url="{{ symbol.icon.value.url }}"
-            data-symbol-label="{{ symbol.label.value }}"
-            data-icon-transparent-bg="{{ symbol.transparent_bg.value }}"
-            title="{{ symbol.label.value }}"
-            aria-label="{{ symbol.label.value }}">
-            <img src="{{ symbol.icon.value.url }}" alt="{{ symbol.label.value }}" width="18" height="18" loading="lazy">
-          </button>
-        {% endfor %}
-      </div>
-    </div>
-
-    {% comment %} Dynamic @font-face injection for merchant-uploaded font files {% endcomment %}
     <style>
     {% for font in metaobjects["app--418838118401--neon_font"].values %}
       {% if font.font_file.value.url %}
-      @font-face {
-        font-family: "moz-font-{{ font.system.handle }}";
-        src: url("{{ font.font_file.value.url }}");
-        font-display: swap;
-      }
+      @font-face { font-family: "moz-font-{{ font.system.handle }}"; src: url("{{ font.font_file.value.url }}"); font-display: swap; }
       {% endif %}
     {% endfor %}
     </style>
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">2. Choose Font</label>
-      <div class="neon-configurator__font-cards" data-font-cards>
-        {% for font in metaobjects["app--418838118401--neon_font"].values %}
-          {% if font.font_file.value.url %}
-            {% assign font_value = "moz-font-" | append: font.system.handle %}
-          {% else %}
-            {% assign font_value = font.css_font_family.value %}
-          {% endif %}
-          <button
-            type="button"
-            class="neon-configurator__font-card{% if forloop.first %} is-selected{% endif %}"
-            data-font-value="{{ font_value }}">
-            {% if font.is_new.value %}
-              <span class="neon-configurator__font-card-badge">NEW</span>
-            {% endif %}
-            <span class="neon-configurator__font-card-thumb">
-              {% if font.preview_image.value %}
-                <img src="{{ font.preview_image.value | image_url: width: 200 }}" alt="{{ font.name.value }}" width="100" height="40" loading="lazy">
-              {% else %}
-                <span class="neon-configurator__font-card-sample" style="font-family: {{ font_value }};">Your Text</span>
-              {% endif %}
-            </span>
-            <span class="neon-configurator__font-card-label">{{ font.name.value }}</span>
-          </button>
-        {% endfor %}
+      <button type="button" class="neon-configurator__dropdown-trigger" data-font-dropdown-trigger>
+        <span class="neon-configurator__dropdown-trigger-preview" data-font-dropdown-preview></span>
+        <svg class="neon-configurator__dropdown-arrow" data-font-dropdown-arrow width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="neon-configurator__dropdown-panel" data-font-dropdown-panel hidden>
+        <div class="neon-configurator__font-cards" data-font-cards></div>
       </div>
-      <select class="neon-configurator__select" data-font-select hidden aria-hidden="true" tabindex="-1">
-        {% for font in metaobjects["app--418838118401--neon_font"].values %}
-          {% if font.font_file.value.url %}
-            {% assign font_value = "moz-font-" | append: font.system.handle %}
-          {% else %}
-            {% assign font_value = font.css_font_family.value %}
-          {% endif %}
-          <option value="{{ font_value }}" {% if forloop.first %}selected{% endif %}>
-            {{ font.name.value }}
-          </option>
-        {% endfor %}
-      </select>
+      <select class="neon-configurator__select" data-font-select hidden aria-hidden="true" tabindex="-1"></select>
+    </div>
+
+    <div class="neon-configurator__field">
+      <label class="neon-configurator__label">3. Choose Quick Symbol (optional)</label>
+      <button type="button" class="neon-configurator__dropdown-trigger" data-symbol-dropdown-trigger>
+        <span data-symbol-dropdown-preview>Select icons</span>
+        <svg class="neon-configurator__dropdown-arrow" data-symbol-dropdown-arrow width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="neon-configurator__dropdown-panel" data-symbol-dropdown-panel hidden>
+        <div class="neon-configurator__symbols" data-symbol-buttons></div>
+      </div>
+      <div class="neon-configurator__symbol-position-options" data-symbol-position-options>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="left"><span>Left</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="top"><span>Top</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked><span>Right</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom"><span>Bottom</span></label>
+      </div>
     </div>
 
     {% assign effect_modes = metaobjects["app--418838118401--neon_effect_mode"].values %}
     {% assign has_single_mode = false %}
-    {% for mode in effect_modes %}
-      {% if mode.mode_key.value == "single" %}
-        {% assign has_single_mode = true %}
-      {% endif %}
-    {% endfor %}
+    {% for mode in effect_modes %}{% if mode.mode_key.value == "single" %}{% assign has_single_mode = true %}{% endif %}{% endfor %}
     {% if effect_modes.size > 0 %}
     <div class="neon-configurator__field">
-      <label class="neon-configurator__label">Colour Effect</label>
+      <label class="neon-configurator__label">4. Choose Colour / Effect</label>
       <div class="neon-configurator__effect-modes" data-effect-modes>
         {% for mode in effect_modes %}
           <label class="neon-configurator__effect-mode-option">
-            <input
-              type="radio"
-              name="neon-effect-mode-{{ block.id }}"
-              data-effect-mode-radio
-              value="{{ mode.mode_key.value }}"
-              data-price="{{ mode.extra_price_decimal.value | default: 0 }}"
-              {% if mode.mode_key.value == "single" %}checked{% elsif has_single_mode == false and forloop.first %}checked{% endif %}>
-            <span>{{ mode.label.value }}</span>
+            <input type="radio" name="neon-effect-mode-{{ block.id }}" data-effect-mode-radio value="{{ mode.mode_key.value }}" data-price="{{ mode.extra_price_decimal.value | default: 0 }}" {% if mode.mode_key.value == "single" %}checked{% elsif has_single_mode == false and forloop.first %}checked{% endif %}>
+            <span>{{ mode.label.value }}{% if mode.extra_price_decimal.value and mode.extra_price_decimal.value != 0 %} (+${{ mode.extra_price_decimal.value }}){% endif %}</span>
           </label>
         {% endfor %}
       </div>
@@ -282,37 +218,32 @@
     {% endif %}
 
     <div class="neon-configurator__field" data-colour-field>
-      <label class="neon-configurator__label">3. Choose Colour</label>
       <div class="neon-configurator__swatches" data-colour-swatches>
         {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
-          <button
-            type="button"
-            class="neon-configurator__swatch{% if forloop.first %} is-selected{% endif %}"
-            style="background-color: {{ colour.hex_code.value }};"
-            data-colour-hex="{{ colour.hex_code.value }}"
-            data-colour-price="{{ colour.extra_price_decimal.value | default: 0 }}"
-            data-colour-name="{{ colour.name.value }}"
-            title="{{ colour.name.value }}"
-            aria-label="{{ colour.name.value }}">
-          </button>
+          <div class="neon-configurator__swatch-item">
+            <button type="button" class="neon-configurator__swatch{% if forloop.first %} is-selected{% endif %}" style="background-color: {{ colour.hex_code.value }};" data-colour-hex="{{ colour.hex_code.value }}" data-colour-price="{{ colour.extra_price_decimal.value | default: 0 }}" data-colour-name="{{ colour.name.value }}" title="{{ colour.name.value }}" aria-label="{{ colour.name.value }}"></button>
+            <span class="neon-configurator__swatch-name">{{ colour.name.value }}</span>
+          </div>
         {% endfor %}
       </div>
-      <p class="neon-configurator__selected-label" data-colour-name-label>
-        {{ metaobjects["app--418838118401--neon_colour"].values.first.name.value }}
-      </p>
+      <p class="neon-configurator__selected-label" data-colour-name-label>Selected: {{ metaobjects["app--418838118401--neon_colour"].values.first.name.value }}</p>
     </div>
 
     <div class="neon-configurator__field" data-size-field="choose-size" data-visible-indoor="{{ show_choose_size_indoor }}" data-visible-outdoor="{{ show_choose_size_outdoor }}">
-      <label class="neon-configurator__label">4. Choose Size</label>
-      <select class="neon-configurator__select" data-size-select>
+      <label class="neon-configurator__label">5. Choose Size</label>
+      <div class="neon-configurator__size-cards" data-size-cards>
         {% for size in metaobjects["app--418838118401--sign_size"].values %}
-          <option
-            value="{{ size.width_cm.value }}"
-            data-price="{{ size.price_decimal.value | default: 0 }}"
-            data-height="{{ size.height_cm.value | default: 0 }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ size.label.value }}
-          </option>
+          <button type="button" class="neon-configurator__size-card{% if forloop.first %} is-selected{% endif %}" data-size-width="{{ size.width_cm.value }}">
+            {% if size.badge_text.value != blank %}<span class="neon-configurator__size-card-badge">{{ size.badge_text.value }}</span>{% endif %}
+            <span class="neon-configurator__size-card-label">{{ size.label.value }}</span>
+            <span class="neon-configurator__size-card-price">${{ size.price_decimal.value | default: 0 }}</span>
+            <span class="neon-configurator__size-card-meta">Length: {{ size.width_cm.value }}cm</span>
+          </button>
+        {% endfor %}
+      </div>
+      <select class="neon-configurator__select" data-size-select hidden aria-hidden="true" tabindex="-1">
+        {% for size in metaobjects["app--418838118401--sign_size"].values %}
+          <option value="{{ size.width_cm.value }}" data-price="{{ size.price_decimal.value | default: 0 }}" data-height="{{ size.height_cm.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>{{ size.label.value }}</option>
         {% endfor %}
       </select>
     </div>
@@ -321,154 +252,129 @@
     {% assign default_unit_entry = nil %}
     {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
       {% assign size_units_count = size_units_count | plus: 1 %}
-      {% if forloop.first %}
-        {% assign default_unit_entry = u %}
-      {% endif %}
+      {% if forloop.first %}{% assign default_unit_entry = u %}{% endif %}
     {% endfor %}
     <div class="neon-configurator__field" data-size-field="custom-slider" data-visible-indoor="{{ show_slider_indoor }}" data-visible-outdoor="{{ show_slider_outdoor }}">
       <label class="neon-configurator__label">Or Set a Custom Size (<span data-slider-unit-label>{{ default_unit_entry.unit.value | default: 'cm' }}</span>)</label>
-
       {% if size_units_count > 1 %}
       <div class="neon-configurator__unit-tabs" data-unit-tabs>
         {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
-          <button type="button"
-            class="neon-configurator__unit-tab{% if forloop.first %} is-selected{% endif %}"
-            data-unit-tab
-            data-unit="{{ u.unit.value }}"
-            data-min="{{ u.min_value.value | default: 0 }}"
-            data-max="{{ u.max_value.value | default: 100 }}"
-            data-price-per-unit="{{ u.price_per_unit.value | default: 0 }}"
-            data-height-ratio="{{ u.height_ratio.value | default: 2.6 }}">
-            {{ u.unit.value | upcase }}
-          </button>
+          <button type="button" class="neon-configurator__unit-tab{% if forloop.first %} is-selected{% endif %}" data-unit-tab data-unit="{{ u.unit.value }}" data-min="{{ u.min_value.value | default: 0 }}" data-max="{{ u.max_value.value | default: 100 }}" data-price-per-unit="{{ u.price_per_unit.value | default: 0 }}" data-height-ratio="{{ u.height_ratio.value | default: 2.6 }}">{{ u.unit.value | upcase }}</button>
         {% endfor %}
       </div>
       {% endif %}
-
       <div class="neon-configurator__slider-meta">
         <span data-slider-width-value>Width: {{ default_unit_entry.min_value.value | default: 20 }} {{ default_unit_entry.unit.value | default: 'cm' }}</span>
         <span data-slider-height-value>Height: -- {{ default_unit_entry.unit.value | default: 'cm' }}</span>
       </div>
       <div class="neon-configurator__slider-row">
         <button type="button" class="neon-configurator__slider-arrow" data-slider-decrease aria-label="Decrease size">‹</button>
-        <input type="range"
-          class="neon-configurator__slider"
-          data-custom-size-slider
-          min="{{ default_unit_entry.min_value.value | default: 20 }}"
-          max="{{ default_unit_entry.max_value.value | default: 150 }}"
-          step="1"
-          data-price-per-unit="{{ default_unit_entry.price_per_unit.value | default: 0 }}"
-          data-unit="{{ default_unit_entry.unit.value | default: 'cm' }}"
-          data-height-ratio="{{ default_unit_entry.height_ratio.value | default: 2.6 }}"
-          value="{{ default_unit_entry.min_value.value | default: 20 }}">
+        <input type="range" class="neon-configurator__slider" data-custom-size-slider min="{{ default_unit_entry.min_value.value | default: 20 }}" max="{{ default_unit_entry.max_value.value | default: 150 }}" step="1" data-price-per-unit="{{ default_unit_entry.price_per_unit.value | default: 0 }}" data-unit="{{ default_unit_entry.unit.value | default: 'cm' }}" data-height-ratio="{{ default_unit_entry.height_ratio.value | default: 2.6 }}" value="{{ default_unit_entry.min_value.value | default: 20 }}">
         <button type="button" class="neon-configurator__slider-arrow" data-slider-increase aria-label="Increase size">›</button>
       </div>
       <p class="neon-configurator__slider-hint">Drag to request a custom width instead of a preset size above.</p>
     </div>
 
+    <p class="neon-configurator__oversized-notice" data-oversized-notice hidden>⚠️ Signs larger than 2 metres are manufactured and shipped in split sections due to oversized delivery and transportation requirements.</p>
+
     <div class="neon-configurator__field">
-      <label class="neon-configurator__label">5. Backboard Style</label>
+      <label class="neon-configurator__label">6. Backboard Style</label>
       <div class="neon-configurator__style-cards" data-backboard-style-cards>
         {% for style in metaobjects["app--418838118401--backboard_style"].values %}
-          <button
-            type="button"
-            class="neon-configurator__style-card{% if forloop.first %} is-selected{% endif %}"
-            data-style-label="{{ style.label.value }}">
+          <button type="button" class="neon-configurator__style-card{% if forloop.first %} is-selected{% endif %}" data-style-label="{{ style.label.value }}">
             <span class="neon-configurator__style-card-thumb">
-              {% if style.preview_image.value %}
-                <img src="{{ style.preview_image.value | image_url: width: 160 }}" alt="{{ style.label.value }}" width="80" height="60" loading="lazy">
-              {% else %}
-                <span class="neon-configurator__style-card-fallback" data-shape-fallback="{{ style.shape_type.value | default: 'rectangle' }}">Hello</span>
-              {% endif %}
+              {% if style.preview_image.value %}<img src="{{ style.preview_image.value | image_url: width: 160 }}" alt="{{ style.label.value }}" width="80" height="60" loading="lazy">{% else %}<span class="neon-configurator__style-card-fallback" data-shape-fallback="{{ style.shape_type.value | default: 'rectangle' }}">Hello</span>{% endif %}
             </span>
             <span class="neon-configurator__style-card-label">{{ style.label.value }}</span>
-            <span class="neon-configurator__style-card-price">
-              {% if style.extra_price_decimal.value and style.extra_price_decimal.value != 0 %}+${{ style.extra_price_decimal.value }}{% else %}FREE{% endif %}
-            </span>
+            <span class="neon-configurator__style-card-price">{% if style.extra_price_decimal.value and style.extra_price_decimal.value != 0 %}+${{ style.extra_price_decimal.value }}{% else %}FREE{% endif %}</span>
           </button>
         {% endfor %}
       </div>
       <select class="neon-configurator__select" data-backboard-style-select hidden aria-hidden="true" tabindex="-1">
         {% for style in metaobjects["app--418838118401--backboard_style"].values %}
-          <option
-            value="{{ style.label.value }}"
-            data-price="{{ style.extra_price_decimal.value | default: 0 }}"
-            data-shape="{{ style.shape_type.value | default: 'rectangle' }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ style.label.value }}
-          </option>
+          <option value="{{ style.label.value }}" data-price="{{ style.extra_price_decimal.value | default: 0 }}" data-shape="{{ style.shape_type.value | default: 'rectangle' }}" {% if forloop.first %}selected{% endif %}>{{ style.label.value }}</option>
         {% endfor %}
       </select>
     </div>
 
     <div class="neon-configurator__field">
-      <label class="neon-configurator__label">6. Backboard Colour</label>
+      <label class="neon-configurator__label">7. Backboard Colour</label>
       <select class="neon-configurator__select" data-backboard-colour-select>
         {% for colour in metaobjects["app--418838118401--backboard_colour"].values %}
-          <option
-            value="{{ colour.label.value }}"
-            data-price="{{ colour.extra_price_decimal.value | default: 0 }}"
-            data-hex="{{ colour.hex_or_swatch.value | default: '#e8e8e8' }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ colour.label.value }}
-          </option>
+          <option value="{{ colour.label.value }}" data-price="{{ colour.extra_price_decimal.value | default: 0 }}" data-hex="{{ colour.hex_or_swatch.value | default: '#e8e8e8' }}" data-is-clear="{{ colour.is_clear.value }}" {% if forloop.first %}selected{% endif %}>{{ colour.label.value }}</option>
         {% endfor %}
       </select>
     </div>
 
+    {% if neon_type_count > 0 %}
+    <div class="neon-configurator__field" data-neon-type-field>
+      <label class="neon-configurator__label">8. Indoor or Outdoor</label>
+      <div class="neon-configurator__neon-type-cards" data-neon-type-cards>
+        {% for item in metaobjects["app--418838118401--signage_addon"].values %}
+          {% if item.category.value == "neon_type" %}
+            <button type="button" class="neon-configurator__neon-type-card{% if item.type_key.value == neon_type_first_key %} is-selected{% endif %}" data-neon-type-key="{{ item.type_key.value }}" data-neon-type-price="{{ item.extra_price_decimal.value | default: 0 }}" data-neon-type-label="{{ item.label.value }}">
+              <span class="neon-configurator__neon-type-icon neon-configurator__neon-type-icon--{{ item.type_key.value }}"></span>
+              <span class="neon-configurator__neon-type-label">{{ item.label.value }}</span>
+              {% if item.extra_price_decimal.value != blank and item.extra_price_decimal.value != 0 %}<span class="neon-configurator__neon-type-price">+${{ item.extra_price_decimal.value }}</span>{% endif %}
+            </button>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="neon-configurator__field">
-      <label class="neon-configurator__label">7. Add-ons</label>
+      <label class="neon-configurator__label">Power Adapter</label>
+      <select class="neon-configurator__select" data-power-adapter-select>
+        {% for adapter in metaobjects["app--418838118401--power_adapter"].values %}
+          <option {% if forloop.first %}selected{% endif %}>{{ adapter.label.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% assign has_paid_addon = false %}
+    {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
+      {% if addon.category.value == blank or addon.category.value == "addon" %}{% unless addon.is_free.value %}{% assign has_paid_addon = true %}{% endunless %}{% endif %}
+    {% endfor %}
+    {% if has_paid_addon %}
+    <div class="neon-configurator__field">
+      <label class="neon-configurator__label">Optional Add-ons</label>
       {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
         {% if addon.category.value == blank or addon.category.value == "addon" %}
-        <label class="neon-configurator__checkbox-row">
-          <input
-            type="checkbox"
-            data-addon-checkbox
-            data-price="{{ addon.extra_price_decimal.value | default: 0 }}"
-            {% if addon.is_free.value %}checked{% endif %}>
-          <span>{{ addon.label.value }}{% if addon.is_free.value %} (Free){% endif %}</span>
-        </label>
+          {% unless addon.is_free.value %}
+          <label class="neon-configurator__checkbox-row">
+            <input type="checkbox" data-addon-checkbox data-addon-label="{{ addon.label.value }}" data-price="{{ addon.extra_price_decimal.value | default: 0 }}">
+            <span>{{ addon.label.value }} (+${{ addon.extra_price_decimal.value | default: 0 }})</span>
+          </label>
+          {% endunless %}
         {% endif %}
       {% endfor %}
     </div>
+    {% endif %}
 
-
-
-
-
-
-    <div class="neon-configurator__field">
-      <label class="neon-configurator__label">8. Power Adapter</label>
-      <select class="neon-configurator__select" data-power-adapter-select>
-        {% for adapter in metaobjects["app--418838118401--power_adapter"].values %}
-          <option {% if forloop.first %}selected{% endif %}>
-            {{ adapter.label.value }}
-          </option>
+    <div class="neon-configurator__field neon-configurator__included-box">
+      <label class="neon-configurator__label">9. Included With Your Order</label>
+      <ul class="neon-configurator__included-list">
+        <li data-included-power-adapter></li>
+        {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
+          {% if addon.category.value == blank or addon.category.value == "addon" %}
+            {% if addon.is_free.value %}
+              <li>{{ addon.label.value }}<input type="checkbox" data-addon-checkbox data-addon-label="{{ addon.label.value }}" data-price="{{ addon.extra_price_decimal.value | default: 0 }}" checked disabled hidden></li>
+            {% endif %}
+          {% endif %}
         {% endfor %}
-      </select>
+      </ul>
     </div>
+
     {% if install_settings %}
     <div class="neon-configurator__field neon-configurator__install-field">
       <label class="neon-configurator__label">Need Installation?</label>
       <div class="neon-configurator__install-options" data-install-options>
-        <label class="neon-configurator__install-option">
-          <input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="no" checked>
-          <span>No installation — I will arrange installation myself</span>
-        </label>
-        <label class="neon-configurator__install-option">
-          <input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="yes" data-install-price="{{ install_settings.price_decimal.value | default: 0 }}">
-          <span>Yes, I need installation — +${{ install_settings.price_decimal.value | default: 0 }}</span>
-        </label>
+        <label class="neon-configurator__install-option"><input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="no" checked><span>No installation — I will arrange installation myself</span></label>
+        <label class="neon-configurator__install-option"><input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="yes" data-install-price="{{ install_settings.price_decimal.value | default: 0 }}"><span>Yes, I need installation — +${{ install_settings.price_decimal.value | default: 0 }}</span></label>
       </div>
-
-      <div class="neon-configurator__install-booking" data-install-booking hidden
-        data-min-lead-days="{{ install_settings.min_lead_days.value | default: 14 }}"
-        data-earliest-time="{{ install_settings.earliest_time.value | default: '10:00' }}"
-        data-latest-time="{{ install_settings.latest_time.value | default: '17:00' }}"
-        data-slot-interval="{{ install_settings.slot_interval_minutes.value | default: 60 }}">
-        <p class="neon-configurator__install-notice">
-          Sydney area installation, up to 100km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.
-        </p>
+      <div class="neon-configurator__install-booking" data-install-booking hidden data-min-lead-days="{{ install_settings.min_lead_days.value | default: 14 }}" data-earliest-time="{{ install_settings.earliest_time.value | default: '10:00' }}" data-latest-time="{{ install_settings.latest_time.value | default: '17:00' }}" data-slot-interval="{{ install_settings.slot_interval_minutes.value | default: 60 }}">
+        <p class="neon-configurator__install-notice">Sydney area installation, up to 100km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.</p>
         <div class="neon-configurator__install-row">
           <label class="neon-configurator__install-sublabel" for="neon-install-date-{{ block.id }}">Preferred Installation Date</label>
           <input type="date" id="neon-install-date-{{ block.id }}" class="neon-configurator__select" data-install-date>
@@ -487,21 +393,10 @@
 
     <div class="neon-configurator__price-box">
       <span class="neon-configurator__price-label">Total Price</span>
-
-
-
-
       <span class="neon-configurator__price-value" data-total-price>$0.00</span>
     </div>
 
-    <button
-      type="button"
-      class="neon-configurator__add-to-cart"
-      data-add-to-cart
-      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
-      data-product-id="{{ product.id }}">
-      Add to Cart
-    </button>
+    <button type="button" class="neon-configurator__add-to-cart" data-add-to-cart data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}" data-product-id="{{ product.id }}">Add to Cart</button>
     <p class="neon-configurator__status" data-add-to-cart-status></p>
 
   </div>
@@ -511,9 +406,5 @@
 <script src="{{ 'neon-configurator.js' | asset_url }}" defer></script>
 
 {% schema %}
-{
-  "name": "Neon Sign Configurator",
-  "target": "section",
-  "settings": []
-}
+{ "name": "Neon Sign Configurator", "target": "section", "settings": [] }
 {% endschema %}

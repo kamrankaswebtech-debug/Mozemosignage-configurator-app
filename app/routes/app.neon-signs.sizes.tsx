@@ -11,6 +11,7 @@ type SizeEntry = {
     heightCm: string;
     price: string;
     sortOrder: string;
+    badgeText: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -34,6 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             heightCm: f.height_cm || "0",
             price: f.price_decimal || "0",
             sortOrder: f.sort_order || "0",
+            badgeText: f.badge_text || "",
         };
     });
     sizes.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -51,6 +53,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "height_cm", value: String(formData.get("heightCm") || "0") },
         { key: "price_decimal", value: String(formData.get("price") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
+        { key: "badge_text", value: String(formData.get("badgeText") || "") },
     ];
 
     if (intent === "create") {
@@ -127,6 +130,10 @@ export default function SignSizesPage() {
         <s-page heading="Sign Sizes">
             <s-section heading="Add New Size">
                 <s-link href="/app/neon-signs">← Back to Neon Signs</s-link>
+                <s-paragraph>
+                    Badge Text is optional — shown as a small ribbon on this size's card on the storefront
+                    (e.g. "Most Popular"). Leave it empty for no badge.
+                </s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -135,6 +142,7 @@ export default function SignSizesPage() {
                         <input type="number" step="0.1" name="heightCm" placeholder="Height (cm)" required />
                         <input type="number" step="0.01" name="price" placeholder="Price" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={sizes.length + 1} />
+                        <input type="text" name="badgeText" placeholder="Badge (e.g. Most Popular)" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Size</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -148,6 +156,7 @@ export default function SignSizesPage() {
                             <th style={{ padding: "8px" }}>Width (cm)</th>
                             <th style={{ padding: "8px" }}>Height (cm)</th>
                             <th style={{ padding: "8px" }}>Price</th>
+                            <th style={{ padding: "8px" }}>Badge</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
@@ -156,7 +165,7 @@ export default function SignSizesPage() {
                         {sizes.map((s) => (
                             <tr key={s.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === s.id ? (
-                                    <td colSpan={6} style={{ padding: "8px" }}>
+                                    <td colSpan={7} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={s.id} />
@@ -166,6 +175,7 @@ export default function SignSizesPage() {
                                                 <input type="number" step="0.1" name="heightCm" defaultValue={s.heightCm} required />
                                                 <input type="number" step="0.01" name="price" defaultValue={s.price} required />
                                                 <input type="number" name="sortOrder" defaultValue={s.sortOrder} />
+                                                <input type="text" name="badgeText" defaultValue={s.badgeText} placeholder="Badge (e.g. Most Popular)" />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -177,6 +187,11 @@ export default function SignSizesPage() {
                                         <td style={{ padding: "8px" }}>{s.widthCm}</td>
                                         <td style={{ padding: "8px" }}>{s.heightCm}</td>
                                         <td style={{ padding: "8px" }}>${s.price}</td>
+                                        <td style={{ padding: "8px" }}>
+                                            {s.badgeText
+                                                ? <span style={{ background: "linear-gradient(90deg,#ff00c8,#7a00ff)", color: "#fff", fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px" }}>{s.badgeText}</span>
+                                                : <span style={{ color: "#999", fontSize: "12px" }}>—</span>}
+                                        </td>
                                         <td style={{ padding: "8px" }}>{s.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">

@@ -913,8 +913,8 @@
 
 .neon-configurator__preview-icon {
     display: inline-block;
-    width: 42px;
-    height: 42px;
+    width: var(--neon-icon-size, 42px);
+    height: var(--neon-icon-size, 42px);
     background-color: currentColor;
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
@@ -922,8 +922,11 @@
     mask-position: center;
     -webkit-mask-size: contain;
     mask-size: contain;
+    /* Same blur radii as the text's own glow (.neon-configurator__letter's text-shadow:
+       5px/15px/30px/60px) so Quick Symbol icons glow exactly like the neon text, not a
+       separately-tuned weaker glow. */
     filter:
-        drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor);
+        drop-shadow(0 0 5px #ffffff) drop-shadow(0 0 15px #ffffff) drop-shadow(0 0 30px currentColor) drop-shadow(0 0 60px currentColor);
     transition: color 0.25s ease, filter 0.3s ease, opacity 0.3s ease;
     cursor: grab;
     user-select: none;
@@ -1247,6 +1250,246 @@
 .neon-configurator__neon-type-price {
     font-size: 11px;
     color: #b8b8c4;
+}
+
+/* ---- Dropdown trigger (Font / Quick Symbol) — matches reference site's collapsed dropdown ---- */
+.neon-configurator__dropdown-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.neon-configurator__dropdown-arrow {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.neon-configurator__dropdown-trigger.is-open .neon-configurator__dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.neon-configurator__dropdown-panel {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #0f0f16;
+}
+
+.neon-configurator__dropdown-panel[hidden] {
+    display: none;
+}
+
+/* ---- Colour swatch + name label under each, matching the reference site ---- */
+.neon-configurator__swatch-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.neon-configurator__swatch-name {
+    font-size: 10px;
+    color: #b8b8c4;
+    text-align: center;
+    max-width: 44px;
+}
+
+/* ---- Size cards with optional badge ribbon ---- */
+.neon-configurator__size-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.neon-configurator__size-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    cursor: pointer;
+    text-align: left;
+}
+
+.neon-configurator__size-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.12);
+}
+
+.neon-configurator__size-card-badge {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.neon-configurator__size-card-label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.neon-configurator__size-card-price {
+    font-size: 15px;
+    font-weight: 800;
+    color: #ff2ec4;
+}
+
+.neon-configurator__size-card-meta {
+    font-size: 11px;
+    color: #7a7a88;
+}
+
+.neon-configurator__oversized-notice {
+    font-size: 12px;
+    color: #ffb84d;
+    background: rgba(255, 184, 77, 0.1);
+    border: 1px solid rgba(255, 184, 77, 0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 4px 0 0;
+}
+
+.neon-configurator__oversized-notice[hidden] {
+    display: none;
+}
+
+/* ---- Included With Your Order ---- */
+.neon-configurator__included-box .neon-configurator__included-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.neon-configurator__included-box li {
+    font-size: 13px;
+    color: #b8b8c4;
+    padding-left: 18px;
+    position: relative;
+}
+
+.neon-configurator__included-box li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: #00e0a4;
+    font-weight: 700;
+}
+
+/* ---- Content-flex holds text + icons together so the outline/fill wraps both ---- */
+.neon-configurator__content-flex {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.neon-configurator__shape-source {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.neon-configurator__shape-text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    word-break: break-word;
+    color: #050505;
+}
+
+.neon-configurator__shape-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Symbol position — right (default): text first, icons after */
+.neon-configurator__content-flex.symbols-right,
+.neon-configurator__shape-source.symbols-right {
+    flex-direction: row;
+}
+
+.neon-configurator__content-flex.symbols-right .neon-configurator__preview-icons,
+.neon-configurator__shape-source.symbols-right .neon-configurator__shape-icons {
+    order: 1;
+    margin-left: 8px;
+}
+
+/* Left */
+.neon-configurator__content-flex.symbols-left,
+.neon-configurator__shape-source.symbols-left {
+    flex-direction: row;
+}
+
+.neon-configurator__content-flex.symbols-left .neon-configurator__preview-icons,
+.neon-configurator__shape-source.symbols-left .neon-configurator__shape-icons {
+    order: -1;
+    margin-left: 0;
+    margin-right: 8px;
+}
+
+/* Top */
+.neon-configurator__content-flex.symbols-top,
+.neon-configurator__shape-source.symbols-top {
+    flex-direction: column;
+}
+
+.neon-configurator__content-flex.symbols-top .neon-configurator__preview-icons,
+.neon-configurator__shape-source.symbols-top .neon-configurator__shape-icons {
+    order: -1;
+    margin: 0 0 8px;
+}
+
+/* Bottom */
+.neon-configurator__content-flex.symbols-bottom,
+.neon-configurator__shape-source.symbols-bottom {
+    flex-direction: column;
+}
+
+.neon-configurator__content-flex.symbols-bottom .neon-configurator__preview-icons,
+.neon-configurator__shape-source.symbols-bottom .neon-configurator__shape-icons {
+    order: 1;
+    margin: 8px 0 0;
+}
+
+/* ---- Solid-fill backboard (non-clear colour) for the box-style shapes ---- */
+.neon-configurator__preview-inner.is-solid-fill.backboard--rectangle,
+.neon-configurator__preview-inner.is-solid-fill.backboard--open-box {
+    background: var(--moz-backboard-color, #000000);
+    border-color: var(--moz-backboard-color, #000000);
+}
+
+.neon-configurator__preview-inner.is-solid-fill.backboard--acrylic-stand-middle::after {
+    background: var(--moz-backboard-color, #000000);
+    border-color: var(--moz-backboard-color, #000000);
 }
 
 @media (max-width: 768px) {

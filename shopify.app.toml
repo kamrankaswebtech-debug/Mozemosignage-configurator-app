@@ -177,6 +177,11 @@ type = "number_decimal"
 name = "Sort Order"
 type = "number_integer"
 
+[metaobjects.app.sign_size.fields.badge_text]
+name = "Badge Text (optional)"
+description = "Small ribbon shown on this size's card, e.g. 'Most Popular'. Leave empty for no badge."
+type = "single_line_text_field"
+
 [metaobjects.app.backboard_style]
 name = "Backboard Style"
 description = "Cut Around, Rectangle, Cut-to-Letter, Naked Neon, etc."
@@ -242,6 +247,11 @@ type = "number_integer"
 name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
 type = "single_line_text_field"
+
+[metaobjects.app.backboard_colour.fields.is_clear]
+name = "Is Clear / Transparent"
+description = "Enable ONLY for the ONE entry representing the transparent/clear backboard. That entry always renders as a thin neutral-grey outline; every other colour renders as a solid filled backing behind the whole design."
+type = "boolean"
 
 [metaobjects.app.signage_addon]
 name = "Signage Add-on"

@@ -11,6 +11,7 @@ type BackboardColourEntry = {
     extraPrice: string;
     sortOrder: string;
     visibility: string;
+    isClear: boolean;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -34,6 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             extraPrice: f.extra_price_decimal || "0",
             sortOrder: f.sort_order || "0",
             visibility: f.visibility || "both",
+            isClear: f.is_clear === "true",
         };
     });
     colours.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -51,16 +53,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
         { key: "visibility", value: String(formData.get("visibility") || "both") },
+        { key: "is_clear", value: formData.get("isClear") === "on" ? "true" : "false" },
     ];
 
     if (intent === "create") {
         const response = await admin.graphql(
             `#graphql
       mutation CreateBackboardColour($metaobject: MetaobjectCreateInput!) {
-        metaobjectCreate(metaobject: $metaobject) {
-          metaobject { id }
-          userErrors { field message }
-        }
+        metaobjectCreate(metaobject: $metaobject) { metaobject { id } userErrors { field message } }
       }`,
             { variables: { metaobject: { type: "$app:backboard_colour", fields } } }
         );
@@ -75,10 +75,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const response = await admin.graphql(
             `#graphql
       mutation UpdateBackboardColour($id: ID!, $metaobject: MetaobjectUpdateInput!) {
-        metaobjectUpdate(id: $id, metaobject: $metaobject) {
-          metaobject { id }
-          userErrors { field message }
-        }
+        metaobjectUpdate(id: $id, metaobject: $metaobject) { metaobject { id } userErrors { field message } }
       }`,
             { variables: { id, metaobject: { fields } } }
         );
@@ -92,9 +89,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const id = String(formData.get("id"));
         const response = await admin.graphql(
             `#graphql
-      mutation DeleteBackboardColour($id: ID!) {
-        metaobjectDelete(id: $id) { deletedId userErrors { field message } }
-      }`,
+      mutation DeleteBackboardColour($id: ID!) { metaobjectDelete(id: $id) { deletedId userErrors { field message } } }`,
             { variables: { id } }
         );
         const data = await response.json();
@@ -127,6 +122,12 @@ export default function BackboardColoursPage() {
         <s-page heading="Backboard Colours">
             <s-section heading="Add New Backboard Colour">
                 <s-link href="/app/neon-signs">← Back to Neon Signs</s-link>
+                <s-paragraph>
+                    Tick "Is Clear / Transparent" on the ONE entry that represents no backing (e.g. "Clear").
+                    The storefront always renders that one as a thin neutral-grey outline. Every other colour
+                    renders as a solid filled backing behind the whole design — the swatch colour below only
+                    matters for those.
+                </s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -139,6 +140,7 @@ export default function BackboardColoursPage() {
                             <option value="neon_only">Neon Only</option>
                             <option value="3d_only">3D Only</option>
                         </select>
+                        <label><input type="checkbox" name="isClear" /> Is Clear/Transparent</label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -150,6 +152,7 @@ export default function BackboardColoursPage() {
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Swatch</th>
+                            <th style={{ padding: "8px" }}>Clear?</th>
                             <th style={{ padding: "8px" }}>Extra Price</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Actions</th>
@@ -159,7 +162,7 @@ export default function BackboardColoursPage() {
                         {colours.map((c) => (
                             <tr key={c.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === c.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={c.id} />
@@ -173,6 +176,7 @@ export default function BackboardColoursPage() {
                                                     <option value="neon_only">Neon Only</option>
                                                     <option value="3d_only">3D Only</option>
                                                 </select>
+                                                <label><input type="checkbox" name="isClear" defaultChecked={c.isClear} /> Is Clear</label>
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -185,6 +189,7 @@ export default function BackboardColoursPage() {
                                             {c.label}
                                         </td>
                                         <td style={{ padding: "8px" }}>{c.swatch}</td>
+                                        <td style={{ padding: "8px" }}>{c.isClear ? "Yes" : "—"}</td>
                                         <td style={{ padding: "8px" }}>${c.extraPrice}</td>
                                         <td style={{ padding: "8px" }}>{c.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>

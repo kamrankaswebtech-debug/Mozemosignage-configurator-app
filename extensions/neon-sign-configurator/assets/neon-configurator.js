@@ -69,11 +69,86 @@ function showTemporaryStatus(statusEl, text, durationMs) {
     }, durationMs);
 }
 
+// Builds Font cards + Quick Symbol buttons from compact JSON (instead of large repeated
+// Liquid markup) — keeps the .liquid file's byte size well under the Theme App Extension's
+// 100KB total limit while keeping everything fully dynamic from the same metaobject data.
+function renderNeonFontsAndSymbols(root) {
+    const fontsDataEl = root.querySelector('[data-neon-fonts-data]');
+    const symbolsDataEl = root.querySelector('[data-neon-symbols-data]');
+    const fontSelectEl = root.querySelector('[data-font-select]');
+    const fontCardsEl = root.querySelector('[data-font-cards]');
+    const fontPreviewEl = root.querySelector('[data-font-dropdown-preview]');
+    const symbolButtonsEl = root.querySelector('[data-symbol-buttons]');
+
+    if (fontsDataEl && fontSelectEl && fontCardsEl) {
+        let fonts = [];
+        try { fonts = JSON.parse(fontsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse fonts JSON.', err); }
+        fonts.forEach((font, i) => {
+            const option = document.createElement('option');
+            option.value = font.value;
+            option.dataset.name = font.name;
+            option.textContent = font.name;
+            if (i === 0) option.selected = true;
+            fontSelectEl.appendChild(option);
+
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'neon-configurator__font-card' + (i === 0 ? ' is-selected' : '');
+            card.dataset.fontValue = font.value;
+            let inner = '';
+            if (font.isNew) inner += '<span class="neon-configurator__font-card-badge">NEW</span>';
+            inner += '<span class="neon-configurator__font-card-thumb">';
+            inner += font.previewImage
+                ? '<img src="' + font.previewImage + '" alt="' + font.name + '" width="100" height="40" loading="lazy">'
+                : '<span class="neon-configurator__font-card-sample" style="font-family: ' + font.value + ';">Your Text</span>';
+            inner += '</span><span class="neon-configurator__font-card-label">' + font.name + '</span>';
+            card.innerHTML = inner;
+            fontCardsEl.appendChild(card);
+        });
+        if (fontPreviewEl && fonts.length) {
+            fontPreviewEl.textContent = fonts[0].name;
+            fontPreviewEl.style.fontFamily = fonts[0].value;
+        }
+    }
+
+    if (symbolsDataEl && symbolButtonsEl) {
+        let symbols = [];
+        try { symbols = JSON.parse(symbolsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse symbols JSON.', err); }
+        symbols.forEach((sym) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'neon-configurator__symbol-btn';
+            btn.dataset.symbolUrl = sym.url;
+            btn.dataset.symbolLabel = sym.label;
+            btn.dataset.iconTransparentBg = sym.transparentBg ? 'true' : 'false';
+            btn.title = sym.label;
+            btn.setAttribute('aria-label', sym.label);
+            btn.innerHTML = '<img src="' + sym.url + '" alt="' + sym.label + '" width="18" height="18" loading="lazy">';
+            symbolButtonsEl.appendChild(btn);
+        });
+    }
+}
+
 function initConfigurator(root) {
+    renderNeonFontsAndSymbols(root);
     const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
     const fontCards = root.querySelectorAll('[data-font-cards] .neon-configurator__font-card');
+    const fontDropdownTrigger = root.querySelector('[data-font-dropdown-trigger]');
+    const fontDropdownPanel = root.querySelector('[data-font-dropdown-panel]');
+    const fontDropdownPreview = root.querySelector('[data-font-dropdown-preview]');
+    const symbolDropdownTrigger = root.querySelector('[data-symbol-dropdown-trigger]');
+    const symbolDropdownPanel = root.querySelector('[data-symbol-dropdown-panel]');
+    const symbolDropdownPreview = root.querySelector('[data-symbol-dropdown-preview]');
+    const symbolPositionRadios = root.querySelectorAll('[data-symbol-position-radio]');
+    const contentFlex = root.querySelector('[data-content-flex]');
+    const shapeText = root.querySelector('[data-shape-text]');
+    const shapeIcons = root.querySelector('[data-shape-icons]');
+    const sizeCards = root.querySelectorAll('[data-size-cards] .neon-configurator__size-card');
+    const oversizedNotice = root.querySelector('[data-oversized-notice]');
+    const includedPowerAdapterLi = root.querySelector('[data-included-power-adapter]');
+    let currentSymbolPosition = 'right';
     const swatches = root.querySelectorAll('[data-colour-swatches] .neon-configurator__swatch');
     const colourNameLabel = root.querySelector('[data-colour-name-label]');
     const sizeSelect = root.querySelector('[data-size-select]');
@@ -85,6 +160,7 @@ function initConfigurator(root) {
     const previewInner = root.querySelector('[data-preview-inner]');
     const shapeSource = root.querySelector('[data-shape-source]');
     const textWrap = root.querySelector('[data-text-wrap]');
+    const BACKBOARD_SOLID_SHAPES = ['rectangle', 'open-box', 'acrylic-stand-middle'];
     const previewStage = root.querySelector('[data-preview-stage]');
     const widthLabel = root.querySelector('[data-width-label]');
     const heightLabel = root.querySelector('[data-height-label]');
@@ -243,6 +319,14 @@ function initConfigurator(root) {
     let groupScale = 1;
     let baseFontSize = 48;
     let selectedLetterIndex = null;
+    // Keeps Quick Symbol icon size proportional to the current text size — same ratio as
+    // the original fixed 48px font / 42px icon default — so icons scale up/down together
+    // with Choose Size / the custom slider / whole-group resize, instead of staying fixed.
+    const ICON_SIZE_RATIO = 42 / 48;
+    function updateIconSize() {
+        const size = Math.max(16, baseFontSize * groupScale * ICON_SIZE_RATIO);
+        root.style.setProperty('--neon-icon-size', size + 'px');
+    }
 
     // 'letter' | 'icon' | null — tracks which system currently owns the shared selection box
     let activeSelectionKind = null;
@@ -315,8 +399,8 @@ function initConfigurator(root) {
         // Keep the hidden shape-source clone's matching letter perfectly aligned —
         // same index, same transform — so the outline always hugs the real letter's
         // exact position, even after dragging/resizing an individual letter.
-        if (shapeSource && shapeSource.children[i]) {
-            shapeSource.children[i].style.transform = transformStr;
+        if (shapeText && shapeText.children[i]) {
+            shapeText.children[i].style.transform = transformStr;
         }
     }
 
@@ -339,11 +423,15 @@ function initConfigurator(root) {
     }
 
     function showSelectionBoxAround(el) {
-        if (!selectionBox || !previewStage || !el) return;
-        const stageRect = previewStage.getBoundingClientRect();
+        if (!selectionBox || !previewInner || !el) return;
+        // Positioned relative to previewInner, NOT previewStage — selectionBox is a direct
+        // DOM child of previewInner (its real containing block, since previewInner has
+        // position:relative). Using a different, non-parent ancestor here was what produced
+        // the fixed offset between the box and the actually-clicked letter/icon.
+        const innerRect = previewInner.getBoundingClientRect();
         const elRect = el.getBoundingClientRect();
-        selectionBox.style.left = (elRect.left - stageRect.left - 6) + 'px';
-        selectionBox.style.top = (elRect.top - stageRect.top - 6) + 'px';
+        selectionBox.style.left = (elRect.left - innerRect.left - 6) + 'px';
+        selectionBox.style.top = (elRect.top - innerRect.top - 6) + 'px';
         selectionBox.style.width = (elRect.width + 12) + 'px';
         selectionBox.style.height = (elRect.height + 12) + 'px';
         selectionBox.hidden = false;
@@ -538,7 +626,7 @@ function initConfigurator(root) {
         }
 
         textFlex.innerHTML = '';
-        if (shapeSource) shapeSource.innerHTML = '';
+        if (shapeText) shapeText.innerHTML = '';
 
         value.split('').forEach((ch, i) => {
             const span = document.createElement('span');
@@ -550,15 +638,12 @@ function initConfigurator(root) {
             attachLetterDrag(span, i, ch);
             textFlex.appendChild(span);
 
-            // Mirror the exact same letter (same character, same wrapping position, same
-            // transform) into the hidden shape-source — this is what makes the outline
-            // hug the REAL text pixel-for-pixel instead of drifting/duplicating.
-            if (shapeSource) {
+            if (shapeText) {
                 const shapeSpan = document.createElement('span');
                 shapeSpan.className = 'neon-configurator__shape-letter';
                 shapeSpan.textContent = ch === ' ' ? '\u00A0' : ch;
                 shapeSpan.style.transform = computeLetterTransform(i);
-                shapeSource.appendChild(shapeSpan);
+                shapeText.appendChild(shapeSpan);
             }
         });
 
@@ -569,11 +654,13 @@ function initConfigurator(root) {
 
     function updatePreviewText() {
         renderLetters();
+        updateBackboardPanel();
     }
 
     function updatePreviewFont() {
         if (textFlex) textFlex.style.fontFamily = fontSelect.value;
         syncShapeSourceStyle();
+        updateBackboardPanel();
     }
 
     function updatePreviewTransform() {
@@ -591,9 +678,9 @@ function initConfigurator(root) {
     // (fixes ghost/misaligned outline on wrapped multi-line text). Fully dynamic: called
     // automatically whenever text, font, size, or scale changes.
     function syncShapeSourceStyle() {
-        if (!shapeSource) return;
-        shapeSource.style.fontFamily = fontSelect.value;
-        shapeSource.style.fontSize = (baseFontSize * groupScale) + 'px';
+        if (!shapeText) return;
+        shapeText.style.fontFamily = fontSelect.value;
+        shapeText.style.fontSize = (baseFontSize * groupScale) + 'px';
     }
 
     function updateRotationLabel() {
@@ -656,6 +743,7 @@ function initConfigurator(root) {
                         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
                         showSelectionBoxAround(textFlex);
                         syncShapeSourceStyle();
+                        updateIconSize();
                     }
                 };
 
@@ -692,6 +780,8 @@ function initConfigurator(root) {
         }
 
         iconsContainer.innerHTML = '';
+        if (shapeIcons) shapeIcons.innerHTML = '';
+
         selectedSymbols.forEach((sym, i) => {
             const iconSpan = document.createElement('span');
             iconSpan.className = 'neon-configurator__preview-icon';
@@ -703,11 +793,42 @@ function initConfigurator(root) {
             applyIconTransform(iconSpan, i);
             attachIconDrag(iconSpan, i);
             iconsContainer.appendChild(iconSpan);
+
+            // Mirror into shape-icons (solid black, no glow/mask-position offset) so the
+            // backboard outline/fill silhouette also wraps around the icons, not just text.
+            if (shapeIcons) {
+                const shapeIconSpan = document.createElement('span');
+                shapeIconSpan.className = 'neon-configurator__preview-icon';
+                shapeIconSpan.style.webkitMaskImage = 'url("' + sym.url + '")';
+                shapeIconSpan.style.maskImage = 'url("' + sym.url + '")';
+                shapeIconSpan.style.backgroundColor = '#050505';
+                shapeIconSpan.style.filter = 'none';
+                shapeIconSpan.style.transform = 'translate(' + (iconOffsets[i]?.x || 0) + 'px, ' + (iconOffsets[i]?.y || 0) + 'px) scale(' + (iconScales[i] || 1) + ')';
+                shapeIcons.appendChild(shapeIconSpan);
+            }
         });
 
         if (activeSelectionKind === 'icon') hideSelectionBox();
         updatePowerState();
+        updateIconSize();
+        updateBackboardPanel();
     }
+
+    function updateSymbolPositionClass() {
+        [contentFlex, shapeSource].forEach((el) => {
+            if (!el) return;
+            ['symbols-left', 'symbols-right', 'symbols-top', 'symbols-bottom'].forEach((cls) => el.classList.remove(cls));
+            el.classList.add('symbols-' + currentSymbolPosition);
+        });
+    }
+
+    symbolPositionRadios.forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            currentSymbolPosition = radio.value;
+            updateSymbolPositionClass();
+        });
+    });
 
     function updatePreviewScale() {
         let widthValue;
@@ -732,6 +853,7 @@ function initConfigurator(root) {
         baseFontSize = Math.min(90, Math.max(22, widthValue * 0.42));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
         syncShapeSourceStyle();
+        updateIconSize();
 
         if (widthLabel) {
             widthLabel.textContent = widthValue + ' ' + unit;
@@ -746,6 +868,9 @@ function initConfigurator(root) {
         const cmFactor = UNIT_TO_CM[unit] || 1;
         currentWidthCm = Math.round(widthValue * cmFactor * 10) / 10;
         currentHeightCm = Math.round(heightValue * cmFactor * 10) / 10;
+
+        if (oversizedNotice) oversizedNotice.hidden = currentWidthCm <= 200;
+        updateBackboardPanel();
     }
 
     // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign box
@@ -792,28 +917,52 @@ function initConfigurator(root) {
 
         const colourOption = backboardColourSelect?.options[backboardColourSelect.selectedIndex];
         const hex = colourOption?.dataset.hex || '#e8e8e8';
+        const isClear = colourOption?.dataset.isClear === 'true';
 
-        // Colour is the OUTLINE/edge line only — never a filled block — exactly like the
-        // client's reference PDFs. This CSS variable feeds the plain-border shapes
-        // (rectangle/open-box/acrylic-stand's base line) AND the SVG filter's flood-colour below.
-        root.style.setProperty('--moz-backboard-color', hex);
+        // Clear/Transparent -> forced neutral grey outline (never the stored hex, so a
+        // wrongly-entered admin colour on the "Clear" row can never show as bold/pink).
+        // Any other colour -> its real hex, used for a SOLID filled backing.
+        root.style.setProperty('--moz-backboard-color', isClear ? '#9a9a9a' : hex);
+        previewInner.classList.toggle('is-solid-fill', !isClear && BACKBOARD_SOLID_SHAPES.includes(shape));
 
-        // The outline for Cut Around / Cut to Letter / Acrylic Stand is drawn on the hidden,
-        // glow-free clone of the text (data-shape-source) — NOT on the real glowing letters —
-        // because the neon glow (text-shadow) would otherwise pollute the shape's alpha channel
-        // and make the SVG filter render a solid block instead of a thin contour-hugging line.
         const blockId = root.dataset.blockId;
+        let filterValue = 'none';
+        let isActive = false;
+
+        if (shape === 'naked') {
+            filterValue = 'none';
+            isActive = false;
+        } else if (isClear) {
+            // Thin outline only, hugging text + icons together.
+            const filterId = shape === 'cut-to-letter' ? 'moz-outline-tight-' : 'moz-outline-loose-';
+            filterValue = 'url(#' + filterId + blockId + ')';
+            isActive = true;
+        } else if (shape === 'cut-around' || shape === 'cut-to-letter' || shape === 'acrylic-stand-middle') {
+            // Solid coloured backing following the exact silhouette of text + icons.
+            const fillId = shape === 'cut-to-letter' ? 'moz-solid-fill-tight-' : 'moz-solid-fill-loose-';
+            filterValue = 'url(#' + fillId + blockId + ')';
+            isActive = true;
+        } else {
+            // rectangle / open-box already get their solid fill via the .is-solid-fill
+            // CSS class + --moz-backboard-color above — no SVG filter needed for these.
+            filterValue = 'none';
+            isActive = false;
+        }
+
         if (shapeSource) {
-            if (shape === 'cut-around' || shape === 'acrylic-stand-middle') {
-                shapeSource.style.filter = 'url(#moz-outline-loose-' + blockId + ')';
-                shapeSource.classList.add('is-active');
-            } else if (shape === 'cut-to-letter') {
-                shapeSource.style.filter = 'url(#moz-outline-tight-' + blockId + ')';
-                shapeSource.classList.add('is-active');
-            } else {
-                shapeSource.style.filter = 'none';
-                shapeSource.classList.remove('is-active');
-            }
+            shapeSource.classList.toggle('is-active', isActive);
+            // Force a full repaint of the SVG url() filter instead of just swapping the
+            // `filter` property in place. Some browsers cache the filter's computed region
+            // against the element's PREVIOUS size, so when the customer's text grows and
+            // wraps onto a new line the filter keeps painting against that stale, smaller
+            // box — producing a disconnected/wrong-shaped backboard. Clearing the filter,
+            // forcing a layout read (offsetHeight), then re-applying it next frame forces the
+            // browser to recompute the filter region against the CURRENT (post-wrap) layout.
+            shapeSource.style.filter = 'none';
+            void shapeSource.offsetHeight;
+            requestAnimationFrame(() => {
+                shapeSource.style.filter = filterValue;
+            });
         }
     }
 
@@ -833,7 +982,8 @@ function initConfigurator(root) {
                     // Written out explicitly (not just cleared to '') so the glow is
                     // GUARANTEED to render exactly like the text's glow, regardless
                     // of any other CSS on the page — inline styles set here always win.
-                    el.style.filter = 'drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor)';
+                    // Same blur radii as the text's own text-shadow (5/15/30/60px).
+                    el.style.filter = 'drop-shadow(0 0 5px #ffffff) drop-shadow(0 0 15px #ffffff) drop-shadow(0 0 30px currentColor) drop-shadow(0 0 60px currentColor)';
                     el.style.opacity = '1';
                 } else {
                     // Off = plain colour only, no dimming — matches the text's off state exactly.
@@ -934,13 +1084,36 @@ function initConfigurator(root) {
             if (matchIndex === -1) return;
             fontSelect.selectedIndex = matchIndex;
             fontSelect.dispatchEvent(new Event('change'));
+            if (fontDropdownPanel) fontDropdownPanel.hidden = true;
+            if (fontDropdownTrigger) fontDropdownTrigger.classList.remove('is-open');
         });
     });
 
     fontSelect.addEventListener('change', () => {
         updatePreviewFont();
         syncFontCards();
+        const selectedOption = fontSelect.options[fontSelect.selectedIndex];
+        if (fontDropdownPreview && selectedOption) {
+            fontDropdownPreview.textContent = selectedOption.dataset.name || selectedOption.textContent.trim();
+            fontDropdownPreview.style.fontFamily = fontSelect.value;
+        }
     });
+
+    if (fontDropdownTrigger && fontDropdownPanel) {
+        fontDropdownTrigger.addEventListener('click', () => {
+            const isOpen = !fontDropdownPanel.hidden;
+            fontDropdownPanel.hidden = isOpen;
+            fontDropdownTrigger.classList.toggle('is-open', !isOpen);
+        });
+    }
+
+    if (symbolDropdownTrigger && symbolDropdownPanel) {
+        symbolDropdownTrigger.addEventListener('click', () => {
+            const isOpen = !symbolDropdownPanel.hidden;
+            symbolDropdownPanel.hidden = isOpen;
+            symbolDropdownTrigger.classList.toggle('is-open', !isOpen);
+        });
+    }
 
     swatches.forEach((swatch) => {
         swatch.addEventListener('click', () => {
@@ -987,6 +1160,7 @@ function initConfigurator(root) {
         customSizeActive = false;
         updatePreviewScale();
         calculateTotal();
+        syncSizeCards();
     });
 
     if (customSizeSlider) {
@@ -1099,6 +1273,31 @@ function initConfigurator(root) {
                 btn.classList.add('is-selected');
             }
             renderIcons();
+            if (symbolDropdownPreview) {
+                symbolDropdownPreview.textContent = selectedSymbols.length
+                    ? selectedSymbols.map((s) => s.label).join(', ')
+                    : 'Select icons';
+            }
+        });
+    });
+
+    function syncSizeCards() {
+        const selectedWidth = sizeSelect.value;
+        sizeCards.forEach((card) => {
+            card.classList.toggle('is-selected', card.dataset.sizeWidth === selectedWidth);
+        });
+    }
+
+    sizeCards.forEach((card) => {
+        card.addEventListener('click', () => {
+            const width = card.dataset.sizeWidth;
+            const options = Array.from(sizeSelect.options);
+            const matchIndex = options.findIndex((opt) => opt.value === width);
+            if (matchIndex === -1) return;
+            customSizeActive = false;
+            sizeSelect.selectedIndex = matchIndex;
+            sizeSelect.dispatchEvent(new Event('change'));
+            syncSizeCards();
         });
     });
 
@@ -1119,7 +1318,8 @@ function initConfigurator(root) {
 
             const selectedAddons = Array.from(addonCheckboxes)
                 .filter((checkbox) => checkbox.checked)
-                .map((checkbox) => checkbox.closest('label').querySelector('span').textContent.trim())
+                .map((checkbox) => checkbox.dataset.addonLabel || '')
+                .filter(Boolean)
                 .join(', ');
 
             const properties = {
@@ -1244,6 +1444,15 @@ function initConfigurator(root) {
         });
     }
 
+    function updateIncludedPowerAdapterText() {
+        if (includedPowerAdapterLi && powerAdapterSelect && powerAdapterSelect.options.length) {
+            includedPowerAdapterLi.textContent = powerAdapterSelect.options[powerAdapterSelect.selectedIndex].textContent.trim();
+        }
+    }
+    if (powerAdapterSelect) {
+        powerAdapterSelect.addEventListener('change', updateIncludedPowerAdapterText);
+    }
+
     // Initial render
     applyDefaultBackground();
     updatePreviewText();
@@ -1257,6 +1466,9 @@ function initConfigurator(root) {
     updateBackboardPanel();
     syncBackboardStyleCards();
     syncFontCards();
+    syncSizeCards();
+    updateSymbolPositionClass();
+    updateIncludedPowerAdapterText();
     updateOutdoorThicknessVisibility();
     updateSizeFieldsVisibility();
     calculateTotal();
