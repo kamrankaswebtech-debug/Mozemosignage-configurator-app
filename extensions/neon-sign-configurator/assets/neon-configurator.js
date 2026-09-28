@@ -129,8 +129,95 @@ function renderNeonFontsAndSymbols(root) {
     }
 }
 
+// Re-orders a container's children by their data-sort-order (Admin "Sort Order"), because
+// Liquid returns metaobjects in creation order, not sort order. Stable; blank = last.
+function sortBySortOrder(container) {
+    if (!container) return;
+    const items = Array.from(container.children);
+    items
+        .map((el, idx) => ({ el, idx, so: Number(el.dataset.sortOrder) }))
+        .map((x) => ({ ...x, so: Number.isFinite(x.so) ? x.so : 999999 }))
+        .sort((a, b) => (a.so - b.so) || (a.idx - b.idx))
+        .forEach((x) => container.appendChild(x.el));
+}
+
+// Decides the acrylic finish for a Backboard Colour option: clear / gloss / shiny / frosted.
+// Admin "Finish Type" wins; otherwise auto-detected from the colour name.
+function resolveBackboardFinish(option) {
+    if (!option) return 'gloss';
+    if (option.dataset.isClear === 'true') return 'clear';
+    const explicit = (option.dataset.finish || '').trim().toLowerCase();
+    if (['clear', 'gloss', 'shiny', 'frosted'].indexOf(explicit) > -1) return explicit;
+    const label = (option.textContent || '').toLowerCase();
+    if (label.indexOf('frost') > -1 || label.indexOf('matte') > -1) return 'frosted';
+    if (label.indexOf('shiny') > -1 || label.indexOf('mirror') > -1 || label.indexOf('chrome') > -1) return 'shiny';
+    return 'gloss';
+}
+
+// Builds the 4 SVG filters used for Cut Around / Cut to Letter / Acrylic Stand.
+// Clear = thin grey outline with a faint glass tint. Gloss = reflective edge highlights.
+// Shiny = mirror-like (two lights + sheen). Frosted = dull/matte with fine grain.
+function buildBackboardFilters(blockId, hex, finish) {
+    const region = (p) => 'x="-' + p + '%" y="-' + p + '%" width="' + (100 + p * 2) + '%" height="' + (100 + p * 2) + '%"';
+
+    const outline = (id, innerR, outerR, p) =>
+        '<filter id="' + id + '" ' + region(p) + ' color-interpolation-filters="sRGB">' +
+        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + innerR + '" result="inner"/>' +
+        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + outerR + '" result="outer"/>' +
+        '<feComposite in="outer" in2="inner" operator="out" result="ring"/>' +
+        '<feFlood flood-color="#9a9a9a" result="ringFlood"/>' +
+        '<feComposite in="ringFlood" in2="ring" operator="in" result="ringColour"/>' +
+        '<feFlood flood-color="#ffffff" flood-opacity="0.07" result="tint"/>' +
+        '<feComposite in="tint" in2="inner" operator="in" result="tintIn"/>' +
+        '<feMerge><feMergeNode in="tintIn"/><feMergeNode in="ringColour"/></feMerge>' +
+        '</filter>';
+
+    const fill = (id, radius, p) => {
+        let s = '<filter id="' + id + '" ' + region(p) + ' color-interpolation-filters="sRGB">' +
+            '<feMorphology in="SourceAlpha" operator="dilate" radius="' + radius + '" result="shape"/>' +
+            '<feFlood flood-color="' + hex + '" result="col"/>' +
+            '<feComposite in="col" in2="shape" operator="in" result="base"/>';
+        if (finish === 'frosted') {
+            s += '<feFlood flood-color="#ffffff" flood-opacity="0.10" result="sheen"/>' +
+                '<feComposite in="sheen" in2="shape" operator="in" result="sheenIn"/>' +
+                '<feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="noise"/>' +
+                '<feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 -0.12" result="grain"/>' +
+                '<feComposite in="grain" in2="shape" operator="in" result="grainIn"/>' +
+                '<feMerge><feMergeNode in="base"/><feMergeNode in="sheenIn"/><feMergeNode in="grainIn"/></feMerge>';
+        } else if (finish === 'shiny') {
+            s += '<feGaussianBlur in="shape" stdDeviation="3" result="bump"/>' +
+                '<feSpecularLighting in="bump" surfaceScale="8" specularConstant="1.5" specularExponent="10" lighting-color="#ffffff" result="specA"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>' +
+                '<feComposite in="specA" in2="shape" operator="in" result="specAIn"/>' +
+                '<feComposite in="base" in2="specAIn" operator="arithmetic" k1="0" k2="1" k3="0.9" k4="0" result="lit"/>' +
+                '<feSpecularLighting in="bump" surfaceScale="8" specularConstant="1.1" specularExponent="14" lighting-color="#ffffff" result="specB"><feDistantLight azimuth="45" elevation="40"/></feSpecularLighting>' +
+                '<feComposite in="specB" in2="shape" operator="in" result="specBIn"/>' +
+                '<feComposite in="lit" in2="specBIn" operator="arithmetic" k1="0" k2="1" k3="0.7" k4="0" result="lit2"/>' +
+                '<feFlood flood-color="#ffffff" flood-opacity="0.12" result="sheen"/>' +
+                '<feComposite in="sheen" in2="shape" operator="in" result="sheenIn"/>' +
+                '<feMerge><feMergeNode in="lit2"/><feMergeNode in="sheenIn"/></feMerge>';
+        } else {
+            // gloss
+            s += '<feGaussianBlur in="shape" stdDeviation="2.5" result="bump"/>' +
+                '<feSpecularLighting in="bump" surfaceScale="5" specularConstant="0.9" specularExponent="22" lighting-color="#ffffff" result="spec"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>' +
+                '<feComposite in="spec" in2="shape" operator="in" result="specIn"/>' +
+                '<feComposite in="base" in2="specIn" operator="arithmetic" k1="0" k2="1" k3="0.85" k4="0"/>';
+        }
+        return s + '</filter>';
+    };
+
+    return outline('moz-outline-loose-' + blockId, 9.5, 11, 60) +
+        outline('moz-outline-tight-' + blockId, 5, 6.5, 50) +
+        fill('moz-solid-fill-loose-' + blockId, 11, 60) +
+        fill('moz-solid-fill-tight-' + blockId, 6.5, 50);
+}
+
 function initConfigurator(root) {
     renderNeonFontsAndSymbols(root);
+    // Admin "Sort Order" drives the on-screen order (first item = default).
+    sortBySortOrder(root.querySelector('[data-backboard-style-cards]'));
+    sortBySortOrder(root.querySelector('[data-backboard-style-select]'));
+    sortBySortOrder(root.querySelector('[data-backboard-colour-select]'));
+    sortBySortOrder(root.querySelector('[data-unit-tabs]'));
     const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
@@ -159,6 +246,8 @@ function initConfigurator(root) {
     const totalPriceEl = root.querySelector('[data-total-price]');
     const previewInner = root.querySelector('[data-preview-inner]');
     const shapeSource = root.querySelector('[data-shape-source]');
+    const backboardDefs = root.querySelector('[data-backboard-defs]');
+    let shapeFilterValue = 'none';
     const textWrap = root.querySelector('[data-text-wrap]');
     const BACKBOARD_SOLID_SHAPES = ['rectangle', 'open-box', 'acrylic-stand-middle'];
     const previewStage = root.querySelector('[data-preview-stage]');
@@ -683,6 +772,44 @@ function initConfigurator(root) {
         shapeText.style.fontSize = (baseFontSize * groupScale) + 'px';
     }
 
+    // The backboard copy (shape-source) is absolutely positioned exactly over the REAL text box,
+    // with the identical pixel width, so both always wrap into the same lines (any text length,
+    // spaces included). It no longer takes part in the grid sizing.
+    function syncShapeSourceBox() {
+        if (!shapeSource || !contentFlex || !textWrap) return;
+        const c = contentFlex.getBoundingClientRect();
+        const w = textWrap.getBoundingClientRect();
+        if (!c.width) return;
+        shapeSource.style.width = c.width + 'px';
+        shapeSource.style.left = (c.left - w.left) + 'px';
+        shapeSource.style.top = (c.top - w.top) + 'px';
+    }
+
+    // Re-applies the SVG filter so the browser recomputes it against the current layout.
+    function applyShapeFilter() {
+        if (!shapeSource) return;
+        shapeSource.style.filter = 'none';
+        void shapeSource.offsetHeight;
+        requestAnimationFrame(() => {
+            shapeSource.style.filter = shapeFilterValue;
+        });
+    }
+
+    function setupShapeSourceObserver() {
+        if (!contentFlex || typeof ResizeObserver === 'undefined') return;
+        let queued = false;
+        const ro = new ResizeObserver(() => {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(() => {
+                queued = false;
+                syncShapeSourceBox();
+                applyShapeFilter();
+            });
+        });
+        ro.observe(contentFlex);
+    }
+
     function updateRotationLabel() {
         if (rotationValueLabel) rotationValueLabel.textContent = textRotation + '°';
     }
@@ -925,7 +1052,19 @@ function initConfigurator(root) {
         root.style.setProperty('--moz-backboard-color', isClear ? '#9a9a9a' : hex);
         previewInner.classList.toggle('is-solid-fill', !isClear && BACKBOARD_SOLID_SHAPES.includes(shape));
 
+        const finish = resolveBackboardFinish(colourOption);
+        ['clear', 'gloss', 'shiny', 'frosted'].forEach((f) => previewInner.classList.remove('finish--' + f));
+        previewInner.classList.add('finish--' + finish);
+
         const blockId = root.dataset.blockId;
+        if (backboardDefs) {
+            const defsHex = isClear ? '#9a9a9a' : hex;
+            const defsKey = blockId + '|' + finish + '|' + defsHex;
+            if (backboardDefs.dataset.key !== defsKey) {
+                backboardDefs.innerHTML = buildBackboardFilters(blockId, defsHex, finish);
+                backboardDefs.dataset.key = defsKey;
+            }
+        }
         let filterValue = 'none';
         let isActive = false;
 
@@ -949,20 +1088,11 @@ function initConfigurator(root) {
             isActive = false;
         }
 
+        shapeFilterValue = filterValue;
         if (shapeSource) {
             shapeSource.classList.toggle('is-active', isActive);
-            // Force a full repaint of the SVG url() filter instead of just swapping the
-            // `filter` property in place. Some browsers cache the filter's computed region
-            // against the element's PREVIOUS size, so when the customer's text grows and
-            // wraps onto a new line the filter keeps painting against that stale, smaller
-            // box — producing a disconnected/wrong-shaped backboard. Clearing the filter,
-            // forcing a layout read (offsetHeight), then re-applying it next frame forces the
-            // browser to recompute the filter region against the CURRENT (post-wrap) layout.
-            shapeSource.style.filter = 'none';
-            void shapeSource.offsetHeight;
-            requestAnimationFrame(() => {
-                shapeSource.style.filter = filterValue;
-            });
+            syncShapeSourceBox();
+            applyShapeFilter();
         }
     }
 
@@ -1473,5 +1603,6 @@ function initConfigurator(root) {
     updateSizeFieldsVisibility();
     calculateTotal();
     setupDimensionObserver();
+    setupShapeSourceObserver();
     updateDimensionLines();
 }

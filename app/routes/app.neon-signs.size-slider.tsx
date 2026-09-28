@@ -12,6 +12,7 @@ type UnitEntry = {
     pricePerUnit: string;
     heightRatio: string;
     sortOrder: string;
+    visibility: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -36,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             pricePerUnit: f.price_per_unit || "0",
             heightRatio: f.height_ratio || "2.6",
             sortOrder: f.sort_order || "0",
+            visibility: f.visibility || "both",
         };
     });
     units.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -54,6 +56,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "price_per_unit", value: String(formData.get("pricePerUnit") || "0") },
         { key: "height_ratio", value: String(formData.get("heightRatio") || "2.6") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
+        { key: "visibility", value: String(formData.get("visibility") || "both") },
     ];
 
     if (intent === "create") {
@@ -144,6 +147,11 @@ export default function SizeUnitsPage() {
                         <input type="number" step="0.01" name="pricePerUnit" placeholder="Price per unit ($)" required />
                         <input type="number" step="0.1" name="heightRatio" placeholder="Height Ratio" defaultValue="2.6" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={units.length + 1} />
+                        <select name="visibility" defaultValue="both">
+                            <option value="both">Both (Neon + 3D)</option>
+                            <option value="neon_only">Neon Only</option>
+                            <option value="3d_only">3D Only</option>
+                        </select>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Unit</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -177,6 +185,11 @@ export default function SizeUnitsPage() {
                                                 <input type="number" step="0.01" name="pricePerUnit" defaultValue={u.pricePerUnit} required />
                                                 <input type="number" step="0.1" name="heightRatio" defaultValue={u.heightRatio} required />
                                                 <input type="number" name="sortOrder" defaultValue={u.sortOrder} />
+                                                <select name="visibility" defaultValue={u.visibility}>
+                                                    <option value="both">Both (Neon + 3D)</option>
+                                                    <option value="neon_only">Neon Only</option>
+                                                    <option value="3d_only">3D Only</option>
+                                                </select>
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>

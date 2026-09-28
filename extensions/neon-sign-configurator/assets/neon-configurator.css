@@ -183,15 +183,15 @@
 }
 
 .neon-configurator__preview-inner.backboard--open-box::before {
-    /* The second, slightly-inset frame line the corner clamps visually "clip" onto —
-       matches the reference photo's double-line look. */
+    /* Second frame offset diagonally from the main one — matches the reference's
+       two-layer open-box look. */
     content: "";
     position: absolute;
-    top: 9px;
-    left: 9px;
-    right: 9px;
-    bottom: 9px;
-    border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.45));
+    top: -12px;
+    left: 12px;
+    right: -12px;
+    bottom: 12px;
+    border: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.45));
     border-radius: 2px;
     pointer-events: none;
 }
@@ -263,22 +263,38 @@
 }
 
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
-    padding-bottom: 44px;
+    padding-bottom: 50px;
     position: relative;
 }
 
-.neon-configurator__preview-inner.backboard--acrylic-stand-middle::after {
+/* Soft contact shadow under the base — reads as a desk/table-top display, not wall-mounted. */
+.neon-configurator__preview-inner.backboard--acrylic-stand-middle::before {
     content: "";
     position: absolute;
     left: 50%;
-    bottom: 6px;
+    bottom: 0;
     transform: translateX(-50%);
-    width: 42%;
-    height: 16px;
-    border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
-    border-top: none;
-    border-radius: 0 0 4px 4px;
-    background: transparent;
+    width: 74%;
+    height: 14px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 70%);
+    pointer-events: none;
+}
+
+.neon-configurator__preview-inner.backboard--acrylic-stand-middle::after {
+    /* Acrylic base plate with a slot line, like the client's reference. */
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    width: 58%;
+    height: 26px;
+    border: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
+    border-radius: 3px 3px 9px 9px;
+    background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02)),
+        linear-gradient(to bottom, transparent calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 7.5px), transparent calc(100% - 7.5px));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 
@@ -1492,6 +1508,44 @@
     border-color: var(--moz-backboard-color, #000000);
 }
 
+/* ---- Realistic acrylic finishes for the box-style backboards ---- */
+/* CLEAR: transparent with a thin grey border + faint glass tint */
+.neon-configurator__preview-inner.finish--clear.backboard--rectangle,
+.neon-configurator__preview-inner.finish--clear.backboard--open-box {
+    background: rgba(255, 255, 255, 0.05);
+    border-width: 1.5px;
+}
+
+/* GLOSS: reflective — diagonal highlight + edge shine + soft drop shadow */
+.neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--rectangle,
+.neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--open-box,
+.neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--acrylic-stand-middle::after {
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.06) 32%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.28) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* SHINY: mirror-like — hard-edged bright bands */
+.neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--rectangle,
+.neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--open-box,
+.neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--acrylic-stand-middle::after {
+    background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.08) 28%, rgba(255, 255, 255, 0.45) 46%, rgba(0, 0, 0, 0.22) 58%, rgba(255, 255, 255, 0.3) 78%, rgba(255, 255, 255, 0.08) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* FROSTED: dull / matte — fine grain, no reflections */
+.neon-configurator__preview-inner.is-solid-fill.finish--frosted.backboard--rectangle,
+.neon-configurator__preview-inner.is-solid-fill.finish--frosted.backboard--open-box,
+.neon-configurator__preview-inner.is-solid-fill.finish--frosted.backboard--acrylic-stand-middle::after {
+    background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.35'/></svg>"),
+        linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12));
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.neon-configurator__symbol-position-options {
+    margin-bottom: 10px;
+}
+
 @media (max-width: 768px) {
     .neon-configurator {
         grid-template-rows: auto auto;
@@ -1532,4 +1586,27 @@
     border-radius: 16px;
     padding: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+
+
+
+
+
+/* Backboard copy overlays the real text box exactly (size/position set by JS) instead of
+   sharing the grid cell, so it can never wrap differently from the real text. */
+.neon-configurator__shape-source {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: auto;
+    flex-wrap: nowrap;
+}
+
+.neon-configurator__shape-text {
+    width: 100%;
+}
+
+.neon-configurator__shape-icons {
+    gap: 8px;
 }

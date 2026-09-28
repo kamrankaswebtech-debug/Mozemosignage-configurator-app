@@ -208,6 +208,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: true };
     }
 
+    if (intent === "bulkVisibility") {
+        const visibility = String(formData.get("visibility") || "both");
+        if (!["both", "neon_only", "3d_only"].includes(visibility)) return { error: "Invalid visibility" };
+
+        const listResponse = await admin.graphql(
+            `#graphql
+    query ListSymbolIds {
+      metaobjects(type: "$app:neon_quick_symbol", first: 100) { edges { node { id } } }
+    }`
+        );
+        const listData = await listResponse.json();
+        const ids: string[] = listData.data.metaobjects.edges.map((e: any) => e.node.id);
+
+        // Aliased mutations, 10 per request: a few fast calls instead of one call per symbol.
+        for (let i = 0; i < ids.length; i += 10) {
+            const chunk = ids.slice(i, i + 10);
+            const body = chunk
+                .map((id, idx) => `u${idx}: metaobjectUpdate(id: "${id}", metaobject: { fields: [{ key: "visibility", value: "${visibility}" }] }) { userErrors { message } }`)
+                .join("\n");
+            const res = await admin.graphql(`#graphql
+      mutation BulkSymbolVisibility { ${body} }`);
+            const d = await res.json();
+            if (d.errors?.length) return { error: "Bulk update failed" };
+        }
+        return { success: true };
+    }
+
     return { error: "Unknown action" };
 };
 
@@ -247,6 +274,24 @@ export default function QuickSymbolsPage() {
                             <input type="checkbox" name="transparentBg" /> Has white/solid background
                         </label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Symbol</s-button>
+                    </s-stack>
+                </fetcher.Form>
+            </s-section>
+
+            <s-section heading="Bulk Visibility">
+                <s-paragraph>
+                    Sets the Visibility of ALL symbols at once (up to 100). If no symbol is visible to 3D,
+                    the 3D configurator automatically hides the Symbol Position and Quick Symbols fields.
+                </s-paragraph>
+                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply this visibility to ALL symbols?")) e.preventDefault(); }}>
+                    <input type="hidden" name="intent" value="bulkVisibility" />
+                    <s-stack direction="inline" gap="base">
+                        <select name="visibility" defaultValue="neon_only">
+                            <option value="both">Both (Neon + 3D)</option>
+                            <option value="neon_only">Neon Only</option>
+                            <option value="3d_only">3D Only</option>
+                        </select>
+                        <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Apply to all symbols</s-button>
                     </s-stack>
                 </fetcher.Form>
             </s-section>

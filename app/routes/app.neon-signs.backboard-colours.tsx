@@ -12,6 +12,7 @@ type BackboardColourEntry = {
     sortOrder: string;
     visibility: string;
     isClear: boolean;
+    finishType: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -36,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             sortOrder: f.sort_order || "0",
             visibility: f.visibility || "both",
             isClear: f.is_clear === "true",
+            finishType: f.finish_type || "",
         };
     });
     colours.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -55,6 +57,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "visibility", value: String(formData.get("visibility") || "both") },
         { key: "is_clear", value: formData.get("isClear") === "on" ? "true" : "false" },
     ];
+
+    // Only send finish_type when chosen (or on update, so "Auto" can clear it).
+    const finishType = String(formData.get("finishType") || "");
+    if (finishType || intent === "update") {
+        fields.push({ key: "finish_type", value: finishType });
+    }
 
     if (intent === "create") {
         const response = await admin.graphql(
@@ -141,6 +149,13 @@ export default function BackboardColoursPage() {
                             <option value="3d_only">3D Only</option>
                         </select>
                         <label><input type="checkbox" name="isClear" /> Is Clear/Transparent</label>
+                        <select name="finishType" defaultValue="">
+                            <option value="">Finish: Auto-detect from name</option>
+                            <option value="clear">Clear (transparent)</option>
+                            <option value="gloss">Gloss (reflective)</option>
+                            <option value="shiny">Shiny (mirror-like)</option>
+                            <option value="frosted">Frosted (matte)</option>
+                        </select>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -177,6 +192,13 @@ export default function BackboardColoursPage() {
                                                     <option value="3d_only">3D Only</option>
                                                 </select>
                                                 <label><input type="checkbox" name="isClear" defaultChecked={c.isClear} /> Is Clear</label>
+                                                <select name="finishType" defaultValue={c.finishType}>
+                                                    <option value="">Finish: Auto-detect from name</option>
+                                                    <option value="clear">Clear (transparent)</option>
+                                                    <option value="gloss">Gloss (reflective)</option>
+                                                    <option value="shiny">Shiny (mirror-like)</option>
+                                                    <option value="frosted">Frosted (matte)</option>
+                                                </select>
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>

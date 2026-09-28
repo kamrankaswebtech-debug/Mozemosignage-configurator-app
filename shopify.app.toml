@@ -248,6 +248,11 @@ name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
 type = "single_line_text_field"
 
+[metaobjects.app.backboard_colour.fields.finish_type]
+name = "Finish Type"
+description = "One of: clear, gloss, shiny, frosted. Controls the realistic acrylic reflection look. Leave empty to auto-detect from the colour name (Frosted / Shiny, otherwise Gloss)."
+type = "single_line_text_field"
+
 [metaobjects.app.backboard_colour.fields.is_clear]
 name = "Is Clear / Transparent"
 description = "Enable ONLY for the ONE entry representing the transparent/clear backboard. That entry always renders as a thin neutral-grey outline; every other colour renders as a solid filled backing behind the whole design."
@@ -714,6 +719,11 @@ name = "Height Ratio"
 description = "Height is calculated as Width ÷ this ratio (e.g. 2.6 means a 100cm-wide sign is ~38cm tall). Matches your typical sign proportions."
 type = "number_decimal"
 required = true
+
+[metaobjects.app.neon_size_settings.fields.visibility]
+name = "Visibility"
+description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
 
 [metaobjects.app.neon_size_settings.fields.sort_order]
 name = "Sort Order"

@@ -9,6 +9,24 @@
 {% endfor %}
 {% assign default_3d_bg_url = default_3d_bg.image.value | image_url %}
 
+{% comment %} How many Quick Symbols are available to 3D. 0 = hide Symbol Position + Quick Symbols fields. {% endcomment %}
+{% assign sign3d_symbol_count = 0 %}
+{% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
+  {% if symbol.visibility.value == "neon_only" %}{% continue %}{% endif %}
+  {% assign sign3d_symbol_count = sign3d_symbol_count | plus: 1 %}
+{% endfor %}
+
+{% comment %} Custom Size Slider units available to 3D. Default = lowest Sort Order. {% endcomment %}
+{% assign s3d_units_count = 0 %}
+{% assign s3d_default_unit = nil %}
+{% assign s3d_ud_min = 1000000 %}
+{% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
+  {% if u.visibility.value == "neon_only" %}{% continue %}{% endif %}
+  {% assign s3d_units_count = s3d_units_count | plus: 1 %}
+  {% assign s3d_u_so = u.sort_order.value | default: 999999 %}
+  {% if s3d_u_so < s3d_ud_min %}{% assign s3d_ud_min = s3d_u_so %}{% assign s3d_default_unit = u %}{% endif %}
+{% endfor %}
+
 <div class="sign3d-configurator" id="sign3d-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
   <div class="sign3d-configurator__preview" data-preview-box{% if default_3d_bg_url %} style="background-image: url('{{ default_3d_bg_url }}');"{% endif %}>
@@ -189,6 +207,7 @@
       <div class="sign3d-configurator__mode-toggle" data-mode-toggle>
         <button type="button" class="sign3d-configurator__mode-btn is-selected" data-mode-btn="text">Type Wording</button>
         <button type="button" class="sign3d-configurator__mode-btn" data-mode-btn="upload">Upload Logo / Design</button>
+        <button type="button" class="sign3d-configurator__mode-btn" data-mode-btn="both">Wording + Logo</button>
       </div>
     </div>
 
@@ -211,6 +230,7 @@
       </div>
     </div>
 
+    {% if sign3d_symbol_count > 0 %}
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">Symbol Position</label>
       <div class="sign3d-configurator__symbol-position-options" data-symbol-position-options>
@@ -250,6 +270,8 @@
         {% endfor %}
       </div>
     </div>
+
+    {% endif %}
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">Font</label>
@@ -329,6 +351,29 @@
         <span class="sign3d-configurator__measure-unit">cm</span>
       </div>
     </div>
+
+    {% if s3d_units_count > 0 %}
+    <div class="sign3d-configurator__field" data-size-slider-field>
+      <label class="sign3d-configurator__label">Or Set Width With Slider (<span data-slider-unit-label>{{ s3d_default_unit.unit.value | default: 'cm' }}</span>)</label>
+      {% if s3d_units_count > 1 %}
+      <div class="sign3d-configurator__unit-tabs" data-unit-tabs>
+        {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
+          {% if u.visibility.value == "neon_only" %}{% continue %}{% endif %}
+          <button type="button" class="sign3d-configurator__unit-tab{% if u.unit.value == s3d_default_unit.unit.value %} is-selected{% endif %}" data-unit-tab data-sort-order="{{ u.sort_order.value | default: 999999 }}" data-unit="{{ u.unit.value }}" data-min="{{ u.min_value.value | default: 0 }}" data-max="{{ u.max_value.value | default: 100 }}">{{ u.unit.value | upcase }}</button>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="sign3d-configurator__slider-meta">
+        <span data-slider-width-value>Width: -- {{ s3d_default_unit.unit.value | default: 'cm' }}</span>
+      </div>
+      <div class="sign3d-configurator__slider-row">
+        <button type="button" class="sign3d-configurator__slider-arrow" data-slider-decrease aria-label="Decrease width">‹</button>
+        <input type="range" class="sign3d-configurator__slider" data-custom-size-slider min="{{ s3d_default_unit.min_value.value | default: 20 }}" max="{{ s3d_default_unit.max_value.value | default: 500 }}" step="1" data-unit="{{ s3d_default_unit.unit.value | default: 'cm' }}" value="{{ s3d_default_unit.min_value.value | default: 20 }}">
+        <button type="button" class="sign3d-configurator__slider-arrow" data-slider-increase aria-label="Increase width">›</button>
+      </div>
+      <p class="sign3d-configurator__slider-hint">Drag to set the overall width — it stays in sync with the Width field above.</p>
+    </div>
+    {% endif %}
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label">4. Letter / Element Height</label>
