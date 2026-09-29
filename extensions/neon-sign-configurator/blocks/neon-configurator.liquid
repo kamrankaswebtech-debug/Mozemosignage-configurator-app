@@ -1,5 +1,3 @@
-{% comment %} Mozemo Signage - Live Neon Sign Configurator {% endcomment %}
-
 {% assign install_settings = nil %}
 {% for entry in metaobjects["app--418838118401--installation_settings"].values %}
   {% assign install_settings = entry %}
@@ -8,17 +6,8 @@
 
 {% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
 
-{% comment %} Default = entry with the LOWEST Sort Order (set in Admin). Blank sort order = last. {% endcomment %}
-{% assign bs_min = 1000000 %}{% assign bs_default = "" %}
-{% for s in metaobjects["app--418838118401--backboard_style"].values %}
-  {% assign s_so = s.sort_order.value | default: 999999 %}
-  {% if s_so < bs_min %}{% assign bs_min = s_so %}{% assign bs_default = s.label.value %}{% endif %}
-{% endfor %}
-{% assign bc_min = 1000000 %}{% assign bc_default = "" %}
-{% for c in metaobjects["app--418838118401--backboard_colour"].values %}
-  {% assign c_so = c.sort_order.value | default: 999999 %}
-  {% if c_so < bc_min %}{% assign bc_min = c_so %}{% assign bc_default = c.label.value %}{% endif %}
-{% endfor %}
+
+
 
 {% assign neon_type_count = 0 %}
 {% assign neon_type_first_key = "" %}
@@ -124,7 +113,7 @@
 
   <div class="neon-configurator__panel">
 
-    {% comment %} Font + Symbol data as compact JSON — JS builds the cards/buttons, keeps this .liquid file small (100KB extension-wide cap). {% endcomment %}
+    
     <script type="application/json" data-neon-fonts-data>
     [
       {% assign nf_i = 0 %}
@@ -173,12 +162,6 @@
     </div>
 
     <div class="neon-configurator__field">
-      <div class="neon-configurator__symbol-position-options" data-symbol-position-options>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="left"><span>Left</span></label>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="top"><span>Top</span></label>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked><span>Right</span></label>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom"><span>Bottom</span></label>
-      </div>
       <label class="neon-configurator__label">3. Choose Quick Symbol (optional)</label>
       <button type="button" class="neon-configurator__dropdown-trigger" data-symbol-dropdown-trigger>
         <span data-symbol-dropdown-preview>Select icons</span>
@@ -187,7 +170,13 @@
       <div class="neon-configurator__dropdown-panel" data-symbol-dropdown-panel hidden>
         <div class="neon-configurator__symbols" data-symbol-buttons></div>
       </div>
-
+      <label class="neon-configurator__label neon-configurator__symbol-position-heading">Select Your Symbol Position</label>
+      <div class="neon-configurator__symbol-position-options" data-symbol-position-options>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="left"><span>Left</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="top"><span>Top</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked><span>Right</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom"><span>Bottom</span></label>
+      </div>
     </div>
 
     {% assign effect_modes = metaobjects["app--418838118401--neon_effect_mode"].values %}
@@ -198,44 +187,45 @@
       <label class="neon-configurator__label">4. Choose Colour / Effect</label>
       <div class="neon-configurator__effect-modes" data-effect-modes>
         {% for mode in effect_modes %}
-          <label class="neon-configurator__effect-mode-option">
+          <label class="neon-configurator__effect-mode-option" data-sort-order="{{ mode.sort_order.value | default: 999999 }}">
             <input type="radio" name="neon-effect-mode-{{ block.id }}" data-effect-mode-radio value="{{ mode.mode_key.value }}" data-price="{{ mode.extra_price_decimal.value | default: 0 }}" {% if mode.mode_key.value == "single" %}checked{% elsif has_single_mode == false and forloop.first %}checked{% endif %}>
             <span>{{ mode.label.value }}{% if mode.extra_price_decimal.value and mode.extra_price_decimal.value != 0 %} (+${{ mode.extra_price_decimal.value }}){% endif %}</span>
           </label>
         {% endfor %}
       </div>
+      <p class="neon-configurator__multicolour-info" data-multicolour-info hidden>✨ Multicoloured Text lets you choose a different colour for each individual letter and symbol — click any letter or symbol in the preview to set its own colour.</p>
     </div>
     {% endif %}
 
+    <script type="application/json" data-neon-colours-data>
+    [
+      {% assign ncl_i = 0 %}
+      {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
+        {% if ncl_i > 0 %},{% endif %}
+        {"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"name":{{ colour.name.value | json }}}
+        {% assign ncl_i = ncl_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
     <div class="neon-configurator__field" data-colour-field>
-      <div class="neon-configurator__swatches" data-colour-swatches>
-        {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
-          <div class="neon-configurator__swatch-item">
-            <button type="button" class="neon-configurator__swatch{% if forloop.first %} is-selected{% endif %}" style="background-color: {{ colour.hex_code.value }};" data-colour-hex="{{ colour.hex_code.value }}" data-colour-price="{{ colour.extra_price_decimal.value | default: 0 }}" data-colour-name="{{ colour.name.value }}" title="{{ colour.name.value }}" aria-label="{{ colour.name.value }}"></button>
-            <span class="neon-configurator__swatch-name">{{ colour.name.value }}</span>
-          </div>
-        {% endfor %}
-      </div>
-      <p class="neon-configurator__selected-label" data-colour-name-label>Selected: {{ metaobjects["app--418838118401--neon_colour"].values.first.name.value }}</p>
+      <div class="neon-configurator__swatches" data-colour-swatches></div>
+      <p class="neon-configurator__selected-label" data-colour-name-label></p>
     </div>
 
+    <script type="application/json" data-neon-sizes-data>
+    [
+      {% assign nsz_i = 0 %}
+      {% for size in metaobjects["app--418838118401--sign_size"].values %}
+        {% if nsz_i > 0 %},{% endif %}
+        {"width":{{ size.width_cm.value | default: 0 }},"height":{{ size.height_cm.value | default: 0 }},"price":{{ size.price_decimal.value | default: 0 }},"sortOrder":{{ size.sort_order.value | default: 999999 }},"badge":{{ size.badge_text.value | default: "" | json }},"label":{{ size.label.value | json }}}
+        {% assign nsz_i = nsz_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
     <div class="neon-configurator__field" data-size-field="choose-size" data-visible-indoor="{{ show_choose_size_indoor }}" data-visible-outdoor="{{ show_choose_size_outdoor }}">
       <label class="neon-configurator__label">5. Choose Size</label>
-      <div class="neon-configurator__size-cards" data-size-cards>
-        {% for size in metaobjects["app--418838118401--sign_size"].values %}
-          <button type="button" class="neon-configurator__size-card{% if forloop.first %} is-selected{% endif %}" data-size-width="{{ size.width_cm.value }}">
-            {% if size.badge_text.value != blank %}<span class="neon-configurator__size-card-badge">{{ size.badge_text.value }}</span>{% endif %}
-            <span class="neon-configurator__size-card-label">{{ size.label.value }}</span>
-            <span class="neon-configurator__size-card-price">${{ size.price_decimal.value | default: 0 }}</span>
-            <span class="neon-configurator__size-card-meta">Length: {{ size.width_cm.value }}cm</span>
-          </button>
-        {% endfor %}
-      </div>
-      <select class="neon-configurator__select" data-size-select hidden aria-hidden="true" tabindex="-1">
-        {% for size in metaobjects["app--418838118401--sign_size"].values %}
-          <option value="{{ size.width_cm.value }}" data-price="{{ size.price_decimal.value | default: 0 }}" data-height="{{ size.height_cm.value | default: 0 }}" {% if forloop.first %}selected{% endif %}>{{ size.label.value }}</option>
-        {% endfor %}
-      </select>
+      <div class="neon-configurator__size-cards" data-size-cards></div>
+      <select class="neon-configurator__select" data-size-select hidden aria-hidden="true" tabindex="-1"></select>
     </div>
 
     {% assign size_units_count = 0 %}
@@ -271,33 +261,36 @@
 
     <p class="neon-configurator__oversized-notice" data-oversized-notice hidden>⚠️ Signs larger than 2 metres are manufactured and shipped in split sections due to oversized delivery and transportation requirements.</p>
 
+    <script type="application/json" data-neon-backboard-styles-data>
+    [
+      {% assign nbs_i = 0 %}
+      {% for style in metaobjects["app--418838118401--backboard_style"].values %}
+        {% if nbs_i > 0 %},{% endif %}
+        {"label":{{ style.label.value | json }},"price":{{ style.extra_price_decimal.value | default: 0 }},"shape":{{ style.shape_type.value | default: "rectangle" | json }},"sortOrder":{{ style.sort_order.value | default: 999999 }},"previewImage":{{ style.preview_image.value | image_url: width: 160 | default: "" | json }}}
+        {% assign nbs_i = nbs_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">6. Backboard Style</label>
-      <div class="neon-configurator__style-cards" data-backboard-style-cards>
-        {% for style in metaobjects["app--418838118401--backboard_style"].values %}
-          <button type="button" class="neon-configurator__style-card{% if style.label.value == bs_default %} is-selected{% endif %}" data-sort-order="{{ style.sort_order.value | default: 999999 }}" data-style-label="{{ style.label.value }}">
-            <span class="neon-configurator__style-card-thumb">
-              {% if style.preview_image.value %}<img src="{{ style.preview_image.value | image_url: width: 160 }}" alt="{{ style.label.value }}" width="80" height="60" loading="lazy">{% else %}<span class="neon-configurator__style-card-fallback" data-shape-fallback="{{ style.shape_type.value | default: 'rectangle' }}">Hello</span>{% endif %}
-            </span>
-            <span class="neon-configurator__style-card-label">{{ style.label.value }}</span>
-            <span class="neon-configurator__style-card-price">{% if style.extra_price_decimal.value and style.extra_price_decimal.value != 0 %}+${{ style.extra_price_decimal.value }}{% else %}FREE{% endif %}</span>
-          </button>
-        {% endfor %}
-      </div>
-      <select class="neon-configurator__select" data-backboard-style-select hidden aria-hidden="true" tabindex="-1">
-        {% for style in metaobjects["app--418838118401--backboard_style"].values %}
-          <option value="{{ style.label.value }}" data-price="{{ style.extra_price_decimal.value | default: 0 }}" data-shape="{{ style.shape_type.value | default: 'rectangle' }}" data-sort-order="{{ style.sort_order.value | default: 999999 }}" {% if style.label.value == bs_default %}selected{% endif %}>{{ style.label.value }}</option>
-        {% endfor %}
-      </select>
+      <div class="neon-configurator__style-cards" data-backboard-style-cards></div>
+      <select class="neon-configurator__select" data-backboard-style-select hidden aria-hidden="true" tabindex="-1"></select>
     </div>
 
+    <script type="application/json" data-neon-backboard-colours-data>
+    [
+      {% assign nbc_i = 0 %}
+      {% for colour in metaobjects["app--418838118401--backboard_colour"].values %}
+        {% if nbc_i > 0 %},{% endif %}
+        {"label":{{ colour.label.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"hex":{{ colour.hex_or_swatch.value | default: "#e8e8e8" | json }},"isClear":{{ colour.is_clear.value | default: false }},"finish":{{ colour.finish_type.value | default: "" | json }},"sortOrder":{{ colour.sort_order.value | default: 999999 }}}
+        {% assign nbc_i = nbc_i | plus: 1 %}
+      {% endfor %}
+    ]
+    </script>
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">7. Backboard Colour</label>
-      <select class="neon-configurator__select" data-backboard-colour-select>
-        {% for colour in metaobjects["app--418838118401--backboard_colour"].values %}
-          <option value="{{ colour.label.value }}" data-price="{{ colour.extra_price_decimal.value | default: 0 }}" data-hex="{{ colour.hex_or_swatch.value | default: '#e8e8e8' }}" data-is-clear="{{ colour.is_clear.value }}" data-finish="{{ colour.finish_type.value }}" data-sort-order="{{ colour.sort_order.value | default: 999999 }}" {% if colour.label.value == bc_default %}selected{% endif %}>{{ colour.label.value }}</option>
-        {% endfor %}
-      </select>
+      <div class="neon-configurator__colour-cards" data-backboard-colour-cards></div>
+      <select class="neon-configurator__select" data-backboard-colour-select hidden aria-hidden="true" tabindex="-1"></select>
     </div>
 
     {% if neon_type_count > 0 %}
@@ -326,37 +319,28 @@
       </select>
     </div>
 
-    {% assign has_paid_addon = false %}
-    {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
-      {% if addon.category.value == blank or addon.category.value == "addon" %}{% unless addon.is_free.value %}{% assign has_paid_addon = true %}{% endunless %}{% endif %}
-    {% endfor %}
-    {% if has_paid_addon %}
-    <div class="neon-configurator__field">
-      <label class="neon-configurator__label">Optional Add-ons</label>
+    <script type="application/json" data-neon-addons-data>
+    [
+      {% assign nad_i = 0 %}
       {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
         {% if addon.category.value == blank or addon.category.value == "addon" %}
-          {% unless addon.is_free.value %}
-          <label class="neon-configurator__checkbox-row">
-            <input type="checkbox" data-addon-checkbox data-addon-label="{{ addon.label.value }}" data-price="{{ addon.extra_price_decimal.value | default: 0 }}">
-            <span>{{ addon.label.value }} (+${{ addon.extra_price_decimal.value | default: 0 }})</span>
-          </label>
-          {% endunless %}
+          {% if nad_i > 0 %},{% endif %}
+          {"label":{{ addon.label.value | json }},"price":{{ addon.extra_price_decimal.value | default: 0 }},"isFree":{{ addon.is_free.value | default: false }}}
+          {% assign nad_i = nad_i | plus: 1 %}
         {% endif %}
       {% endfor %}
+    ]
+    </script>
+
+    <div class="neon-configurator__field" data-optional-addons-field hidden>
+      <label class="neon-configurator__label">Optional Add-ons</label>
+      <div data-optional-addons-list></div>
     </div>
-    {% endif %}
 
     <div class="neon-configurator__field neon-configurator__included-box">
       <label class="neon-configurator__label">9. Included With Your Order</label>
-      <ul class="neon-configurator__included-list">
+      <ul class="neon-configurator__included-list" data-included-list>
         <li data-included-power-adapter></li>
-        {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
-          {% if addon.category.value == blank or addon.category.value == "addon" %}
-            {% if addon.is_free.value %}
-              <li>{{ addon.label.value }}<input type="checkbox" data-addon-checkbox data-addon-label="{{ addon.label.value }}" data-price="{{ addon.extra_price_decimal.value | default: 0 }}" checked disabled hidden></li>
-            {% endif %}
-          {% endif %}
-        {% endfor %}
       </ul>
     </div>
 

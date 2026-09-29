@@ -352,6 +352,18 @@ name = "Effect Key"
 description = "Controls exactly how this illumination type renders in the live preview (depth/shadow/glow). Must be exactly one of: front_lit, backlit, front_back_lit, fully_illuminated. Leave empty to default to front_lit."
 type = "single_line_text_field"
 
+
+[metaobjects.app.illumination_type.fields.preview_image]
+name = "Preview Image"
+description = "Card image shown in the 3D configurator's Illumination Type picker."
+type = "file_reference"
+
+[metaobjects.app.illumination_type.fields.description]
+name = "Short Description (optional)"
+description = "Small text shown under the card label in the 3D configurator."
+type = "single_line_text_field"
+
+
 [metaobjects.app.sign3d_size]
 name = "3D Sign Size"
 description = "Available size options for 3D illuminated signs"
@@ -431,6 +443,11 @@ type = "number_decimal"
 [metaobjects.app.sign3d_front_colour.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+[metaobjects.app.sign3d_front_colour.fields.colour_group]
+name = "Colour Group"
+description = "One of: standard, gloss, metallic, brushed_metal. Leave empty for standard. Used for both Front Colour and Side Colour pickers."
+type = "single_line_text_field"
 
 [metaobjects.app.sign3d_option]
 name = "3D Sign Option"

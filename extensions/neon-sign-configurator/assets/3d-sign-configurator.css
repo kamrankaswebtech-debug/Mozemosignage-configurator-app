@@ -1166,3 +1166,401 @@
 .sign3d-configurator__oversized-notice[hidden] {
     display: none;
 }
+
+
+
+/* =====================================================================
+   v11 — Client changes: cards, font picker, colour groups, finishes
+   ===================================================================== */
+
+.sign3d-configurator {
+    --s3d-fin-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(0, 0, 0, 0.18) 55%, rgba(0, 0, 0, 0.05) 100%);
+    --s3d-fin-metallic: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.25) 55%, rgba(255, 255, 255, 0.45) 80%, rgba(0, 0, 0, 0.15) 100%);
+    --s3d-fin-brushed: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 1px, rgba(0, 0, 0, 0.12) 1px 2px, rgba(255, 255, 255, 0.06) 2px 3px), linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(0, 0, 0, 0.2));
+}
+
+/* Step 1 title: bigger + coloured */
+.sign3d-configurator__label--hero {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    margin-bottom: 10px;
+    background: linear-gradient(90deg, #ff2ec4, #b06bff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.sign3d-configurator__note {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #b8b8c4;
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-left: 3px solid #ff2ec4;
+    background: rgba(255, 46, 196, 0.07);
+    border-radius: 0 6px 6px 0;
+}
+
+.sign3d-configurator__subheading {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #e070e8;
+    margin: 12px 0 6px;
+}
+
+/* ---- Visual pick cards (Illumination, Mounting) ---- */
+.sign3d-configurator__card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.sign3d-configurator__pick-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    font-family: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sign3d-configurator__pick-card.is-selected {
+    border-color: #ff2ec4;
+    background: linear-gradient(135deg, rgba(255, 46, 196, 0.22), rgba(122, 0, 255, 0.18));
+}
+
+.sign3d-configurator__pick-card-img,
+.sign3d-configurator__pick-card-placeholder {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 6px;
+    background: #0b0b12;
+    object-fit: contain;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #7a7a88;
+}
+
+.sign3d-configurator__pick-card-label {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.sign3d-configurator__pick-card-desc {
+    font-size: 10.5px;
+    color: #9a9aa8;
+    line-height: 1.3;
+}
+
+.sign3d-configurator__pick-card-price {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ff2ec4;
+    text-transform: uppercase;
+}
+
+.sign3d-configurator__pick-card-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: linear-gradient(90deg, #ff2ec4, #7a00ff);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 8px;
+    letter-spacing: 0.04em;
+}
+
+/* ---- Font picker (dropdown that expands into a card grid) ---- */
+.sign3d-configurator__font-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.sign3d-configurator__font-toggle[aria-expanded="true"] .sign3d-configurator__chevron {
+    transform: rotate(180deg);
+}
+
+.sign3d-configurator__chevron {
+    transition: transform 0.15s ease;
+}
+
+.sign3d-configurator__font-panel {
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #2c2c38;
+    border-radius: 8px;
+    background: #0e0e18;
+}
+
+.sign3d-configurator__font-panel[hidden] {
+    display: none;
+}
+
+/* If the font preview images are black-on-transparent, this makes them visible on the dark card.
+   Remove the filter line if your preview images are already light coloured. */
+.sign3d-configurator__font-panel .sign3d-configurator__pick-card-img {
+    filter: invert(1);
+    background: transparent;
+}
+
+/* ---- Colour swatches (grouped) ---- */
+.sign3d-configurator__swatch-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sign3d-configurator__swatch-group-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #7a7a88;
+    margin: 0 0 6px;
+}
+
+.sign3d-configurator__swatch-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.sign3d-configurator__swatch-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 56px;
+    gap: 4px;
+}
+
+.sign3d-configurator__swatch-name {
+    font-size: 10px;
+    line-height: 1.2;
+    color: #b8b8c4;
+    text-align: center;
+}
+
+.sign3d-configurator__swatch.finish-gloss {
+    background-image: var(--s3d-fin-gloss);
+}
+
+.sign3d-configurator__swatch.finish-metallic {
+    background-image: var(--s3d-fin-metallic);
+}
+
+.sign3d-configurator__swatch.finish-brushed_metal {
+    background-image: var(--s3d-fin-brushed);
+}
+
+/* ---- Locked add-ons ---- */
+.sign3d-configurator__checkbox-row.is-locked {
+    opacity: 0.9;
+}
+
+.sign3d-configurator__checkbox-row.is-locked svg {
+    color: #ff2ec4;
+    flex-shrink: 0;
+}
+
+/* ---- Front-face finishes (gloss / metallic / brushed) drawn as an overlay ---- */
+.sign3d-configurator__letter::after {
+    content: attr(data-char);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    text-shadow: none;
+    background-image: none;
+}
+
+.sign3d-configurator__preview-inner.face-gloss .sign3d-configurator__letter::after {
+    background-image: var(--s3d-fin-gloss);
+}
+
+.sign3d-configurator__preview-inner.face-metallic .sign3d-configurator__letter::after {
+    background-image: var(--s3d-fin-metallic);
+}
+
+.sign3d-configurator__preview-inner.face-brushed_metal .sign3d-configurator__letter::after {
+    background-image: var(--s3d-fin-brushed);
+}
+
+.sign3d-configurator__preview-inner.face-gloss .sign3d-configurator__preview-icon {
+    background-image: var(--s3d-fin-gloss);
+}
+
+.sign3d-configurator__preview-inner.face-metallic .sign3d-configurator__preview-icon {
+    background-image: var(--s3d-fin-metallic);
+}
+
+.sign3d-configurator__preview-inner.face-brushed_metal .sign3d-configurator__preview-icon {
+    background-image: var(--s3d-fin-brushed);
+}
+
+/* ---- Illumination rendering: black extrusion layers removed so the SIDE COLOUR shows truthfully ---- */
+.sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__letter {
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 8px currentColor, 0 0 18px currentColor;
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__letter {
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 12px currentColor, 0 0 28px currentColor, 0 0 50px currentColor, 0 0 80px currentColor;
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__letter {
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 6px #ffffff, 0 0 16px currentColor, 0 0 34px currentColor, 0 0 60px currentColor;
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__letter {
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 10px #ffffff, 0 0 24px currentColor, 0 0 46px currentColor, 0 0 75px currentColor;
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__preview-icon {
+    filter: drop-shadow(0 0 10px currentColor);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__preview-icon {
+    filter: drop-shadow(0 0 8px #ffffff) drop-shadow(0 0 22px currentColor) drop-shadow(0 0 44px currentColor);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__preview-icon {
+    filter: drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 28px currentColor) drop-shadow(0 0 50px currentColor);
+}
+
+/* ---- Fixed / centred preview (manual dragging disabled). Remove these 3 rules if you set
+   SIGN3D_ALLOW_MANUAL_PLACEMENT = true in the JS. ---- */
+.sign3d-configurator__letter,
+.sign3d-configurator__logo-preview-img {
+    cursor: default;
+}
+
+.sign3d-configurator__preview-stage {
+    min-height: 380px;
+}
+
+
+
+
+/* =====================================================================
+   v12 — Realistic illumination types (Frontlit / Backlit / Front & Back / Fully Illuminated)
+   Light colour = customer's Front Colour (--sign3d-light, set by JS).
+   Side colour comes from --sign3d-extrusion-shadow (normal / -dark / -lit, set by JS).
+   ===================================================================== */
+
+.sign3d-configurator__letter {
+    transition: text-shadow 0.3s ease, filter 0.3s ease, color 0.3s ease;
+}
+
+/* ---- LED OFF: dull, unlit face, real depth still visible ---- */
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 60%, #3a3a3a 40%);
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent);
+}
+
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__preview-icon {
+    filter: brightness(0.7);
+}
+
+/* ---- 1) FRONTLIT: bright lit face, normal sides, NO halo (only a faint spill) ---- */
+.sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 78%, #ffffff 22%);
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.7),
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent),
+        0 0 12px color-mix(in srgb, var(--sign3d-light, #ffffff) 28%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__preview-icon {
+    opacity: 1;
+    filter: brightness(1.12) drop-shadow(0 0 10px color-mix(in srgb, var(--sign3d-light, #ffffff) 28%, transparent));
+}
+
+/* ---- 2) BACKLIT: dark unlit face + dark sides, wide halo glowing from behind ---- */
+.sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 10%, #0b0b0d);
+    text-shadow:
+        var(--sign3d-extrusion-shadow-dark, 0 0 0 transparent),
+        0 0 6px var(--sign3d-light, #ffffff),
+        0 0 16px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent),
+        0 0 32px color-mix(in srgb, var(--sign3d-light, #ffffff) 60%, transparent),
+        0 0 60px color-mix(in srgb, var(--sign3d-light, #ffffff) 35%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__preview-icon {
+    opacity: 1;
+    filter: brightness(0.22) drop-shadow(0 0 6px var(--sign3d-light, #ffffff)) drop-shadow(0 0 18px color-mix(in srgb, var(--sign3d-light, #ffffff) 80%, transparent)) drop-shadow(0 0 34px color-mix(in srgb, var(--sign3d-light, #ffffff) 55%, transparent));
+}
+
+/* ---- 3) FRONTLIT & BACKLIT: bright face + normal sides + halo behind ---- */
+.sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 78%, #ffffff 22%);
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.7),
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent),
+        0 0 8px color-mix(in srgb, var(--sign3d-light, #ffffff) 70%, transparent),
+        0 0 22px color-mix(in srgb, var(--sign3d-light, #ffffff) 50%, transparent),
+        0 0 44px color-mix(in srgb, var(--sign3d-light, #ffffff) 30%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__preview-icon {
+    opacity: 1;
+    filter: brightness(1.15) drop-shadow(0 0 8px color-mix(in srgb, var(--sign3d-light, #ffffff) 70%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--sign3d-light, #ffffff) 50%, transparent)) drop-shadow(0 0 40px color-mix(in srgb, var(--sign3d-light, #ffffff) 30%, transparent));
+}
+
+/* ---- 4) FULLY ILLUMINATED: milky glowing face AND glowing sides, soft all-round light ---- */
+.sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 55%, #ffffff 45%);
+    text-shadow:
+        var(--sign3d-extrusion-shadow-lit, 0 0 0 transparent),
+        0 0 12px color-mix(in srgb, var(--sign3d-light, #ffffff) 55%, transparent),
+        0 0 30px color-mix(in srgb, var(--sign3d-light, #ffffff) 40%, transparent),
+        0 0 60px color-mix(in srgb, var(--sign3d-light, #ffffff) 25%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__preview-icon {
+    opacity: 1;
+    filter: brightness(1.3) saturate(0.85) drop-shadow(0 0 12px color-mix(in srgb, var(--sign3d-light, #ffffff) 55%, transparent)) drop-shadow(0 0 30px color-mix(in srgb, var(--sign3d-light, #ffffff) 40%, transparent)) drop-shadow(0 0 56px color-mix(in srgb, var(--sign3d-light, #ffffff) 25%, transparent));
+}
+
+/* ---- Soft sheen on the letter face (only for plain "standard" colours, so Gloss/Metallic/Brushed finishes stay untouched) ---- */
+.sign3d-configurator__preview-inner.led-on.effect-front_lit.face-standard .sign3d-configurator__letter::after,
+.sign3d-configurator__preview-inner.led-on.effect-front_back_lit.face-standard .sign3d-configurator__letter::after,
+.sign3d-configurator__preview-inner.led-on.effect-fully_illuminated.face-standard .sign3d-configurator__letter::after {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-backlit.face-standard .sign3d-configurator__letter::after {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 60%);
+}

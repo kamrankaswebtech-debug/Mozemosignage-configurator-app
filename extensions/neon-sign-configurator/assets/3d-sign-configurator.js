@@ -1,4 +1,9 @@
 // Mozemo Signage - 3D Illuminated Sign Configurator: live preview + dynamic pricing
+// Manual drag / resize of letters + logo is disabled so the sign always stays fixed and centred.
+// Set to true to bring the old Canva-style placement back (also remove the 3 cursor rules at the end of the CSS).
+// IMPORTANT: this must stay ABOVE the first init call below (script is deferred and runs init immediately).
+const SIGN3D_ALLOW_MANUAL_PLACEMENT = false;
+
 function initAllSign3dConfigurators() {
     document.querySelectorAll('.sign3d-configurator').forEach((root) => {
         if (root.dataset.sign3dConfiguratorInitialized === 'true') return;
@@ -65,7 +70,305 @@ function showTemporaryStatus(statusEl, text, durationMs) {
     }, durationMs);
 }
 
+// ===== Client change v11: UI builders + helpers (data comes from JSON blocks / hidden selects) =====
+// Manual drag / resize of letters + logo is disabled so the sign always stays fixed and centred.
+// Set to true to bring the old Canva-style placement back (also remove the 3 cursor rules at the end of the CSS).
+
+
+function sign3dReadJson(root, selector) {
+    const el = root.querySelector(selector);
+    if (!el) return [];
+    try {
+        return JSON.parse(el.textContent) || [];
+    } catch (err) {
+        console.error('3D Sign Configurator: failed to parse JSON block ' + selector, err);
+        return [];
+    }
+}
+
+function sign3dNormalizeGroup(group) {
+    return String(group || 'standard').trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function sign3dPrettyGroup(group) {
+    return sign3dNormalizeGroup(group).split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function sign3dParseHex(hex) {
+    let h = String(hex || '').trim().replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return { r: 40, g: 40, b: 40 };
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+
+// Extrusion "sides" drawn in the customer's chosen SIDE colour (slightly darker further back).
+function sign3dRgba(hex, alpha) {
+    const c = sign3dParseHex(hex);
+    return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + alpha + ')';
+}
+
+// tone: 'dark' (backlit: sides fall into shadow), 'lit' (fully illuminated: sides glow), anything else = normal.
+function sign3dToneRgb(rgb, tone) {
+    if (tone === 'dark') return { r: rgb.r * 0.35, g: rgb.g * 0.35, b: rgb.b * 0.35 };
+    if (tone === 'lit') return { r: rgb.r + (255 - rgb.r) * 0.55, g: rgb.g + (255 - rgb.g) * 0.55, b: rgb.b + (255 - rgb.b) * 0.55 };
+    return rgb;
+}
+
+function sign3dBuildSideShadow(depthMm, sideHex, tone) {
+    const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
+    const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
+    const layers = [];
+    for (let i = 1; i <= steps; i++) {
+        const shade = 0.92 - (i / steps) * 0.4;
+        layers.push(i + 'px ' + i + 'px 0 rgb(' + Math.round(rgb.r * shade) + ',' + Math.round(rgb.g * shade) + ',' + Math.round(rgb.b * shade) + ')');
+    }
+    layers.push((steps + 2) + 'px ' + (steps + 2) + 'px 6px rgba(0,0,0,0.35)');
+    return layers.join(', ');
+}
+
+function sign3dBuildSideFilter(depthMm, sideHex, tone) {
+    const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
+    const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
+    const layers = [];
+    for (let i = 1; i <= steps; i++) {
+        const shade = 0.92 - (i / steps) * 0.4;
+        layers.push('drop-shadow(' + i + 'px ' + i + 'px 0 rgb(' + Math.round(rgb.r * shade) + ',' + Math.round(rgb.g * shade) + ',' + Math.round(rgb.b * shade) + '))');
+    }
+    return layers.join(' ');
+}
+
+// Sorts <option>s by data-sort-order (Admin "Sort Order") and selects the first one.
+function sign3dSortSelectOptions(select) {
+    const opts = Array.from(select.options);
+    if (!opts.length) return;
+    opts
+        .map((o, i) => ({ o, i, s: Number(o.dataset.sortOrder) }))
+        .map((x) => ({ ...x, s: Number.isFinite(x.s) ? x.s : 999999 }))
+        .sort((a, b) => (a.s - b.s) || (a.i - b.i))
+        .forEach((x) => select.appendChild(x.o));
+    select.selectedIndex = 0;
+}
+
+// Font picker: dropdown that expands into a card grid and collapses on selection (same pattern as Neon).
+function sign3dBuildFontPicker(root) {
+    const select = root.querySelector('[data-font-select]');
+    const toggle = root.querySelector('[data-font-toggle]');
+    const toggleLabel = root.querySelector('[data-font-toggle-label]');
+    const panel = root.querySelector('[data-font-panel]');
+    if (!select || !toggle || !toggleLabel || !panel) return;
+
+    const fonts = sign3dReadJson(root, '[data-sign3d-fonts]')
+        .map((f, i) => ({ f, i }))
+        .sort((a, b) => ((a.f.sort ?? 999999) - (b.f.sort ?? 999999)) || (a.i - b.i))
+        .map((x) => x.f);
+    if (!fonts.length) return;
+
+    select.innerHTML = '';
+    panel.innerHTML = '';
+
+    const setOpen = (open) => {
+        panel.hidden = !open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    const sync = () => {
+        const current = fonts.find((f) => f.family === select.value) || fonts[0];
+        toggleLabel.textContent = current.name;
+        toggleLabel.style.fontFamily = current.family;
+        panel.querySelectorAll('.sign3d-configurator__pick-card').forEach((c) => {
+            c.classList.toggle('is-selected', c.dataset.value === current.family);
+        });
+    };
+
+    fonts.forEach((font) => {
+        const option = document.createElement('option');
+        option.value = font.family;
+        option.textContent = font.name;
+        select.appendChild(option);
+
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'sign3d-configurator__pick-card';
+        card.dataset.value = font.family;
+
+        if (font.preview) {
+            const img = document.createElement('img');
+            img.className = 'sign3d-configurator__pick-card-img';
+            img.src = font.preview;
+            img.alt = font.name;
+            img.loading = 'lazy';
+            card.appendChild(img);
+        } else {
+            const ph = document.createElement('span');
+            ph.className = 'sign3d-configurator__pick-card-placeholder';
+            ph.textContent = font.name;
+            ph.style.fontFamily = font.family;
+            card.appendChild(ph);
+        }
+
+        const label = document.createElement('span');
+        label.className = 'sign3d-configurator__pick-card-label';
+        label.textContent = font.name;
+        card.appendChild(label);
+
+        if (font.isNew) {
+            const badge = document.createElement('span');
+            badge.className = 'sign3d-configurator__pick-card-badge';
+            badge.textContent = 'NEW';
+            card.appendChild(badge);
+        }
+
+        card.addEventListener('click', () => {
+            select.value = font.family;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            sync();
+            setOpen(false);
+        });
+        panel.appendChild(card);
+    });
+
+    toggle.addEventListener('click', () => setOpen(panel.hidden));
+    select._sign3dSync = sync;
+    select.selectedIndex = 0;
+    sync();
+}
+
+// Visual cards driven by a hidden <select> (Illumination Type, Mounting). The select keeps all existing logic working.
+function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
+    const select = root.querySelector(selectSelector);
+    const grid = root.querySelector(gridSelector);
+    if (!select || !grid) return;
+
+    sign3dSortSelectOptions(select);
+    grid.innerHTML = '';
+
+    const sync = () => {
+        grid.querySelectorAll('.sign3d-configurator__pick-card').forEach((c) => {
+            c.classList.toggle('is-selected', Number(c.dataset.index) === select.selectedIndex);
+        });
+    };
+
+    Array.from(select.options).forEach((opt, idx) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'sign3d-configurator__pick-card';
+        card.dataset.index = idx;
+
+        if (opt.dataset.image) {
+            const img = document.createElement('img');
+            img.className = 'sign3d-configurator__pick-card-img';
+            img.src = opt.dataset.image;
+            img.alt = opt.textContent.trim();
+            img.loading = 'lazy';
+            card.appendChild(img);
+        } else {
+            const ph = document.createElement('span');
+            ph.className = 'sign3d-configurator__pick-card-placeholder';
+            ph.textContent = opt.textContent.trim();
+            card.appendChild(ph);
+        }
+
+        const label = document.createElement('span');
+        label.className = 'sign3d-configurator__pick-card-label';
+        label.textContent = opt.textContent.trim();
+        card.appendChild(label);
+
+        if (opt.dataset.description) {
+            const desc = document.createElement('span');
+            desc.className = 'sign3d-configurator__pick-card-desc';
+            desc.textContent = opt.dataset.description;
+            card.appendChild(desc);
+        }
+
+        if (showPrice) {
+            const p = parseFloat(opt.dataset.price) || 0;
+            const price = document.createElement('span');
+            price.className = 'sign3d-configurator__pick-card-price';
+            price.textContent = p > 0 ? '+$' + p.toFixed(2) : 'Included';
+            card.appendChild(price);
+        }
+
+        card.addEventListener('click', () => {
+            select.selectedIndex = idx;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            sync();
+        });
+        grid.appendChild(card);
+    });
+
+    select._sign3dSync = sync;
+    sync();
+}
+
+// Front + Side colour swatches, grouped: Standard / Gloss / Metallic / Brushed Metal.
+function sign3dBuildColourSwatches(root) {
+    const colours = sign3dReadJson(root, '[data-sign3d-colours]');
+    if (!colours.length) return;
+
+    const ORDER = ['standard', 'gloss', 'metallic', 'brushed_metal'];
+    const groups = {};
+    colours.forEach((c) => {
+        const g = sign3dNormalizeGroup(c.group);
+        (groups[g] = groups[g] || []).push(c);
+    });
+    const keys = Object.keys(groups).sort((a, b) => {
+        const ia = ORDER.indexOf(a);
+        const ib = ORDER.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+
+    [
+        { container: '[data-colour-swatches]', label: '[data-colour-name-label]' },
+        { container: '[data-side-colour-swatches]', label: '[data-side-colour-name-label]' }
+    ].forEach((cfg) => {
+        const container = root.querySelector(cfg.container);
+        if (!container) return;
+        container.innerHTML = '';
+        let first = true;
+        keys.forEach((g) => {
+            const section = document.createElement('div');
+            const title = document.createElement('p');
+            title.className = 'sign3d-configurator__swatch-group-title';
+            title.textContent = sign3dPrettyGroup(g);
+            section.appendChild(title);
+            const row = document.createElement('div');
+            row.className = 'sign3d-configurator__swatch-row';
+            groups[g].forEach((c) => {
+                const item = document.createElement('div');
+                item.className = 'sign3d-configurator__swatch-item';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'sign3d-configurator__swatch finish-' + g + (first ? ' is-selected' : '');
+                btn.style.backgroundColor = c.hex;
+                btn.dataset.colourHex = c.hex;
+                btn.dataset.colourPrice = c.price || 0;
+                btn.dataset.colourName = c.name;
+                btn.dataset.colourGroup = g;
+                btn.title = c.name + ' (' + sign3dPrettyGroup(g) + ')';
+                btn.setAttribute('aria-label', c.name);
+                const name = document.createElement('span');
+                name.className = 'sign3d-configurator__swatch-name';
+                name.textContent = c.name;
+                item.appendChild(btn);
+                item.appendChild(name);
+                row.appendChild(item);
+                if (first) {
+                    const labelEl = root.querySelector(cfg.label);
+                    if (labelEl) labelEl.textContent = c.name;
+                    first = false;
+                }
+            });
+            section.appendChild(row);
+            container.appendChild(section);
+        });
+    });
+}
+
 function initSign3dConfigurator(root) {
+    sign3dBuildFontPicker(root);
+    sign3dBuildOptionCards(root, '[data-illumination-select]', '[data-illumination-cards]', true);
+    sign3dBuildOptionCards(root, '[data-mounting-select]', '[data-mounting-cards]', true);
+    sign3dBuildColourSwatches(root);
     const previewText = root.querySelector('[data-preview-text]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
@@ -111,6 +414,9 @@ function initSign3dConfigurator(root) {
     const resetColourBtn = root.querySelector('[data-reset-colour-btn]');
     const resetScaleSizeBtn = root.querySelector('[data-reset-scale-size-btn]');
     const resetFontBtn = root.querySelector('[data-reset-font-btn]');
+    const lhSlider = root.querySelector('[data-lh-slider]');
+    const lhValueEl = root.querySelector('[data-lh-value]');
+    const metalNoteEl = root.querySelector('[data-metal-note]');
 
     // ---- NEW: live-measurement pricing engine (width/letter-height/letter-count/depth,
     // Indoor/Outdoor, logo upload with live scaling, price breakdown, final review) ----
@@ -266,10 +572,13 @@ function initSign3dConfigurator(root) {
         const depthOption = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
         const depthMm = parseFloat(depthOption?.value) || 10;
         if (previewInnerForLed) {
-            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', buildExtrusionShadow(depthMm));
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', sign3dBuildSideShadow(depthMm, selectedSideHex));
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-dark', sign3dBuildSideShadow(depthMm, selectedSideHex, 'dark'));
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-lit', sign3dBuildSideShadow(depthMm, selectedSideHex, 'lit'));
+            previewInnerForLed.style.setProperty('--sign3d-light', selectedColourHex);
         }
         if (logoImg) {
-            logoImg.style.filter = buildExtrusionFilter(depthMm);
+            logoImg.style.filter = buildLogoIlluminationFilter(depthMm);
         }
     }
 
@@ -373,6 +682,7 @@ function initSign3dConfigurator(root) {
     }
 
     function attachLogoInteraction(img) {
+        if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) return;
         let startX = 0;
         let startY = 0;
         let startOffX = 0;
@@ -443,11 +753,15 @@ function initSign3dConfigurator(root) {
             ? letterHeightInput.closest('.sign3d-configurator__field')?.querySelector('.sign3d-configurator__label')
             : null;
         if (letterHeightLabelEl) {
-            letterHeightLabelEl.textContent = mode === 'upload' ? '4. Overall Height' : '4. Letter / Element Height';
+            const lhTextEl = letterHeightLabelEl.querySelector('[data-step-text]');
+            if (lhTextEl) lhTextEl.textContent = mode === 'upload' ? 'Overall Height' : 'Letter / Element Height';
         }
         const uploadLabelEl = root.querySelector('[data-mode-panel="upload"] .sign3d-configurator__label');
         if (uploadLabelEl) {
-            uploadLabelEl.textContent = (mode === 'both' ? '2' : '1') + '. Upload Your Logo / Design';
+            // Numbering is handled automatically by renumberSteps().
+            const fontFieldEl = root.querySelector('[data-font-field]');
+            if (fontFieldEl) fontFieldEl.hidden = !showText;
+            renumberSteps();
         }
 
         renderLetters();
@@ -545,11 +859,12 @@ function initSign3dConfigurator(root) {
         if (d.hasText) rows.push(['Letters/Characters', String(d.letterCount)]);
         if (d.hasText && d.symbolLabels.length) rows.push(['Symbols', escapeHtml(d.symbolLabels.join(', ')) + ' (' + d.symbolPosition + ')']);
         if (d.hasLogo) rows.push(['Logo File', escapeHtml(d.logoName || 'Uploaded')]);
-        rows.push(['Depth/Thickness', d.depthLabel]);
+
         rows.push(['Lighting', d.illuminationLabel]);
-        rows.push(['Colour', d.colourName]);
+        rows.push(['Front Colour', d.colourName + ' (' + d.colourGroupLabel + ')']);
+        rows.push(['Side Colour', d.sideColourName]);
         rows.push(['Material', d.materialLabel]);
-        rows.push(['Finish', d.finishLabel]);
+
         rows.push(['Mounting', d.mountingLabel]);
         if (d.addonLabels.length) rows.push(['Add-ons', d.addonLabels.join(', ')]);
         rows.push(['Construction', d.isOutdoor ? 'Outdoor' : 'Indoor']);
@@ -583,6 +898,12 @@ function initSign3dConfigurator(root) {
 
     let selectedColourHex = swatches.length ? swatches[0].dataset.colourHex : '#ffffff';
     let selectedColourPrice = swatches.length ? parseFloat(swatches[0].dataset.colourPrice) || 0 : 0;
+    let selectedColourGroup = swatches.length ? (swatches[0].dataset.colourGroup || 'standard') : 'standard';
+    const sideSwatches = root.querySelectorAll('[data-side-colour-swatches] .sign3d-configurator__swatch');
+    const sideColourNameLabel = root.querySelector('[data-side-colour-name-label]');
+    let selectedSideHex = sideSwatches.length ? sideSwatches[0].dataset.colourHex : '#000000';
+    let selectedSideName = sideSwatches.length ? sideSwatches[0].dataset.colourName : '';
+    let selectedSideGroup = sideSwatches.length ? (sideSwatches[0].dataset.colourGroup || 'standard') : 'standard';
     let currentTotal = 0;
 
     function applyLetterTransform(span, i) {
@@ -592,6 +913,7 @@ function initSign3dConfigurator(root) {
     }
 
     function attachResizeHandles() {
+        if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) return;
         if (!selectionBox) return;
         const handles = selectionBox.querySelectorAll('[data-resize-handle]');
         handles.forEach((handle) => {
@@ -662,6 +984,7 @@ function initSign3dConfigurator(root) {
     }
 
     function showSelectionBoxAround(el) {
+        if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) return;
         if (!selectionBox || !previewStage || !el) return;
         if (!measurementsVisible) return;
         const stageRect = previewStage.getBoundingClientRect();
@@ -690,6 +1013,7 @@ function initSign3dConfigurator(root) {
     }
 
     function attachLetterDrag(span, i) {
+        if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) return;
         let startX = 0;
         let startY = 0;
         let startOffX = 0;
@@ -755,6 +1079,7 @@ function initSign3dConfigurator(root) {
             span.className = 'sign3d-configurator__letter';
             span.textContent = ch === ' ' ? '\u00A0' : ch;
             span.dataset.letterIndex = i;
+            span.dataset.char = ch === ' ' ? '\u00A0' : ch;
             applyLetterTransform(span, i);
             attachLetterDrag(span, i);
             textFlex.appendChild(span);
@@ -785,6 +1110,10 @@ function initSign3dConfigurator(root) {
             colourHex: selectedColourHex,
             colourPrice: selectedColourPrice,
             colourName: colourNameLabel ? colourNameLabel.textContent : '',
+            colourGroup: selectedColourGroup,
+            sideHex: selectedSideHex,
+            sideName: selectedSideName,
+            sideGroup: selectedSideGroup,
             symbols: selectedSymbols.map((s) => ({ url: s.url, label: s.label })),
             align: selectedAlignBtn ? selectedAlignBtn.dataset.align : 'center',
             letterOffsets: letterOffsets.map((o) => ({ x: o.x, y: o.y })),
@@ -828,9 +1157,11 @@ function initSign3dConfigurator(root) {
         selectedColourHex = state.colourHex;
         selectedColourPrice = state.colourPrice;
         swatches.forEach((swatch) => {
-            swatch.classList.toggle('is-selected', swatch.dataset.colourHex === state.colourHex);
+            swatch.classList.toggle('is-selected', swatch.dataset.colourHex === state.colourHex && swatch.dataset.colourName === state.colourName);
         });
         if (colourNameLabel) colourNameLabel.textContent = state.colourName;
+        selectedColourGroup = state.colourGroup || 'standard';
+        applySideState(state);
         updatePreviewColour();
 
         selectedSymbols = state.symbols.map((s) => ({ url: s.url, label: s.label }));
@@ -878,6 +1209,8 @@ function initSign3dConfigurator(root) {
         selectedColourHex = defaultSwatch.dataset.colourHex;
         selectedColourPrice = parseFloat(defaultSwatch.dataset.colourPrice) || 0;
         if (colourNameLabel) colourNameLabel.textContent = defaultSwatch.dataset.colourName;
+        selectedColourGroup = defaultSwatch.dataset.colourGroup || 'standard';
+        resetSideColour();
         updatePreviewColour();
         calculateTotal();
         pushHistory();
@@ -913,6 +1246,8 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewColour() {
         previewText.style.color = selectedColourHex;
+        updateFinishClasses();
+        updateDepthVisual();
         if (iconsContainer) {
             iconsContainer.querySelectorAll('.sign3d-configurator__preview-icon').forEach((el) => {
                 el.style.color = selectedColourHex;
@@ -922,6 +1257,7 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewFont() {
         if (fontSelect && textFlex) textFlex.style.fontFamily = fontSelect.value;
+        if (fontSelect && fontSelect._sign3dSync) fontSelect._sign3dSync();
         updateDimensionLines();
     }
 
@@ -937,6 +1273,7 @@ function initSign3dConfigurator(root) {
         if (widthLabel) widthLabel.textContent = formatDim(widthCm);
         if (oversizedNoticeEl) oversizedNoticeEl.hidden = widthCm <= 200;
         if (heightLabel) heightLabel.textContent = formatDim(heightCm);
+        syncLetterHeightSlider();
 
         updateLogoPreviewSize(widthCm, heightCm);
         updateDimensionLines();
@@ -1026,6 +1363,7 @@ function initSign3dConfigurator(root) {
         if (!previewInnerForLed) return;
         previewInnerForLed.classList.toggle('led-on', ledOn);
         previewInnerForLed.classList.toggle('led-off', !ledOn);
+        updateDepthVisual();
     }
 
     function updateSymbolPositionClass() {
@@ -1146,13 +1484,16 @@ function initSign3dConfigurator(root) {
 
         let addonsTotal = 0;
         const addonLabels = [];
+        const addonPriceMap = {};
         addonCheckboxes.forEach((checkbox) => {
             if (checkbox.checked) {
-                addonsTotal += parseFloat(checkbox.dataset.price) || 0;
+                const addonPrice = parseFloat(checkbox.dataset.price) || 0;
+                addonsTotal += addonPrice;
                 const lbl = checkbox.closest('label')?.querySelector('span')?.textContent.trim();
-                if (lbl) addonLabels.push(lbl);
+                if (lbl) { addonLabels.push(lbl); addonPriceMap[lbl] = addonPrice; }
             }
         });
+
 
         const subtotalBeforeOutdoor = basePrice + letterHeightAdjustment + letterCountSurcharge + depthSurcharge
             + illuminationPrice + materialPrice + finishPrice + mountingPrice + panelSurcharge + addonsTotal;
@@ -1181,14 +1522,16 @@ function initSign3dConfigurator(root) {
                 included: letterCountSurcharge === 0
             });
         }
-        lines.push({ label: 'Depth: ' + depthLabel, value: depthSurcharge, included: depthSurcharge === 0 });
+
         lines.push({ label: 'Lighting: ' + illuminationLabel, value: illuminationPrice, included: illuminationPrice === 0 });
+        if (depthSurcharge > 0) lines.push({ label: 'Depth: ' + depthLabel, value: depthSurcharge, included: false });
         lines.push({ label: 'Material: ' + materialLabel, value: materialPrice, included: materialPrice === 0 });
-        lines.push({ label: 'Finish: ' + finishLabel, value: finishPrice, included: finishPrice === 0 });
+
         lines.push({ label: 'Mounting: ' + mountingLabel, value: mountingPrice, included: mountingPrice === 0 });
         if (panelSurcharge > 0) lines.push({ label: 'Backing panel (by area)', value: panelSurcharge, included: false });
-        addonLabels.forEach((lbl) => lines.push({ label: lbl, value: 0, included: true }));
-        lines.push({ label: 'Colour', value: 0, included: true, note: '(no surcharge)' });
+        addonLabels.forEach((lbl) => lines.push({ label: lbl, value: addonPriceMap[lbl] || 0, included: !(addonPriceMap[lbl] > 0) }));
+        lines.push({ label: 'Front colour: ' + (colourNameLabel ? colourNameLabel.textContent.trim() : '') + ' (' + sign3dPrettyGroup(selectedColourGroup) + ')', value: 0, included: true });
+        lines.push({ label: 'Side colour: ' + selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')', value: 0, included: true });
         lines.push({ label: isOutdoor ? 'Outdoor construction' : 'Indoor', value: outdoorSurcharge, included: !isOutdoor });
         lines.push({ label: 'Standard delivery (Australia-wide)', value: 0, included: true });
 
@@ -1202,7 +1545,10 @@ function initSign3dConfigurator(root) {
             symbolLabels: selectedSymbols.map((s) => s.label), symbolPosition: currentSymbolPosition,
             logoName: logoFileName, widthCm, letterHeightCm, letterCount, depthLabel, illuminationLabel,
             materialLabel, finishLabel, mountingLabel, isOutdoor, addonLabels,
-            colourName: colourNameLabel ? colourNameLabel.textContent.trim() : '', total
+            colourName: colourNameLabel ? colourNameLabel.textContent.trim() : '',
+            colourGroupLabel: sign3dPrettyGroup(selectedColourGroup),
+            sideColourName: selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
+            total
         };
     }
 
@@ -1272,6 +1618,7 @@ function initSign3dConfigurator(root) {
             selectedColourHex = swatch.dataset.colourHex;
             selectedColourPrice = parseFloat(swatch.dataset.colourPrice) || 0;
             colourNameLabel.textContent = swatch.dataset.colourName;
+            selectedColourGroup = swatch.dataset.colourGroup || 'standard';
             updatePreviewColour();
             calculateTotal();
             pushHistory();
@@ -1286,9 +1633,10 @@ function initSign3dConfigurator(root) {
         const selectedOption = illuminationSelect.options[illuminationSelect.selectedIndex];
         const effectKey = selectedOption?.dataset.effectKey || 'front_lit';
         previewInnerForLed.classList.add('effect-' + effectKey);
+        updateDepthVisual();
     }
 
-    [illuminationSelect, sizeSelect, materialSelect, thicknessSelect, finishSelect, mountingSelect].forEach((select) => {
+    [illuminationSelect, sizeSelect, materialSelect, thicknessSelect, finishSelect, mountingSelect].filter(Boolean).forEach((select) => {
         select.addEventListener('change', calculateTotal);
     });
 
@@ -1510,7 +1858,8 @@ function initSign3dConfigurator(root) {
                 'Depth / Thickness': depthOptionForCart ? depthOptionForCart.textContent.trim() : 'Standard',
                 'Material': getSelectedOptionText(materialSelect, 'Standard'),
                 'Front Colour': colourNameLabel ? colourNameLabel.textContent.trim() : 'Default',
-                'Finish': getSelectedOptionText(finishSelect, 'Standard'),
+                'Side Colour': (selectedSideName || 'Default') + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
+                'Finish': sign3dPrettyGroup(selectedColourGroup),
                 'Mounting': getSelectedOptionText(mountingSelect, 'Standard'),
                 'Add-ons': selectedAddons || 'None',
                 'Construction': isOutdoorForCart ? 'Outdoor' : 'Indoor',
@@ -1599,6 +1948,146 @@ function initSign3dConfigurator(root) {
         });
     }
 
+    // ---- v11 additions ----
+
+    function getIlluminationKey() {
+        const opt = illuminationSelect ? illuminationSelect.options[illuminationSelect.selectedIndex] : null;
+        return (opt && opt.dataset.effectKey) || 'front_lit';
+    }
+
+    // Uploaded logo: same 4 illumination looks as the text, built as a CSS filter chain.
+    function buildLogoIlluminationFilter(depthMm) {
+        const key = getIlluminationKey();
+        const light = selectedColourHex || '#ffffff';
+        if (!ledOn) {
+            return 'brightness(0.7) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal');
+        }
+        if (key === 'backlit') {
+            return 'brightness(0.3) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'dark')
+                + ' drop-shadow(0 0 6px ' + sign3dRgba(light, 0.9) + ')'
+                + ' drop-shadow(0 0 18px ' + sign3dRgba(light, 0.7) + ')'
+                + ' drop-shadow(0 0 36px ' + sign3dRgba(light, 0.5) + ')';
+        }
+        if (key === 'front_back_lit') {
+            return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
+                + ' drop-shadow(0 0 10px ' + sign3dRgba(light, 0.7) + ')'
+                + ' drop-shadow(0 0 26px ' + sign3dRgba(light, 0.5) + ')'
+                + ' drop-shadow(0 0 46px ' + sign3dRgba(light, 0.3) + ')';
+        }
+        if (key === 'fully_illuminated') {
+            return 'brightness(1.3) saturate(0.85) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'lit')
+                + ' drop-shadow(0 0 12px ' + sign3dRgba(light, 0.6) + ')'
+                + ' drop-shadow(0 0 30px ' + sign3dRgba(light, 0.4) + ')'
+                + ' drop-shadow(0 0 56px ' + sign3dRgba(light, 0.25) + ')';
+        }
+        // front_lit (default): bright face, no halo, only a faint spill
+        return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
+            + ' drop-shadow(0 0 10px ' + sign3dRgba(light, 0.28) + ')';
+    }
+
+    // Auto numbering: only visible steps are numbered, always in order.
+    function renumberSteps() {
+        let n = 0;
+        root.querySelectorAll('[data-step]').forEach((label) => {
+            const num = label.querySelector('[data-step-num]');
+            if (label.closest('[hidden]')) {
+                if (num) num.textContent = '';
+                return;
+            }
+            n += 1;
+            if (num) num.textContent = n + '. ';
+        });
+    }
+
+    // Metal + Frontlit note
+    function updateMetalNote() {
+        if (!metalNoteEl) return;
+        const illOpt = illuminationSelect ? illuminationSelect.options[illuminationSelect.selectedIndex] : null;
+        const isFrontlit = !!illOpt && (illOpt.dataset.effectKey || 'front_lit') === 'front_lit';
+        const matOpt = materialSelect ? materialSelect.options[materialSelect.selectedIndex] : null;
+        const isMetal = !!matOpt && /metal/i.test(matOpt.textContent);
+        metalNoteEl.hidden = !(isFrontlit && isMetal);
+    }
+    [illuminationSelect, materialSelect].forEach((s) => { if (s) s.addEventListener('change', updateMetalNote); });
+
+    // Front-face finish class (gloss / metallic / brushed) on the preview
+    function updateFinishClasses() {
+        if (!previewInnerForLed) return;
+        Array.from(previewInnerForLed.classList)
+            .filter((c) => c.indexOf('face-') === 0)
+            .forEach((c) => previewInnerForLed.classList.remove(c));
+        previewInnerForLed.classList.add('face-' + sign3dNormalizeGroup(selectedColourGroup));
+    }
+
+    // Letter height slider (range comes from the letter_height_tier entries; value is stored in cm)
+    function syncLetterHeightSlider() {
+        if (!lhSlider) return;
+        const cm = getHeightCm();
+        const min = parseFloat(lhSlider.min);
+        const max = parseFloat(lhSlider.max);
+        lhSlider.value = Math.min(max, Math.max(min, Math.round(cm)));
+        if (lhValueEl) lhValueEl.textContent = (currentMode === 'upload' ? 'Height: ' : 'Letter height: ') + formatDim(cm);
+    }
+
+    function initLetterHeightSlider() {
+        if (!lhSlider) return;
+        const applyCm = (cm) => {
+            if (letterHeightInput) letterHeightInput.value = roundNice(cm / unitFactor());
+            updatePreviewScale();
+            calculateTotal();
+        };
+        lhSlider.addEventListener('input', () => applyCm(parseFloat(lhSlider.value) || 0));
+        const stepBy = (dir) => {
+            const min = parseFloat(lhSlider.min);
+            const max = parseFloat(lhSlider.max);
+            const next = Math.min(max, Math.max(min, (parseFloat(lhSlider.value) || min) + dir));
+            lhSlider.value = next;
+            applyCm(next);
+        };
+        const dec = root.querySelector('[data-lh-decrease]');
+        const inc = root.querySelector('[data-lh-increase]');
+        if (dec) dec.addEventListener('click', () => stepBy(-1));
+        if (inc) inc.addEventListener('click', () => stepBy(1));
+        syncLetterHeightSlider();
+    }
+
+    // Side colour
+    function resetSideColour() {
+        if (!sideSwatches.length) return;
+        const d = sideSwatches[0];
+        sideSwatches.forEach((s) => s.classList.remove('is-selected'));
+        d.classList.add('is-selected');
+        selectedSideHex = d.dataset.colourHex;
+        selectedSideName = d.dataset.colourName;
+        selectedSideGroup = d.dataset.colourGroup || 'standard';
+        if (sideColourNameLabel) sideColourNameLabel.textContent = selectedSideName;
+    }
+
+    function applySideState(state) {
+        if (state.sideHex === undefined) return;
+        selectedSideHex = state.sideHex;
+        selectedSideName = state.sideName;
+        selectedSideGroup = state.sideGroup || 'standard';
+        sideSwatches.forEach((s) => {
+            s.classList.toggle('is-selected', s.dataset.colourHex === state.sideHex && s.dataset.colourName === state.sideName);
+        });
+        if (sideColourNameLabel) sideColourNameLabel.textContent = state.sideName;
+    }
+
+    sideSwatches.forEach((swatch) => {
+        swatch.addEventListener('click', () => {
+            sideSwatches.forEach((s) => s.classList.remove('is-selected'));
+            swatch.classList.add('is-selected');
+            selectedSideHex = swatch.dataset.colourHex;
+            selectedSideName = swatch.dataset.colourName;
+            selectedSideGroup = swatch.dataset.colourGroup || 'standard';
+            if (sideColourNameLabel) sideColourNameLabel.textContent = selectedSideName;
+            updatePreviewColour();
+            calculateTotal();
+            pushHistory();
+        });
+    });
+
     if (undoBtn) undoBtn.addEventListener('click', undo);
     if (redoBtn) redoBtn.addEventListener('click', redo);
     if (resetColourBtn) resetColourBtn.addEventListener('click', resetColourToDefault);
@@ -1621,5 +2110,8 @@ function initSign3dConfigurator(root) {
     updateUndoRedoButtons();
     setupDimensionObserver();
     initSizeSlider();
+    initLetterHeightSlider();
+    updateMetalNote();
+    renumberSteps();
     updateDimensionLines();
 }

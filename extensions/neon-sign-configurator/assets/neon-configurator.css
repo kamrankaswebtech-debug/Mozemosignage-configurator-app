@@ -263,50 +263,47 @@
 }
 
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
-    padding-bottom: 50px;
+    padding-bottom: 62px;
     position: relative;
+    /* Ground-contact shadow — reads as a desk/table-top display, not wall-mounted. */
+    filter: drop-shadow(0 16px 10px rgba(0, 0, 0, 0.3));
 }
 
-/* Soft contact shadow under the base — reads as a desk/table-top display, not wall-mounted. */
+/* Support riser physically connecting the letters down to the shelf below — this is what
+   removes the "floating / disconnected pieces" look the client flagged. */
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle::before {
     content: "";
     position: absolute;
     left: 50%;
-    bottom: 0;
+    bottom: 24px;
     transform: translateX(-50%);
-    width: 74%;
-    height: 14px;
-    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 70%);
+    width: 30%;
+    height: 32px;
+    border-left: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
+    border-right: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
+    background: linear-gradient(to bottom, var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) 0%, transparent 100%);
+    opacity: 0.5;
     pointer-events: none;
 }
 
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle::after {
-    /* Acrylic base plate with a slot line, like the client's reference. */
+    /* Acrylic shelf/base, flush at the bottom and wide enough to visually support the
+       whole sign — connects directly to the riser above so the stand reads as one
+       physically assembled piece, not separate floating parts. */
     content: "";
     position: absolute;
     left: 50%;
-    bottom: 10px;
+    bottom: 2px;
     transform: translateX(-50%);
-    width: 58%;
-    height: 26px;
+    width: 76%;
+    height: 24px;
     border: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
-    border-radius: 3px 3px 9px 9px;
+    border-radius: 4px;
     background:
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02)),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02)),
         linear-gradient(to bottom, transparent calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 7.5px), transparent calc(100% - 7.5px));
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
-
-
-
-
-
-
-
-
-
-
-
 
 .neon-configurator__style-cards {
     display: grid;
@@ -1516,20 +1513,50 @@
     border-width: 1.5px;
 }
 
-/* GLOSS: reflective — diagonal highlight + edge shine + soft drop shadow */
+/* GLOSS: reflective — highlights use "soft-light" and shadows use "multiply" as TWO
+   SEPARATE layers instead of one "overlay" pass. "overlay" bleaches light base colours
+   (e.g. Gold) toward white when a bright highlight lands on them; splitting the highlight
+   (soft-light, gentle, hue-preserving) from the shadow (multiply, always darkens — never
+   whitens) keeps the real acrylic colour visible under the reflection on any base colour. */
 .neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--rectangle,
 .neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--open-box,
 .neon-configurator__preview-inner.is-solid-fill.finish--gloss.backboard--acrylic-stand-middle::after {
-    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.06) 32%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.28) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 32%, transparent 55%),
+        linear-gradient(135deg, transparent 45%, rgba(0, 0, 0, 0.28) 78%, rgba(0, 0, 0, 0.5) 100%);
+    background-blend-mode: soft-light, multiply;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
-/* SHINY: mirror-like — hard-edged bright bands */
+/* SHINY: mirror-like chrome/gold metallic. Highlights (soft-light) and shadow bands
+   (multiply) are two separate layers instead of one "overlay" pass — "overlay" was what
+   made Gold turn near-white wherever a bright band landed on it. multiply can only ever
+   darken, so the base hue (gold/silver/etc.) always stays visible and reads as genuine
+   polished metal with real reflections, on any colour. */
 .neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--rectangle,
 .neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--open-box,
 .neon-configurator__preview-inner.is-solid-fill.finish--shiny.backboard--acrylic-stand-middle::after {
-    background-image: linear-gradient(115deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.08) 28%, rgba(255, 255, 255, 0.45) 46%, rgba(0, 0, 0, 0.22) 58%, rgba(255, 255, 255, 0.3) 78%, rgba(255, 255, 255, 0.08) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.4);
+    background-image:
+        linear-gradient(115deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.55) 14%,
+            transparent 28%,
+            transparent 45%,
+            rgba(255, 255, 255, 0.45) 60%,
+            transparent 76%,
+            rgba(255, 255, 255, 0.3) 92%,
+            transparent 100%),
+        linear-gradient(115deg,
+            rgba(0, 0, 0, 0.4) 0%,
+            transparent 14%,
+            rgba(0, 0, 0, 0.3) 28%,
+            rgba(0, 0, 0, 0.5) 45%,
+            transparent 60%,
+            rgba(0, 0, 0, 0.35) 76%,
+            transparent 92%,
+            rgba(0, 0, 0, 0.25) 100%);
+    background-blend-mode: soft-light, multiply;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.5), 0 10px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* FROSTED: dull / matte — fine grain, no reflections */
@@ -1609,4 +1636,127 @@
 
 .neon-configurator__shape-icons {
     gap: 8px;
+}
+
+
+/* Safety net: guarantees an inactive backboard (previous style) can never remain
+   visible/overlapping, regardless of any filter-repaint timing. */
+.neon-configurator__shape-source:not(.is-active) {
+    opacity: 0 !important;
+    display: none !important;
+}
+
+/* ---- Symbol position heading spacing ---- */
+.neon-configurator__symbol-position-heading {
+    margin-top: 14px;
+}
+
+/* ---- Multicoloured Text explainer ---- */
+.neon-configurator__multicolour-info {
+    font-size: 12px;
+    color: #ffb84d;
+    background: rgba(255, 184, 77, 0.1);
+    border: 1px solid rgba(255, 184, 77, 0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 8px 0 0;
+    line-height: 1.5;
+}
+
+.neon-configurator__multicolour-info[hidden] {
+    display: none;
+}
+
+/* ---- Backboard Colour: card selector (name + price left, realistic swatch right) —
+   matches the reference site's layout. The hidden <select> stays the single source of
+   truth for pricing/cart/preview; clicking a card just drives that select. ---- */
+.neon-configurator__colour-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.neon-configurator__colour-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.neon-configurator__colour-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.10);
+}
+
+.neon-configurator__colour-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.neon-configurator__colour-card-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.neon-configurator__colour-card-price {
+    font-size: 11px;
+    color: #ff2ec4;
+    font-weight: 700;
+}
+
+.neon-configurator__colour-card-swatch {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    background-color: var(--swatch-colour, #888888);
+}
+
+.neon-configurator__colour-card.is-selected .neon-configurator__colour-card-swatch {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px #000, 0 0 8px var(--swatch-colour, #888888);
+}
+
+.neon-configurator__colour-card-swatch.finish--clear {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(154, 154, 154, 0.6);
+}
+
+.neon-configurator__colour-card-swatch.finish--gloss {
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 32%, transparent 55%),
+        linear-gradient(135deg, transparent 45%, rgba(0, 0, 0, 0.28) 78%, rgba(0, 0, 0, 0.5) 100%);
+    background-blend-mode: soft-light, multiply;
+}
+
+.neon-configurator__colour-card-swatch.finish--shiny {
+    background-image:
+        linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.55) 14%, transparent 28%, transparent 45%, rgba(255, 255, 255, 0.45) 60%, transparent 76%, rgba(255, 255, 255, 0.3) 92%, transparent 100%),
+        linear-gradient(115deg, rgba(0, 0, 0, 0.4) 0%, transparent 14%, rgba(0, 0, 0, 0.3) 28%, rgba(0, 0, 0, 0.5) 45%, transparent 60%, rgba(0, 0, 0, 0.35) 76%, transparent 92%, rgba(0, 0, 0, 0.25) 100%);
+    background-blend-mode: soft-light, multiply;
+}
+
+.neon-configurator__colour-card-swatch.finish--frosted {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.18));
+}
+
+@media (max-width: 420px) {
+    .neon-configurator__colour-cards {
+        grid-template-columns: 1fr;
+    }
 }

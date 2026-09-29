@@ -211,13 +211,182 @@ function buildBackboardFilters(blockId, hex, finish) {
         fill('moz-solid-fill-tight-' + blockId, 6.5, 50);
 }
 
+// Builds Colour swatches, Backboard Colour/Style options, Size cards, and Add-ons from
+// compact JSON instead of large repeated Liquid markup — same purpose as
+// renderNeonFontsAndSymbols above, needed to stay under the extension's 100KB Liquid cap.
+function renderNeonDynamicOptions(root) {
+    const coloursDataEl = root.querySelector('[data-neon-colours-data]');
+    const swatchesEl = root.querySelector('[data-colour-swatches]');
+    const colourNameLabelEl = root.querySelector('[data-colour-name-label]');
+    if (coloursDataEl && swatchesEl) {
+        let colours = [];
+        try { colours = JSON.parse(coloursDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse colours JSON.', err); }
+        colours.forEach((c, i) => {
+            const item = document.createElement('div');
+            item.className = 'neon-configurator__swatch-item';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'neon-configurator__swatch' + (i === 0 ? ' is-selected' : '');
+            btn.style.backgroundColor = c.hex;
+            btn.dataset.colourHex = c.hex;
+            btn.dataset.colourPrice = c.price;
+            btn.dataset.colourName = c.name;
+            btn.title = c.name;
+            btn.setAttribute('aria-label', c.name);
+            item.appendChild(btn);
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'neon-configurator__swatch-name';
+            nameSpan.textContent = c.name;
+            item.appendChild(nameSpan);
+            swatchesEl.appendChild(item);
+        });
+        if (colourNameLabelEl && colours.length) {
+            colourNameLabelEl.textContent = 'Selected: ' + colours[0].name;
+        }
+    }
+
+    const backboardColoursDataEl = root.querySelector('[data-neon-backboard-colours-data]');
+    const backboardColourSelectEl = root.querySelector('[data-backboard-colour-select]');
+    if (backboardColoursDataEl && backboardColourSelectEl) {
+        let bColours = [];
+        try { bColours = JSON.parse(backboardColoursDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse backboard colours JSON.', err); }
+        let defaultLabel = null;
+        let minSort = Infinity;
+        bColours.forEach((c) => { if (c.sortOrder < minSort) { minSort = c.sortOrder; defaultLabel = c.label; } });
+        bColours.forEach((c) => {
+            const option = document.createElement('option');
+            option.value = c.label;
+            option.dataset.price = c.price;
+            option.dataset.hex = c.hex;
+            option.dataset.isClear = c.isClear ? 'true' : 'false';
+            option.dataset.finish = c.finish;
+            option.dataset.sortOrder = c.sortOrder;
+            option.textContent = c.label;
+            if (c.label === defaultLabel) option.selected = true;
+            backboardColourSelectEl.appendChild(option);
+        });
+    }
+
+    const sizesDataEl = root.querySelector('[data-neon-sizes-data]');
+    const sizeCardsEl = root.querySelector('[data-size-cards]');
+    const sizeSelectEl = root.querySelector('[data-size-select]');
+    if (sizesDataEl && sizeCardsEl && sizeSelectEl) {
+        let sizes = [];
+        try { sizes = JSON.parse(sizesDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse sizes JSON.', err); }
+        let defaultWidth = null;
+        let minSort = Infinity;
+        sizes.forEach((s) => { if (s.sortOrder < minSort) { minSort = s.sortOrder; defaultWidth = s.width; } });
+        sizes.forEach((s) => {
+            const isDefault = s.width === defaultWidth;
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'neon-configurator__size-card' + (isDefault ? ' is-selected' : '');
+            card.dataset.sortOrder = s.sortOrder;
+            card.dataset.sizeWidth = s.width;
+            let inner = '';
+            if (s.badge) inner += '<span class="neon-configurator__size-card-badge">' + s.badge + '</span>';
+            inner += '<span class="neon-configurator__size-card-label">' + s.label + '</span>';
+            inner += '<span class="neon-configurator__size-card-price">$' + s.price + '</span>';
+            inner += '<span class="neon-configurator__size-card-meta">Length: ' + s.width + 'cm</span>';
+            card.innerHTML = inner;
+            sizeCardsEl.appendChild(card);
+
+            const option = document.createElement('option');
+            option.value = s.width;
+            option.dataset.price = s.price;
+            option.dataset.height = s.height;
+            option.dataset.sortOrder = s.sortOrder;
+            option.textContent = s.label;
+            if (isDefault) option.selected = true;
+            sizeSelectEl.appendChild(option);
+        });
+    }
+
+    const stylesDataEl = root.querySelector('[data-neon-backboard-styles-data]');
+    const styleCardsEl = root.querySelector('[data-backboard-style-cards]');
+    const styleSelectEl = root.querySelector('[data-backboard-style-select]');
+    if (stylesDataEl && styleCardsEl && styleSelectEl) {
+        let styles = [];
+        try { styles = JSON.parse(stylesDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse backboard styles JSON.', err); }
+        let defaultLabel = null;
+        let minSort = Infinity;
+        styles.forEach((s) => { if (s.sortOrder < minSort) { minSort = s.sortOrder; defaultLabel = s.label; } });
+        styles.forEach((s) => {
+            const isDefault = s.label === defaultLabel;
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'neon-configurator__style-card' + (isDefault ? ' is-selected' : '');
+            card.dataset.sortOrder = s.sortOrder;
+            card.dataset.styleLabel = s.label;
+            const thumb = s.previewImage
+                ? '<img src="' + s.previewImage + '" alt="' + s.label + '" width="80" height="60" loading="lazy">'
+                : '<span class="neon-configurator__style-card-fallback" data-shape-fallback="' + s.shape + '">Hello</span>';
+            card.innerHTML = '<span class="neon-configurator__style-card-thumb">' + thumb + '</span>' +
+                '<span class="neon-configurator__style-card-label">' + s.label + '</span>' +
+                '<span class="neon-configurator__style-card-price">' + (s.price ? '+$' + s.price : 'FREE') + '</span>';
+            styleCardsEl.appendChild(card);
+
+            const option = document.createElement('option');
+            option.value = s.label;
+            option.dataset.price = s.price;
+            option.dataset.shape = s.shape;
+            option.dataset.sortOrder = s.sortOrder;
+            option.textContent = s.label;
+            if (isDefault) option.selected = true;
+            styleSelectEl.appendChild(option);
+        });
+    }
+
+    const addonsDataEl = root.querySelector('[data-neon-addons-data]');
+    const optionalField = root.querySelector('[data-optional-addons-field]');
+    const optionalList = root.querySelector('[data-optional-addons-list]');
+    const includedListEl = root.querySelector('[data-included-list]');
+    if (addonsDataEl) {
+        let addons = [];
+        try { addons = JSON.parse(addonsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse addons JSON.', err); }
+        const paidAddons = addons.filter((a) => !a.isFree);
+        const freeAddons = addons.filter((a) => a.isFree);
+
+        if (paidAddons.length && optionalField && optionalList) {
+            optionalField.hidden = false;
+            paidAddons.forEach((a) => {
+                const label = document.createElement('label');
+                label.className = 'neon-configurator__checkbox-row';
+                label.innerHTML = '<input type="checkbox" data-addon-checkbox data-addon-label="' + a.label + '" data-price="' + a.price + '"><span>' + a.label + ' (+$' + a.price + ')</span>';
+                optionalList.appendChild(label);
+            });
+        }
+
+        if (includedListEl) {
+            freeAddons.forEach((a) => {
+                const li = document.createElement('li');
+                li.textContent = a.label;
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.setAttribute('data-addon-checkbox', '');
+                cb.dataset.addonLabel = a.label;
+                cb.dataset.price = a.price;
+                cb.checked = true;
+                cb.disabled = true;
+                cb.hidden = true;
+                li.appendChild(cb);
+                includedListEl.appendChild(li);
+            });
+        }
+    }
+}
+
 function initConfigurator(root) {
     renderNeonFontsAndSymbols(root);
+    renderNeonDynamicOptions(root);
     // Admin "Sort Order" drives the on-screen order (first item = default).
     sortBySortOrder(root.querySelector('[data-backboard-style-cards]'));
     sortBySortOrder(root.querySelector('[data-backboard-style-select]'));
     sortBySortOrder(root.querySelector('[data-backboard-colour-select]'));
     sortBySortOrder(root.querySelector('[data-unit-tabs]'));
+    sortBySortOrder(root.querySelector('[data-effect-modes]'));
+    sortBySortOrder(root.querySelector('[data-size-cards]'));
+    sortBySortOrder(root.querySelector('[data-size-select]'));
     const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
@@ -242,6 +411,7 @@ function initConfigurator(root) {
     const backboardStyleSelect = root.querySelector('[data-backboard-style-select]');
     const backboardStyleCards = root.querySelectorAll('[data-backboard-style-cards] .neon-configurator__style-card');
     const backboardColourSelect = root.querySelector('[data-backboard-colour-select]');
+    const backboardColourCardsEl = root.querySelector('[data-backboard-colour-cards]');
     const addonCheckboxes = root.querySelectorAll('[data-addon-checkbox]');
     const totalPriceEl = root.querySelector('[data-total-price]');
     const previewInner = root.querySelector('[data-preview-inner]');
@@ -276,6 +446,7 @@ function initConfigurator(root) {
     const initiallyCheckedRadio = root.querySelector('[data-effect-mode-radio]:checked');
     let currentEffectMode = initiallyCheckedRadio ? initiallyCheckedRadio.value : (effectModeRadios.length ? effectModeRadios[0].value : 'single');
     let letterColours = [];
+    let iconColours = [];
     const symbolButtons = root.querySelectorAll('[data-symbol-buttons] .neon-configurator__symbol-btn');
     const iconsContainer = root.querySelector('[data-preview-icons]');
     let selectedSymbols = [];
@@ -429,11 +600,15 @@ function initConfigurator(root) {
     const letterPopupSwatches = root.querySelector('[data-letter-popup-swatches]');
     let activeLetterIndex = null;
     let activeLetterSpan = null;
+    let activeIconIndex = null;
+    let activeIconSpan = null;
 
     function closeLetterPopup() {
         if (letterPopup) letterPopup.hidden = true;
         activeLetterIndex = null;
         activeLetterSpan = null;
+        activeIconIndex = null;
+        activeIconSpan = null;
     }
 
     function openLetterPopup(index, span, ch) {
@@ -469,10 +644,48 @@ function initConfigurator(root) {
         letterPopup.hidden = false;
     }
 
+    // Same shared popup, used when Multicoloured Text is active and the customer clicks a
+    // Quick Symbol icon instead of a letter — lets each symbol also get its own colour.
+    function openIconColourPopup(index, span) {
+        if (!letterPopup || !letterPopupSwatches || !previewStage) return;
+        activeLetterIndex = null;
+        activeLetterSpan = null;
+        activeIconIndex = index;
+        activeIconSpan = span;
+
+        if (letterPopupTitle) {
+            letterPopupTitle.textContent = 'Set colour for symbol';
+        }
+
+        const hexList = swatches.length ? Array.from(swatches).map((s) => s.dataset.colourHex) : ['#ffffff'];
+        letterPopupSwatches.innerHTML = '';
+        hexList.forEach((hex) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'neon-configurator__letter-popup-swatch';
+            btn.style.backgroundColor = hex;
+            if (iconColours[index] === hex) btn.classList.add('is-selected');
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                iconColours[index] = hex;
+                if (activeIconSpan) activeIconSpan.style.color = hex;
+                closeLetterPopup();
+            });
+            letterPopupSwatches.appendChild(btn);
+        });
+
+        const stageRect = previewStage.getBoundingClientRect();
+        const iconRect = span.getBoundingClientRect();
+        letterPopup.style.left = (iconRect.left - stageRect.left + iconRect.width / 2) + 'px';
+        letterPopup.style.top = (iconRect.top - stageRect.top) + 'px';
+        letterPopup.hidden = false;
+    }
+
     document.addEventListener('click', (event) => {
         if (!letterPopup || letterPopup.hidden) return;
         if (letterPopup.contains(event.target)) return;
         if (activeLetterSpan && activeLetterSpan.contains(event.target)) return;
+        if (activeIconSpan && activeIconSpan.contains(event.target)) return;
         closeLetterPopup();
     });
 
@@ -638,6 +851,10 @@ function initConfigurator(root) {
         span.addEventListener('pointerup', (event) => {
             if (span.hasPointerCapture(event.pointerId)) span.releasePointerCapture(event.pointerId);
             if (!moved) {
+                if (currentEffectMode === 'multicolour') {
+                    openIconColourPopup(i, span);
+                    return;
+                }
                 selectIcon(i);
             }
         });
@@ -890,7 +1107,7 @@ function initConfigurator(root) {
         if (currentEffectMode !== 'multicolour' && textFlex) {
             textFlex.style.color = selectedColourHex;
         }
-        if (iconsContainer) {
+        if (currentEffectMode !== 'multicolour' && iconsContainer) {
             iconsContainer.querySelectorAll('.neon-configurator__preview-icon').forEach((el) => {
                 el.style.color = selectedColourHex;
             });
@@ -903,6 +1120,7 @@ function initConfigurator(root) {
         if (iconOffsets.length !== selectedSymbols.length) {
             iconOffsets = selectedSymbols.map(() => ({ x: 0, y: 0 }));
             iconScales = selectedSymbols.map(() => 1);
+            iconColours = selectedSymbols.map((_, i) => iconColours[i] || (swatches.length ? swatches[0].dataset.colourHex : '#ffffff'));
             selectedIconIndex = null;
         }
 
@@ -915,7 +1133,7 @@ function initConfigurator(root) {
             iconSpan.dataset.iconIndex = i;
             iconSpan.style.webkitMaskImage = 'url("' + sym.url + '")';
             iconSpan.style.maskImage = 'url("' + sym.url + '")';
-            iconSpan.style.color = selectedColourHex;
+            iconSpan.style.color = currentEffectMode === 'multicolour' ? (iconColours[i] || selectedColourHex) : selectedColourHex;
             iconSpan.title = sym.label;
             applyIconTransform(iconSpan, i);
             attachIconDrag(iconSpan, i);
@@ -1068,7 +1286,15 @@ function initConfigurator(root) {
         let filterValue = 'none';
         let isActive = false;
 
-        if (shape === 'naked') {
+        // The SVG outline/fill filter is ONLY for the shape-hugging styles (Cut Around, Cut
+        // to Letter, Acrylic Stand). It must NEVER apply to Rectangle/Open Box/Naked, which
+        // already render their own backboard entirely via CSS (border or solid background).
+        // Previously `isClear` was checked BEFORE the shape, so selecting Clear Colour on
+        // Rectangle also painted the Cut Around-style outline underneath it, making it look
+        // like two backboard styles were selected at once.
+        const isShapeHugging = shape === 'cut-around' || shape === 'cut-to-letter' || shape === 'acrylic-stand-middle';
+
+        if (shape === 'naked' || !isShapeHugging) {
             filterValue = 'none';
             isActive = false;
         } else if (isClear) {
@@ -1076,21 +1302,17 @@ function initConfigurator(root) {
             const filterId = shape === 'cut-to-letter' ? 'moz-outline-tight-' : 'moz-outline-loose-';
             filterValue = 'url(#' + filterId + blockId + ')';
             isActive = true;
-        } else if (shape === 'cut-around' || shape === 'cut-to-letter' || shape === 'acrylic-stand-middle') {
+        } else {
             // Solid coloured backing following the exact silhouette of text + icons.
             const fillId = shape === 'cut-to-letter' ? 'moz-solid-fill-tight-' : 'moz-solid-fill-loose-';
             filterValue = 'url(#' + fillId + blockId + ')';
             isActive = true;
-        } else {
-            // rectangle / open-box already get their solid fill via the .is-solid-fill
-            // CSS class + --moz-backboard-color above — no SVG filter needed for these.
-            filterValue = 'none';
-            isActive = false;
         }
 
         shapeFilterValue = filterValue;
         if (shapeSource) {
             shapeSource.classList.toggle('is-active', isActive);
+            shapeSource.style.display = isActive ? '' : 'none';
             syncShapeSourceBox();
             applyShapeFilter();
         }
@@ -1263,6 +1485,55 @@ function initConfigurator(root) {
 
     backboardStyleSelect.addEventListener('change', updateBackboardPanel);
     backboardColourSelect.addEventListener('change', updateBackboardPanel);
+    buildBackboardColourCards();
+
+    // Reference-site-style cards: name + price on the left, a realistic finish swatch on the
+    // right, pink border when selected. The hidden <select> stays the single source of truth
+    // for pricing/cart/preview — clicking a card just drives that select's value and change
+    // event, so nothing about the pricing/preview logic changes.
+    function buildBackboardColourCards() {
+        if (!backboardColourSelect || !backboardColourCardsEl) return;
+        backboardColourCardsEl.innerHTML = '';
+        Array.from(backboardColourSelect.options).forEach((opt, i) => {
+            const isClear = opt.dataset.isClear === 'true';
+            const finish = isClear ? 'clear' : (opt.dataset.finish || 'gloss');
+            const price = parseFloat(opt.dataset.price) || 0;
+
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'neon-configurator__colour-card' + (opt.selected ? ' is-selected' : '');
+            card.dataset.colourLabel = opt.value;
+            card.title = opt.textContent.trim();
+            card.setAttribute('aria-label', opt.textContent.trim());
+
+            const info = document.createElement('span');
+            info.className = 'neon-configurator__colour-card-info';
+            const nameEl = document.createElement('span');
+            nameEl.className = 'neon-configurator__colour-card-name';
+            nameEl.textContent = opt.textContent.trim();
+            const priceEl = document.createElement('span');
+            priceEl.className = 'neon-configurator__colour-card-price';
+            priceEl.textContent = price > 0 ? ('+$' + price) : 'FREE';
+            info.appendChild(nameEl);
+            info.appendChild(priceEl);
+
+            const swatch = document.createElement('span');
+            swatch.className = 'neon-configurator__colour-card-swatch finish--' + finish;
+            swatch.style.setProperty('--swatch-colour', isClear ? '#9a9a9a' : (opt.dataset.hex || '#888888'));
+
+            card.appendChild(info);
+            card.appendChild(swatch);
+
+            card.addEventListener('click', () => {
+                backboardColourSelect.selectedIndex = i;
+                backboardColourSelect.dispatchEvent(new Event('change'));
+                backboardColourCardsEl.querySelectorAll('.neon-configurator__colour-card').forEach((c) => c.classList.remove('is-selected'));
+                card.classList.add('is-selected');
+            });
+
+            backboardColourCardsEl.appendChild(card);
+        });
+    }
 
     // Keep the visible cards in sync with the hidden select (single source of truth for pricing/cart)
     function syncBackboardStyleCards() {
@@ -1357,6 +1628,8 @@ function initConfigurator(root) {
         wallpaperToggle.addEventListener('change', updateWallpaperState);
     }
 
+    const multicolourInfo = root.querySelector('[data-multicolour-info]');
+
     effectModeRadios.forEach((radio) => {
         radio.addEventListener('change', () => {
             currentEffectMode = radio.value;
@@ -1366,8 +1639,10 @@ function initConfigurator(root) {
             if (colourField) {
                 colourField.style.display = currentEffectMode === 'multicolour' ? 'none' : '';
             }
+            if (multicolourInfo) multicolourInfo.hidden = currentEffectMode !== 'multicolour';
             updatePreviewText();
             updatePreviewColour();
+            renderIcons();
             calculateTotal();
         });
     });
