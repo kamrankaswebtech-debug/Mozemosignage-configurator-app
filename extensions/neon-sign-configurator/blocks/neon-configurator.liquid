@@ -138,7 +138,7 @@
 
     <div class="neon-configurator__field">
       <label class="neon-configurator__label">1. Enter Your Text</label>
-      <input type="text" class="neon-configurator__text-input" data-text-input maxlength="50" placeholder="Type your text here">
+      <textarea class="neon-configurator__text-input neon-configurator__text-input--textarea" data-text-input maxlength="50" rows="2" placeholder="Type your text here"></textarea>
     </div>
 
     <style>
@@ -172,9 +172,9 @@
       </div>
       <label class="neon-configurator__label neon-configurator__symbol-position-heading">Select Your Symbol Position</label>
       <div class="neon-configurator__symbol-position-options" data-symbol-position-options>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="left"><span>Left</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="left" checked><span>Left</span></label>
         <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="top"><span>Top</span></label>
-        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked><span>Right</span></label>
+        <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="right"><span>Right</span></label>
         <label class="neon-configurator__symbol-position-option"><input type="radio" name="neon-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom"><span>Bottom</span></label>
       </div>
     </div>
@@ -314,7 +314,7 @@
       <label class="neon-configurator__label">Power Adapter</label>
       <select class="neon-configurator__select" data-power-adapter-select>
         {% for adapter in metaobjects["app--418838118401--power_adapter"].values %}
-          <option {% if forloop.first %}selected{% endif %}>{{ adapter.label.value }}</option>
+          <option data-sort-order="{{ adapter.sort_order.value | default: 999999 }}">{{ adapter.label.value }}</option>
         {% endfor %}
       </select>
     </div>
@@ -368,6 +368,14 @@
       </div>
     </div>
     {% endif %}
+
+    <div class="neon-configurator__modal-overlay" data-outdoor-warning-modal hidden>
+      <div class="neon-configurator__modal-box">
+        <p class="neon-configurator__modal-title">⚠️ Outdoor Sign Required</p>
+        <p class="neon-configurator__modal-text">Signs larger than 60cm are only available for Outdoor use due to structural and weatherproofing requirements. Please select "Outdoor" to continue with this size.</p>
+        <button type="button" class="neon-configurator__modal-close-btn" data-outdoor-warning-close>Got it</button>
+      </div>
+    </div>
 
     <div class="neon-configurator__price-box">
       <span class="neon-configurator__price-label">Total Price</span>

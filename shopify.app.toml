@@ -459,7 +459,7 @@ description = "Materials, Finish, Mounting, and Add-ons for 3D Illuminated Signs
 
 [metaobjects.app.sign3d_option.fields.category]
 name = "Category"
-description = "One of: material, finish, mounting, addon, wallpaper, width_tier, letter_height_tier, letter_count_tier, depth_tier, pricing_settings"
+description = "One of: material, finish, mounting, addon, wallpaper, width_tier, letter_height_tier, letter_count_tier, depth_tier, pricing_settings, install_electrician, install_easy"
 type = "single_line_text_field"
 required = true
 
@@ -484,7 +484,7 @@ type = "boolean"
 
 [metaobjects.app.sign3d_option.fields.image]
 name = "Image"
-description = "Used only when category = wallpaper"
+description = "Used for category = wallpaper, mounting, install_electrician and install_easy"
 type = "file_reference"
 
 [metaobjects.app.sign3d_option.fields.sort_order]
@@ -519,6 +519,17 @@ type = "number_decimal"
 [metaobjects.app.sign3d_option.fields.base_depth_tier_label]
 name = "Base Depth Tier Label"
 description = "category=pricing_settings only. Must match the depth_tier entry's Label that is standard/included."
+type = "single_line_text_field"
+
+
+[metaobjects.app.sign3d_option.fields.backing_type]
+name = "Backing Type"
+description = "category=mounting only. Controls how the backing is drawn in the 3D preview and which install/power rules apply. Must be exactly one of: none, raceway, rectangle, circle. Leave empty to auto-detect from the Label."
+type = "single_line_text_field"
+
+[metaobjects.app.sign3d_option.fields.description]
+name = "Short Description (optional)"
+description = "category=mounting only. Small text shown under the mounting card label."
 type = "single_line_text_field"
 
 [metaobjects.app.uv_size]

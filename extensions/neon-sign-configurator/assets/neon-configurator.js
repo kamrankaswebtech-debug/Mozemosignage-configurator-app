@@ -157,7 +157,22 @@ function resolveBackboardFinish(option) {
 // Builds the 4 SVG filters used for Cut Around / Cut to Letter / Acrylic Stand.
 // Clear = thin grey outline with a faint glass tint. Gloss = reflective edge highlights.
 // Shiny = mirror-like (two lights + sheen). Frosted = dull/matte with fine grain.
-function buildBackboardFilters(blockId, hex, finish) {
+function buildBackboardFilters(blockId, hex, finish, fontSize) {
+    // Radii scale with the CURRENT letter size, instead of a fixed pixel value — a fixed
+    // radius only bridged the gaps between letters/words/the icon at one specific sign
+    // size, and left visible disconnected gaps at every other size (the "not connected as
+    // one sign" issue the client flagged). Tune the multipliers below if a specific font
+    // still needs slightly tighter/looser bridging.
+    const fs = fontSize || 48;
+    const outlineInner = Math.min(70, Math.max(6, fs * 0.14));
+    const outlineOuter = outlineInner + Math.min(20, Math.max(2, fs * 0.045));
+    const outlineInnerTight = Math.min(40, Math.max(4, fs * 0.08));
+    const outlineOuterTight = outlineInnerTight + Math.min(14, Math.max(1.5, fs * 0.03));
+    const fillRadiusLoose = Math.min(90, Math.max(10, fs * 0.22));
+    const fillRadiusTight = Math.min(55, Math.max(6, fs * 0.12));
+    const regionLoose = Math.min(90, Math.max(40, fs * 0.9));
+    const regionTight = Math.min(70, Math.max(30, fs * 0.7));
+
     const region = (p) => 'x="-' + p + '%" y="-' + p + '%" width="' + (100 + p * 2) + '%" height="' + (100 + p * 2) + '%"';
 
     const outline = (id, innerR, outerR, p) =>
@@ -205,10 +220,10 @@ function buildBackboardFilters(blockId, hex, finish) {
         return s + '</filter>';
     };
 
-    return outline('moz-outline-loose-' + blockId, 9.5, 11, 60) +
-        outline('moz-outline-tight-' + blockId, 5, 6.5, 50) +
-        fill('moz-solid-fill-loose-' + blockId, 11, 60) +
-        fill('moz-solid-fill-tight-' + blockId, 6.5, 50);
+    return outline('moz-outline-loose-' + blockId, outlineInner, outlineOuter, regionLoose) +
+        outline('moz-outline-tight-' + blockId, outlineInnerTight, outlineOuterTight, regionTight) +
+        fill('moz-solid-fill-loose-' + blockId, fillRadiusLoose, regionLoose) +
+        fill('moz-solid-fill-tight-' + blockId, fillRadiusTight, regionTight);
 }
 
 // Builds Colour swatches, Backboard Colour/Style options, Size cards, and Add-ons from
@@ -387,6 +402,14 @@ function initConfigurator(root) {
     sortBySortOrder(root.querySelector('[data-effect-modes]'));
     sortBySortOrder(root.querySelector('[data-size-cards]'));
     sortBySortOrder(root.querySelector('[data-size-select]'));
+    (function sortPowerAdapter() {
+        const select = root.querySelector('[data-power-adapter-select]');
+        if (!select) return;
+        sortBySortOrder(select);
+        // Default to the first option in the Admin-defined "most popular first" order
+        // (e.g. Australia, then USA) after reordering.
+        select.selectedIndex = 0;
+    })();
     const textFlex = root.querySelector('[data-text-flex]');
     const textInput = root.querySelector('[data-text-input]');
     const fontSelect = root.querySelector('[data-font-select]');
@@ -403,8 +426,23 @@ function initConfigurator(root) {
     const shapeIcons = root.querySelector('[data-shape-icons]');
     const sizeCards = root.querySelectorAll('[data-size-cards] .neon-configurator__size-card');
     const oversizedNotice = root.querySelector('[data-oversized-notice]');
+    const outdoorWarningModal = root.querySelector('[data-outdoor-warning-modal]');
+    const outdoorWarningCloseBtn = root.querySelector('[data-outdoor-warning-close]');
+    let outdoorWarningShown = false;
+    function maybeShowOutdoorWarning() {
+        const needsOutdoor = currentNeonType === 'indoor' && currentWidthCm > 60;
+        if (needsOutdoor && !outdoorWarningShown && outdoorWarningModal) {
+            outdoorWarningModal.hidden = false;
+            outdoorWarningShown = true;
+        } else if (!needsOutdoor) {
+            outdoorWarningShown = false;
+        }
+    }
+    if (outdoorWarningCloseBtn && outdoorWarningModal) {
+        outdoorWarningCloseBtn.addEventListener('click', () => { outdoorWarningModal.hidden = true; });
+    }
     const includedPowerAdapterLi = root.querySelector('[data-included-power-adapter]');
-    let currentSymbolPosition = 'right';
+    let currentSymbolPosition = 'left';
     const swatches = root.querySelectorAll('[data-colour-swatches] .neon-configurator__swatch');
     const colourNameLabel = root.querySelector('[data-colour-name-label]');
     const sizeSelect = root.querySelector('[data-size-select]');
@@ -561,6 +599,7 @@ function initConfigurator(root) {
         updateOutdoorThicknessVisibility();
         updateSizeFieldsVisibility();
         calculateTotal();
+        maybeShowOutdoorWarning();
     }
 
     neonTypeCards.forEach((card) => {
@@ -603,6 +642,19 @@ function initConfigurator(root) {
     let activeIconIndex = null;
     let activeIconSpan = null;
 
+    function showColourJumpPin(targetEl) {
+        if (!targetEl || !previewInner) return;
+        const innerRect = previewInner.getBoundingClientRect();
+        const elRect = targetEl.getBoundingClientRect();
+        const pin = document.createElement('span');
+        pin.className = 'neon-configurator__colour-pin';
+        pin.textContent = '📍';
+        pin.style.left = (elRect.left - innerRect.left + elRect.width / 2) + 'px';
+        pin.style.top = (elRect.top - innerRect.top - 22) + 'px';
+        previewInner.appendChild(pin);
+        setTimeout(() => { pin.remove(); }, 550);
+    }
+
     function closeLetterPopup() {
         if (letterPopup) letterPopup.hidden = true;
         activeLetterIndex = null;
@@ -631,7 +683,10 @@ function initConfigurator(root) {
             btn.addEventListener('click', (event) => {
                 event.stopPropagation();
                 letterColours[index] = hex;
-                if (activeLetterSpan) activeLetterSpan.style.color = hex;
+                if (activeLetterSpan) {
+                    activeLetterSpan.style.color = hex;
+                    showColourJumpPin(activeLetterSpan);
+                }
                 closeLetterPopup();
             });
             letterPopupSwatches.appendChild(btn);
@@ -668,7 +723,10 @@ function initConfigurator(root) {
             btn.addEventListener('click', (event) => {
                 event.stopPropagation();
                 iconColours[index] = hex;
-                if (activeIconSpan) activeIconSpan.style.color = hex;
+                if (activeIconSpan) {
+                    activeIconSpan.style.color = hex;
+                    showColourJumpPin(activeIconSpan);
+                }
                 closeLetterPopup();
             });
             letterPopupSwatches.appendChild(btn);
@@ -1088,6 +1146,7 @@ function initConfigurator(root) {
                         showSelectionBoxAround(textFlex);
                         syncShapeSourceStyle();
                         updateIconSize();
+                        updateBackboardPanel();
                     }
                 };
 
@@ -1194,8 +1253,11 @@ function initConfigurator(root) {
             heightValue = parseFloat(sizeOption?.dataset.height) || Math.round(widthValue / 2.6);
         }
 
-        // Scale font size proportionally to width, clamped to a sensible range
-        baseFontSize = Math.min(90, Math.max(22, widthValue * 0.42));
+        // Non-linear (sqrt-based) scaling instead of a flat multiplier: keeps very small
+        // sizes (e.g. 40cm) readable in the preview — the client flagged 40cm text as too
+        // tiny to read — while still growing sensibly for large signs without the text
+        // becoming huge relative to the fixed-size preview stage.
+        baseFontSize = Math.min(130, Math.max(34, Math.sqrt(widthValue) * 6.3));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
         syncShapeSourceStyle();
         updateIconSize();
@@ -1216,6 +1278,7 @@ function initConfigurator(root) {
 
         if (oversizedNotice) oversizedNotice.hidden = currentWidthCm <= 200;
         updateBackboardPanel();
+        maybeShowOutdoorWarning();
     }
 
     // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign box
@@ -1275,11 +1338,15 @@ function initConfigurator(root) {
         previewInner.classList.add('finish--' + finish);
 
         const blockId = root.dataset.blockId;
+        // Rounded to the nearest 4px so tiny drag-resize movements don't rebuild the SVG
+        // filter on every pointermove — only rebuilds when the size changes enough to
+        // actually matter for how far the connecting shape needs to bridge.
+        const currentFontSizePx = Math.round((baseFontSize * groupScale) / 4) * 4;
         if (backboardDefs) {
             const defsHex = isClear ? '#9a9a9a' : hex;
-            const defsKey = blockId + '|' + finish + '|' + defsHex;
+            const defsKey = blockId + '|' + finish + '|' + defsHex + '|' + currentFontSizePx;
             if (backboardDefs.dataset.key !== defsKey) {
-                backboardDefs.innerHTML = buildBackboardFilters(blockId, defsHex, finish);
+                backboardDefs.innerHTML = buildBackboardFilters(blockId, defsHex, finish, currentFontSizePx);
                 backboardDefs.dataset.key = defsKey;
             }
         }
@@ -1419,6 +1486,13 @@ function initConfigurator(root) {
 
     textInput.addEventListener('input', () => {
         updatePreviewText();
+    });
+    // The text field is now a <textarea> (2 lines tall, per client request) purely for a
+    // more comfortable typing box — it should still behave as one line of neon text, so
+    // Enter is swallowed instead of inserting a newline that would render as a broken
+    // "letter" in the preview.
+    textInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') event.preventDefault();
     });
 
     function syncFontCards() {

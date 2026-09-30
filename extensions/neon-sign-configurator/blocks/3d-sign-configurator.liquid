@@ -1,18 +1,18 @@
-{% comment %} Mozemo Signage - Live 3D Illuminated Sign Configurator {% endcomment %}
-
-{% assign default_3d_bg = nil %}
-{% for entry in metaobjects["app--418838118401--sign3d_option"].values %}
-  {% if entry.category.value == "wallpaper" %}
-    {% assign default_3d_bg = entry %}
-    {% break %}
-  {% endif %}
-{% endfor %}
-{% assign default_3d_bg_url = default_3d_bg.image.value | image_url %}
-
 {% assign sign3d_symbol_count = 0 %}
-{% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
-  {% if symbol.visibility.value == "neon_only" %}{% continue %}{% endif %}
-  {% assign sign3d_symbol_count = sign3d_symbol_count | plus: 1 %}
+{% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}{% unless symbol.visibility.value == "neon_only" %}{% assign sign3d_symbol_count = sign3d_symbol_count | plus: 1 %}{% endunless %}{% endfor %}
+
+{% comment %} Default wallpaper fallback (trimmed + downcased category match). {% endcomment %}
+{% assign sign3d_default_bg_url = "" %}
+{% assign sign3d_bg_min_sort = 1000000 %}
+{% for o in metaobjects["app--418838118401--sign3d_option"].values %}
+  {% assign sign3d_cat_norm = o.category.value | strip | downcase %}
+  {% if sign3d_cat_norm == "wallpaper" %}
+    {% assign sign3d_o_sort = o.sort_order.value | default: 999999 %}
+    {% if sign3d_o_sort < sign3d_bg_min_sort %}
+      {% assign sign3d_bg_min_sort = sign3d_o_sort %}
+      {% assign sign3d_default_bg_url = o.image.value | image_url %}
+    {% endif %}
+  {% endif %}
 {% endfor %}
 
 {% assign s3d_units_count = 0 %}
@@ -25,21 +25,9 @@
   {% if s3d_u_so < s3d_ud_min %}{% assign s3d_ud_min = s3d_u_so %}{% assign s3d_default_unit = u %}{% endif %}
 {% endfor %}
 
-{% comment %} Letter Height slider range = smallest / largest letter_height_tier threshold (cm). {% endcomment %}
-{% assign s3d_lh_min = 100000 %}
-{% assign s3d_lh_max = 0 %}
-{% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-  {% if item.category.value == "letter_height_tier" %}
-    {% assign s3d_t = item.threshold_value.value | default: 0 %}
-    {% if s3d_t < s3d_lh_min %}{% assign s3d_lh_min = s3d_t %}{% endif %}
-    {% if s3d_t > s3d_lh_max %}{% assign s3d_lh_max = s3d_t %}{% endif %}
-  {% endif %}
-{% endfor %}
-{% if s3d_lh_max == 0 %}{% assign s3d_lh_min = 10 %}{% assign s3d_lh_max = 100 %}{% endif %}
-
 <div class="sign3d-configurator" id="sign3d-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
 
-  <div class="sign3d-configurator__preview" data-preview-box{% if default_3d_bg_url %} style="background-image: url('{{ default_3d_bg_url }}');"{% endif %}>
+  <div class="sign3d-configurator__preview" data-preview-box data-default-bg="{{ sign3d_default_bg_url }}"{% if sign3d_default_bg_url != blank %} style="background-image: url('{{ sign3d_default_bg_url }}'); background-size: cover; background-position: center;"{% endif %}>
     <div class="sign3d-configurator__preview-badge">
       <p class="sign3d-configurator__preview-badge-title">VISUAL ESTIMATE</p>
       <p class="sign3d-configurator__preview-badge-sub">Mock-up for visual estimate only. Final professional artwork supplied for approval before manufacturing.</p>
@@ -47,177 +35,79 @@
 
     <div class="sign3d-configurator__toggle-group">
       <div class="sign3d-configurator__toggle-row">
-        <label class="sign3d-configurator__switch">
-          <input type="checkbox" data-hide-measurements-toggle checked>
-          <span class="sign3d-configurator__switch-slider"></span>
-        </label>
+        <label class="sign3d-configurator__switch"><input type="checkbox" data-hide-measurements-toggle checked><span class="sign3d-configurator__switch-slider"></span></label>
         <span class="sign3d-configurator__toggle-label" data-measurements-label>Measurements On</span>
       </div>
       <div class="sign3d-configurator__toggle-row">
-        <label class="sign3d-configurator__switch">
-          <input type="checkbox" data-hide-wallpaper-toggle checked>
-          <span class="sign3d-configurator__switch-slider"></span>
-        </label>
+        <label class="sign3d-configurator__switch"><input type="checkbox" data-hide-wallpaper-toggle checked><span class="sign3d-configurator__switch-slider"></span></label>
         <span class="sign3d-configurator__toggle-label" data-wallpaper-toggle-label>Wallpaper On</span>
       </div>
       <div class="sign3d-configurator__toggle-row">
-        <label class="sign3d-configurator__switch">
-          <input type="checkbox" data-led-toggle checked>
-          <span class="sign3d-configurator__switch-slider"></span>
-        </label>
+        <label class="sign3d-configurator__switch"><input type="checkbox" data-led-toggle checked><span class="sign3d-configurator__switch-slider"></span></label>
         <span class="sign3d-configurator__toggle-label" data-led-label>LED On</span>
       </div>
     </div>
+
     <div class="sign3d-configurator__preview-stage" data-preview-stage>
+      <div class="sign3d-configurator__backing" data-backing hidden></div>
       <div class="sign3d-configurator__preview-inner" data-preview-inner>
         <div class="sign3d-configurator__text-flex" data-text-flex data-preview-text></div>
         <span class="sign3d-configurator__preview-icons" data-preview-icons></span>
         <div class="sign3d-configurator__selection-box" data-selection-box hidden>
-          <div class="sign3d-configurator__move-badge">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>
-            MOVE
-          </div>
+          <div class="sign3d-configurator__move-badge">MOVE</div>
           <span class="sign3d-configurator__resize-handle" data-resize-handle="tl"></span>
           <span class="sign3d-configurator__resize-handle" data-resize-handle="tr"></span>
           <span class="sign3d-configurator__resize-handle" data-resize-handle="bl"></span>
           <span class="sign3d-configurator__resize-handle" data-resize-handle="br"></span>
         </div>
       </div>
-      <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--width">
-        <span class="sign3d-configurator__dim-label" data-width-label>0 cm</span>
-      </div>
-      <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--height">
-        <span class="sign3d-configurator__dim-label" data-height-label>0 cm</span>
-      </div>
-    </div>
-    <div class="sign3d-configurator__toolbar" data-configurator-toolbar>
-      <button type="button" class="sign3d-configurator__toolbar-btn" data-undo-btn title="Undo" disabled>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-6.7L3 9"/></svg>
-        Undo
-      </button>
-      <button type="button" class="sign3d-configurator__toolbar-btn" data-redo-btn title="Redo" disabled>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-6.7L21 9"/></svg>
-        Redo
-      </button>
-      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-colour-btn title="Reset Colour">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/></svg>
-        Reset Colour
-      </button>
-      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-font-btn title="Reset Font">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/></svg>
-        Reset Font
-      </button>
-    </div>
-    <div class="sign3d-configurator__preview-footer">
-      <div class="sign3d-configurator__preview-footer-item">
-        <span class="sign3d-configurator__preview-footer-label">Title</span>
-        <span class="sign3d-configurator__preview-footer-value">Your sign</span>
-      </div>
-      <div class="sign3d-configurator__preview-footer-item">
-        <span class="sign3d-configurator__preview-footer-label">Created by</span>
-        <span class="sign3d-configurator__preview-footer-value">Mozemo Signage</span>
-      </div>
+      <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--width"><span class="sign3d-configurator__dim-label" data-width-label>0 cm</span></div>
+      <div class="sign3d-configurator__dim-line sign3d-configurator__dim-line--height"><span class="sign3d-configurator__dim-label" data-height-label>0 cm</span></div>
     </div>
 
-    {% assign sign3d_wallpaper_count = 0 %}
-    {% for bg in metaobjects["app--418838118401--sign3d_option"].values %}
-      {% if bg.category.value == "wallpaper" %}
-        {% assign sign3d_wallpaper_count = sign3d_wallpaper_count | plus: 1 %}
-      {% endif %}
-    {% endfor %}
-    {% if sign3d_wallpaper_count > 0 %}
-      <div class="sign3d-configurator__bg-thumbs" data-bg-thumbs>
-        {% assign wallpaper_index = 0 %}
-        {% for bg in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if bg.category.value == "wallpaper" %}
-            <button
-              type="button"
-              class="sign3d-configurator__bg-thumb{% if wallpaper_index == 0 %} is-selected{% endif %}"
-              data-bg-url="{{ bg.image.value | image_url }}"
-              title="{{ bg.label.value }}"
-              aria-label="{{ bg.label.value }}">
-              <img src="{{ bg.image.value | image_url: width: 120 }}" alt="{{ bg.label.value }}" width="60" height="45" loading="lazy">
-            </button>
-            {% assign wallpaper_index = wallpaper_index | plus: 1 %}
-          {% endif %}
-        {% endfor %}
-      </div>
-    {% endif %}
+    <div class="sign3d-configurator__toolbar" data-configurator-toolbar>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-undo-btn title="Undo" disabled>Undo</button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-redo-btn title="Redo" disabled>Redo</button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-colour-btn title="Reset Colour">Reset Colour</button>
+      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-font-btn title="Reset Font">Reset Font</button>
+    </div>
+
+    <div class="sign3d-configurator__preview-footer">
+      <div class="sign3d-configurator__preview-footer-item"><span class="sign3d-configurator__preview-footer-label">Title</span><span class="sign3d-configurator__preview-footer-value">Your sign</span></div>
+      <div class="sign3d-configurator__preview-footer-item"><span class="sign3d-configurator__preview-footer-label">Created by</span><span class="sign3d-configurator__preview-footer-value">Mozemo Signage</span></div>
+    </div>
+
+    <div class="sign3d-configurator__bg-thumbs" data-bg-thumbs style="display:none"></div>
   </div>
 
   <div class="sign3d-configurator__panel">
 
-    <script type="application/json" data-sign3d-pricing-config>
-    {
-      "widthTiers": [
-        {% assign sign3d_wt_i = 0 %}
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "width_tier" %}
-            {% if sign3d_wt_i > 0 %},{% endif %}
-            { "width": {{ item.threshold_value.value | default: 0 }}, "price": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
-            {% assign sign3d_wt_i = sign3d_wt_i | plus: 1 %}
-          {% endif %}
-        {% endfor %}
-      ],
-      "letterHeightTiers": [
-        {% assign sign3d_lh_i = 0 %}
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "letter_height_tier" %}
-            {% if sign3d_lh_i > 0 %},{% endif %}
-            { "height": {{ item.threshold_value.value | default: 0 }}, "adjustment": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
-            {% assign sign3d_lh_i = sign3d_lh_i | plus: 1 %}
-          {% endif %}
-        {% endfor %}
-      ],
-      "letterCountTiers": [
-        {% assign sign3d_lc_i = 0 %}
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "letter_count_tier" %}
-            {% if sign3d_lc_i > 0 %},{% endif %}
-            { "startsAt": {{ item.threshold_value.value | default: 0 }}, "surcharge": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
-            {% assign sign3d_lc_i = sign3d_lc_i | plus: 1 %}
-          {% endif %}
-        {% endfor %}
-      ],
-      "depthTiers": [
-        {% assign sign3d_dt_i = 0 %}
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "depth_tier" %}
-            {% if sign3d_dt_i > 0 %},{% endif %}
-            { "depth": {{ item.threshold_value.value | default: 0 }}, "surcharge": {{ item.extra_price_decimal.value | default: 0 }}, "label": {{ item.label.value | json }} }
-            {% assign sign3d_dt_i = sign3d_dt_i | plus: 1 %}
-          {% endif %}
-        {% endfor %}
-      ],
-      "settings": {
-        {% assign sign3d_pricing_row = nil %}
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "pricing_settings" %}
-            {% assign sign3d_pricing_row = item %}
-            {% break %}
-          {% endif %}
-        {% endfor %}
-        "outdoorPercent": {{ sign3d_pricing_row.outdoor_surcharge_percent.value | default: 15 }},
-        "outdoorMin": {{ sign3d_pricing_row.outdoor_minimum_surcharge.value | default: 200 }},
-        "includedLetters": {{ sign3d_pricing_row.included_letters_count.value | default: 20 }},
-        "panelRate": {{ sign3d_pricing_row.panel_rate_per_sqm.value | default: 0 }},
-        "baseLetterHeight": {{ sign3d_pricing_row.base_letter_height_cm.value | default: 25 }},
-        "baseDepthLabel": {{ sign3d_pricing_row.base_depth_tier_label.value | default: "" | json }}
-      }
-    }
+    <script type="application/json" data-sign3d-options>
+    [{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% unless forloop.first %},{% endunless %}{"c":{{ o.category.value | json }},"t":{{ o.threshold_value.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"l":{{ o.label.value | json }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }},"i":{% if o.image.value %}{{ o.image.value | image_url: width: 480 | json }}{% else %}""{% endif %},"b":{{ o.backing_type.value | default: "" | downcase | json }},"d":{{ o.description.value | default: "" | json }},"oz":{{ o.outdoor_surcharge_percent.value | default: 15 }},"om":{{ o.outdoor_minimum_surcharge.value | default: 200 }},"il":{{ o.included_letters_count.value | default: 20 }},"pr":{{ o.panel_rate_per_sqm.value | default: 0 }},"bh":{{ o.base_letter_height_cm.value | default: 25 }},"bd":{{ o.base_depth_tier_label.value | default: "" | json }}}{% endfor %}]
     </script>
 
-    {% comment %} Fonts as compact JSON, rendered into cards by JS (100KB Liquid limit pattern). {% endcomment %}
+    <script type="application/json" data-sign3d-wallpapers>
+    [{% assign s3d_w_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}{% endif %}{% endfor %}]
+    </script>
+
+    <script type="application/json" data-sign3d-materials>
+    [{% assign s3d_m_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_mc = o.category.value | strip | downcase %}{% if s3d_mc == "material" %}{% unless s3d_m_first %},{% endunless %}{% assign s3d_m_first = false %}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{% endif %}{% endfor %}]
+    </script>
+
+    <script type="application/json" data-sign3d-mountings>
+    [{% assign s3d_mt_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_mtc = o.category.value | strip | downcase %}{% if s3d_mtc == "mounting" %}{% unless s3d_mt_first %},{% endunless %}{% assign s3d_mt_first = false %}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }},"i":{% if o.image.value %}{{ o.image.value | image_url: width: 480 | json }}{% else %}""{% endif %},"b":{{ o.backing_type.value | default: "" | downcase | json }},"d":{{ o.description.value | default: "" | json }}}{% endif %}{% endfor %}]
+    </script>
+
+    <script type="application/json" data-sign3d-power>
+    [{% for pa in metaobjects["app--418838118401--power_adapter"].values %}{% unless forloop.first %},{% endunless %}{"label":{{ pa.label.value | json }},"sort":{{ pa.sort_order.value | default: 999999 }}}{% endfor %}]
+    </script>
+
     <script type="application/json" data-sign3d-fonts>
     [
       {% assign s3d_f_i = 0 %}
       {% for font in metaobjects["app--418838118401--neon_font"].values %}
         {% if font.visibility.value == "neon_only" %}{% continue %}{% endif %}
-        {% if font.font_file.value.url %}
-          {% assign font_value = "moz-font-" | append: font.system.handle %}
-        {% else %}
-          {% assign font_value = font.css_font_family.value %}
-        {% endif %}
+        {% if font.font_file.value.url %}{% assign font_value = "moz-font-" | append: font.system.handle %}{% else %}{% assign font_value = font.css_font_family.value %}{% endif %}
         {% if s3d_f_i > 0 %},{% endif %}
         { "name": {{ font.name.value | json }}, "family": {{ font_value | json }}, "preview": {{ font.preview_image.value | image_url: width: 480 | json }}, "isNew": {% if font.is_new.value %}true{% else %}false{% endif %}, "sort": {{ font.sort_order.value | default: 999999 }} }
         {% assign s3d_f_i = s3d_f_i | plus: 1 %}
@@ -226,12 +116,7 @@
     </script>
 
     <script type="application/json" data-sign3d-colours>
-    [
-      {% for colour in metaobjects["app--418838118401--sign3d_front_colour"].values %}
-        {% if forloop.first == false %},{% endif %}
-        { "name": {{ colour.name.value | json }}, "hex": {{ colour.hex_code.value | json }}, "price": {{ colour.extra_price_decimal.value | default: 0 }}, "group": {{ colour.colour_group.value | default: "standard" | json }} }
-      {% endfor %}
-    ]
+    [{% for colour in metaobjects["app--418838118401--sign3d_front_colour"].values %}{% unless forloop.first %},{% endunless %}{"name":{{ colour.name.value | json }},"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"group":{{ colour.colour_group.value | default: "standard" | json }}}{% endfor %}]
     </script>
 
     <div class="sign3d-configurator__field">
@@ -244,7 +129,6 @@
     </div>
 
     <div data-mode-panel="text">
-
       <div class="sign3d-configurator__field">
         <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Enter Your Text</span></label>
         <input type="text" class="sign3d-configurator__text-input" data-text-input maxlength="30" placeholder="Type your business name / text">
@@ -254,44 +138,22 @@
       <div class="sign3d-configurator__field">
         <label class="sign3d-configurator__label">Symbol Position</label>
         <div class="sign3d-configurator__symbol-position-options" data-symbol-position-options>
-          <label class="sign3d-configurator__symbol-position-option">
-            <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="left">
-            <span>Left</span>
-          </label>
-          <label class="sign3d-configurator__symbol-position-option">
-            <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked>
-            <span>Right</span>
-          </label>
-          <label class="sign3d-configurator__symbol-position-option">
-            <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="top">
-            <span>Top</span>
-          </label>
-          <label class="sign3d-configurator__symbol-position-option">
-            <input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom">
-            <span>Bottom</span>
-          </label>
+          <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="left"><span>Left</span></label>
+          <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="right" checked><span>Right</span></label>
+          <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="top"><span>Top</span></label>
+          <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-symbol-position-{{ block.id }}" data-symbol-position-radio value="bottom"><span>Bottom</span></label>
         </div>
       </div>
-
       <div class="sign3d-configurator__field">
         <label class="sign3d-configurator__label">Quick Symbols (optional)</label>
         <div class="sign3d-configurator__symbols" data-symbol-buttons>
           {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
             {% if symbol.visibility.value == "neon_only" %}{% continue %}{% endif %}
-            <button
-              type="button"
-              class="sign3d-configurator__symbol-btn"
-              data-symbol-url="{{ symbol.icon.value.url }}"
-              data-symbol-label="{{ symbol.label.value }}"
-              title="{{ symbol.label.value }}"
-              aria-label="{{ symbol.label.value }}">
-              <img src="{{ symbol.icon.value.url }}" alt="{{ symbol.label.value }}" width="18" height="18" loading="lazy">
-            </button>
+            <button type="button" class="sign3d-configurator__symbol-btn" data-symbol-url="{{ symbol.icon.value.url }}" data-symbol-label="{{ symbol.label.value }}" title="{{ symbol.label.value }}" aria-label="{{ symbol.label.value }}"><img src="{{ symbol.icon.value.url }}" alt="{{ symbol.label.value }}" width="18" height="18" loading="lazy"></button>
           {% endfor %}
         </div>
       </div>
       {% endif %}
-
     </div>
 
     <div data-mode-panel="upload" hidden>
@@ -307,18 +169,9 @@
     </div>
 
     <style>
-    {% for font in metaobjects["app--418838118401--neon_font"].values %}
-      {% if font.font_file.value.url %}
-      @font-face {
-        font-family: "moz-font-{{ font.system.handle }}";
-        src: url("{{ font.font_file.value.url }}");
-        font-display: swap;
-      }
-      {% endif %}
-    {% endfor %}
+    {% for font in metaobjects["app--418838118401--neon_font"].values %}{% if font.font_file.value.url %}@font-face{font-family:"moz-font-{{ font.system.handle }}";src:url("{{ font.font_file.value.url }}");font-display:swap;}{% endif %}{% endfor %}
     </style>
 
-    {% comment %} FONT: same dropdown-expand card picker as Neon. Hidden select keeps the existing JS logic intact. {% endcomment %}
     <div class="sign3d-configurator__field" data-font-field>
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Choose Font</span></label>
       <select data-font-select hidden></select>
@@ -336,37 +189,12 @@
       <p class="sign3d-configurator__note">Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.</p>
       <select data-illumination-select hidden>
         {% for item in metaobjects["app--418838118401--illumination_type"].values %}
-          <option
-            value="{{ item.label.value }}"
-            data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-            data-effect-key="{{ item.effect_key.value | default: 'front_lit' }}"
-            data-sort-order="{{ item.sort_order.value | default: 999999 }}"
-            data-image="{{ item.preview_image.value | image_url: width: 480 }}"
-            data-description="{{ item.description.value | escape }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ item.label.value }}
-          </option>
+          <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" data-effect-key="{{ item.effect_key.value | default: 'front_lit' }}" data-sort-order="{{ item.sort_order.value | default: 999999 }}" data-image="{{ item.preview_image.value | image_url: width: 480 }}" data-description="{{ item.description.value | escape }}"{% if forloop.first %} selected{% endif %}>{{ item.label.value }}</option>
         {% endfor %}
       </select>
       <div class="sign3d-configurator__card-grid" data-illumination-cards></div>
     </div>
 
-    <div class="sign3d-configurator__field" hidden data-legacy-size-field>
-      <label class="sign3d-configurator__label">Legacy size (hidden, kept for compatibility)</label>
-      <select class="sign3d-configurator__select" data-size-select>
-        {% for item in metaobjects["app--418838118401--sign3d_size"].values %}
-          <option
-            value="{{ item.width_cm.value }}"
-            data-price="{{ item.price_decimal.value | default: 0 }}"
-            data-height="{{ item.height_cm.value | default: 0 }}"
-            {% if forloop.first %}selected{% endif %}>
-            {{ item.label.value }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    {% comment %} Width input is kept (hidden) because the JS reads it; customers use the slider only. {% endcomment %}
     <div class="sign3d-configurator__field" hidden>
       <div class="sign3d-configurator__measure-row">
         <input type="number" min="1" step="0.5" class="sign3d-configurator__text-input" data-width-input value="100">
@@ -385,9 +213,7 @@
         {% endfor %}
       </div>
       {% endif %}
-      <div class="sign3d-configurator__slider-meta">
-        <span data-slider-width-value>Width: -- {{ s3d_default_unit.unit.value | default: 'cm' }}</span>
-      </div>
+      <div class="sign3d-configurator__slider-meta"><span data-slider-width-value>Width: -- {{ s3d_default_unit.unit.value | default: 'cm' }}</span></div>
       <div class="sign3d-configurator__slider-row">
         <button type="button" class="sign3d-configurator__slider-arrow" data-slider-decrease aria-label="Decrease width">‹</button>
         <input type="range" class="sign3d-configurator__slider" data-custom-size-slider min="{{ s3d_default_unit.min_value.value | default: 20 }}" max="{{ s3d_default_unit.max_value.value | default: 500 }}" step="1" data-unit="{{ s3d_default_unit.unit.value | default: 'cm' }}" value="{{ s3d_default_unit.min_value.value | default: 20 }}">
@@ -399,126 +225,67 @@
 
     <div class="sign3d-configurator__field" data-letter-height-field>
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Letter / Element Height</span></label>
-      <input type="hidden" data-letter-height-input value="25">
-      <div class="sign3d-configurator__slider-meta">
-        <span data-lh-value>Letter height: -- cm</span>
+      <div class="sign3d-configurator__measure-row">
+        <input type="number" inputmode="decimal" step="any" class="sign3d-configurator__text-input" data-letter-height-input value="25" placeholder="e.g. 25">
+        <span class="sign3d-configurator__measure-unit">cm</span>
       </div>
-      <div class="sign3d-configurator__slider-row">
-        <button type="button" class="sign3d-configurator__slider-arrow" data-lh-decrease aria-label="Decrease letter height">‹</button>
-        <input type="range" class="sign3d-configurator__slider" data-lh-slider min="{{ s3d_lh_min }}" max="{{ s3d_lh_max }}" step="1" value="25">
-        <button type="button" class="sign3d-configurator__slider-arrow" data-lh-increase aria-label="Increase letter height">›</button>
-      </div>
-      <p class="sign3d-configurator__slider-hint">Drag the slider to set the letter height. The price updates automatically.</p>
+      <p class="sign3d-configurator__slider-hint" data-lh-range>Type your letter height. The price and preview update automatically.</p>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Indoor or Outdoor</span></label>
       <div class="sign3d-configurator__symbol-position-options">
-        <label class="sign3d-configurator__symbol-position-option">
-          <input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="indoor" checked>
-          <span>Indoor</span>
-        </label>
-        <label class="sign3d-configurator__symbol-position-option">
-          <input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor">
-          <span>Outdoor</span>
-        </label>
+        <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="indoor" checked><span>Indoor</span></label>
+        <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor"><span>Outdoor</span></label>
       </div>
     </div>
 
-    {% comment %} Depth is manufacturer-decided now: hidden, kept only so the JS extrusion + cart property keep working. {% endcomment %}
     <div class="sign3d-configurator__field" hidden>
-      <select class="sign3d-configurator__select" data-depth-select>
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "depth_tier" %}
-            <option value="{{ item.threshold_value.value | default: 0 }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" data-label="{{ item.label.value }}" {% if forloop.first %}selected{% endif %}>{{ item.label.value }}</option>
-          {% endif %}
-        {% endfor %}
-      </select>
+      <select class="sign3d-configurator__select" data-depth-select></select>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Material</span></label>
-      <select class="sign3d-configurator__select" data-material-select>
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "material" %}
-            <option
-              value="{{ item.label.value }}"
-              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-              {% if forloop.first %}selected{% endif %}>
-              {{ item.label.value }}
-            </option>
-          {% endif %}
-        {% endfor %}
-      </select>
+      <select class="sign3d-configurator__select" data-material-select></select>
     </div>
     <p class="sign3d-configurator__oversized-notice" data-metal-note hidden>Frontlit Metal Signs: An acrylic face will be used to allow the light to shine through, as solid metal does not transmit light.</p>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Colours</span></label>
-
       <p class="sign3d-configurator__subheading">Front Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-colour-swatches></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-colour-name-label></span></p>
-
       <p class="sign3d-configurator__subheading">Side Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-side-colour-swatches></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-side-colour-name-label></span></p>
+      <div data-backing-colour-block hidden>
+        <p class="sign3d-configurator__subheading">Backing Colour</p>
+        <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
+        <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
+      </div>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Mounting</span></label>
-      <select data-mounting-select hidden>
-        {% for item in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if item.category.value == "mounting" %}
-            <option
-              value="{{ item.label.value }}"
-              data-price="{{ item.extra_price_decimal.value | default: 0 }}"
-              data-sort-order="{{ item.sort_order.value | default: 999999 }}"
-              data-image="{{ item.image.value | image_url: width: 480 }}"
-              {% if forloop.first %}selected{% endif %}>
-              {{ item.label.value }}
-            </option>
-          {% endif %}
-        {% endfor %}
-      </select>
+      <select data-mounting-select hidden></select>
       <div class="sign3d-configurator__card-grid" data-mounting-cards></div>
+      <div class="sign3d-configurator__install-info" data-install-info hidden>
+        <img class="sign3d-configurator__install-badge" data-install-badge alt="" width="64" height="64" hidden>
+        <p class="sign3d-configurator__install-text" data-install-text></p>
+      </div>
+      <p class="sign3d-configurator__electrician-note" data-electrician-note hidden></p>
     </div>
 
-    {% assign s3d_addon_included = 0 %}
-    {% assign s3d_addon_optional = 0 %}
-    {% for addon in metaobjects["app--418838118401--sign3d_option"].values %}
-      {% if addon.category.value == "addon" %}
-        {% if addon.is_free.value %}{% assign s3d_addon_included = s3d_addon_included | plus: 1 %}{% else %}{% assign s3d_addon_optional = s3d_addon_optional | plus: 1 %}{% endif %}
-      {% endif %}
-    {% endfor %}
-    {% if s3d_addon_included > 0 or s3d_addon_optional > 0 %}
-    <div class="sign3d-configurator__field">
-      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Add-ons</span></label>
-      {% if s3d_addon_included > 0 %}
-        <p class="sign3d-configurator__subheading">Included With Your Order</p>
-        {% for addon in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if addon.category.value == "addon" and addon.is_free.value %}
-            <label class="sign3d-configurator__checkbox-row is-locked">
-              <input type="checkbox" data-addon-checkbox data-price="0" checked disabled>
-              <span>{{ addon.label.value }}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-            </label>
-          {% endif %}
-        {% endfor %}
-      {% endif %}
-      {% if s3d_addon_optional > 0 %}
-        <p class="sign3d-configurator__subheading">Optional Add-ons</p>
-        {% for addon in metaobjects["app--418838118401--sign3d_option"].values %}
-          {% if addon.category.value == "addon" and addon.is_free.value == false %}
-            <label class="sign3d-configurator__checkbox-row">
-              <input type="checkbox" data-addon-checkbox data-price="{{ addon.extra_price_decimal.value | default: 0 }}">
-              <span>{{ addon.label.value }}</span>
-            </label>
-          {% endif %}
-        {% endfor %}
-      {% endif %}
+    <div class="sign3d-configurator__field" data-power-field hidden>
+      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Power Supply</span></label>
+      <div class="sign3d-configurator__symbol-position-options sign3d-configurator__power-options" data-power-options></div>
     </div>
-    {% endif %}
+
+    <div class="sign3d-configurator__field" data-addon-field hidden>
+      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Add-ons</span></label>
+      <div data-addon-included-wrap hidden><p class="sign3d-configurator__subheading">Included With Your Order</p><div data-addon-included></div></div>
+      <div data-addon-optional-wrap hidden><p class="sign3d-configurator__subheading">Optional Add-ons</p><div data-addon-optional></div></div>
+    </div>
 
     <div class="sign3d-configurator__breakdown" data-price-breakdown>
       <p class="sign3d-configurator__breakdown-title">Price Breakdown</p>
@@ -543,15 +310,7 @@
       </div>
     </div>
 
-    <button
-      type="button"
-      class="sign3d-configurator__add-to-cart"
-      data-add-to-cart
-      hidden
-      data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}"
-      data-product-id="{{ product.id }}">
-      Add to Cart
-    </button>
+    <button type="button" class="sign3d-configurator__add-to-cart" data-add-to-cart hidden data-variant-id="{{ product.selected_or_first_available_variant.id | default: product.variants.first.id }}" data-product-id="{{ product.id }}">Add to Cart</button>
     <p class="sign3d-configurator__status" data-add-to-cart-status></p>
 
   </div>

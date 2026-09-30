@@ -1564,3 +1564,154 @@
 .sign3d-configurator__preview-inner.led-on.effect-backlit.face-standard .sign3d-configurator__letter::after {
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 60%);
 }
+
+
+/* =====================================================================
+   v13 — Painted backlit, backing panel, custom colours, install notes
+   ===================================================================== */
+
+/* ---- BACKLIT: painted face + painted sides (customer's colours, NOT black), light glowing from behind ---- */
+.sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__letter {
+    color: var(--sign3d-light, #ffffff);
+    text-shadow:
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent),
+        0 0 10px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent),
+        0 0 26px color-mix(in srgb, var(--sign3d-light, #ffffff) 65%, transparent),
+        0 0 50px color-mix(in srgb, var(--sign3d-light, #ffffff) 40%, transparent),
+        0 0 80px color-mix(in srgb, var(--sign3d-light, #ffffff) 22%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__preview-icon {
+    opacity: 1;
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent)) drop-shadow(0 0 26px color-mix(in srgb, var(--sign3d-light, #ffffff) 60%, transparent)) drop-shadow(0 0 48px color-mix(in srgb, var(--sign3d-light, #ffffff) 35%, transparent));
+}
+
+/* ---- Metal backing behind the sign (raceway / rectangle / circle). Colour = Backing Colour. ---- */
+.sign3d-configurator__backing {
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--sign3d-backing, #111111);
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.04) 38%, rgba(0, 0, 0, 0.30) 100%);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    transition: background-color 0.25s ease;
+}
+
+.sign3d-configurator__backing[hidden] {
+    display: none;
+}
+
+.sign3d-configurator__backing.is-raceway {
+    border-radius: 4px;
+}
+
+.sign3d-configurator__backing.is-rectangle {
+    border-radius: 6px;
+}
+
+.sign3d-configurator__backing.is-circle {
+    border-radius: 50%;
+}
+
+.sign3d-configurator__backing.finish-gloss {
+    background-image: var(--s3d-fin-gloss);
+}
+
+.sign3d-configurator__backing.finish-metallic {
+    background-image: var(--s3d-fin-metallic);
+}
+
+.sign3d-configurator__backing.finish-brushed_metal {
+    background-image: var(--s3d-fin-brushed);
+}
+
+/* ---- Long colour lists (paint colour range) scroll inside the picker ---- */
+.sign3d-configurator__swatch-groups {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+/* ---- Custom colour box ---- */
+.sign3d-configurator__custom-colour {
+    margin: 8px 0 4px;
+}
+
+.sign3d-configurator__custom-colour-row {
+    display: flex;
+    gap: 8px;
+}
+
+.sign3d-configurator__custom-colour-row .sign3d-configurator__text-input {
+    flex: 1;
+    font-size: 13px;
+    padding: 8px 10px;
+}
+
+.sign3d-configurator__custom-colour-btn {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ff2ec4, #7a00ff);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.sign3d-configurator__custom-colour-msg {
+    font-size: 11px;
+    color: #9a9aa8;
+    margin: 4px 0 0;
+    min-height: 14px;
+}
+
+.sign3d-configurator__custom-colour-msg.is-error {
+    color: #ff7a7a;
+}
+
+/* ---- Install badge + yellow electrician note + power options ---- */
+.sign3d-configurator__install-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.sign3d-configurator__install-info[hidden],
+.sign3d-configurator__install-badge[hidden],
+.sign3d-configurator__electrician-note[hidden] {
+    display: none;
+}
+
+.sign3d-configurator__install-badge {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.sign3d-configurator__install-text {
+    margin: 0;
+    font-size: 12px;
+    color: #b8b8c4;
+    line-height: 1.4;
+}
+
+.sign3d-configurator__electrician-note {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #ffe066;
+    background: rgba(255, 214, 10, 0.12);
+    border: 1px solid rgba(255, 214, 10, 0.55);
+    border-left: 4px solid #ffd60a;
+    border-radius: 8px;
+}
+
+.sign3d-configurator__power-options {
+    flex-direction: column;
+    gap: 8px;
+}

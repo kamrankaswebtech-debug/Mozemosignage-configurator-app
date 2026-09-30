@@ -144,7 +144,7 @@
 }
 
 .neon-configurator__preview-inner.backboard--rectangle {
-    padding: 22px 32px;
+    padding: 12px 18px;
     border-radius: 6px;
     border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
     background: transparent;
@@ -154,12 +154,12 @@
 .neon-configurator__preview-inner.backboard--cut-around,
 .neon-configurator__preview-inner.backboard--cut-to-letter,
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
-    /* No CSS border/background here on purpose — the outline is painted dynamically on the
-       hidden .neon-configurator__shape-source clone (see updateBackboardPanel() in
-       neon-configurator.js), so it hugs the EXACT rendered shape of the customer's current
-       text/font/size — fully dynamic, matches the client's reference PDFs. Padding reserves
-       just enough room for the outline's gap+thickness so it isn't clipped by the stage. */
-    padding: 18px 26px;
+    /* No CSS border/background here on purpose — the outline/fill is painted dynamically on
+       the hidden .neon-configurator__shape-source clone (see updateBackboardPanel() in
+       neon-configurator.js), sized relative to the CURRENT font size so it hugs the text
+       tightly and BRIDGES the small gaps between letters/words/icon into one connected
+       shape, matching the client's reference. Padding kept small on purpose. */
+    padding: 8px 10px;
     border: none;
     background: transparent;
     box-shadow: none;
@@ -174,7 +174,7 @@
 }
 
 .neon-configurator__preview-inner.backboard--open-box {
-    padding: 26px 40px;
+    padding: 16px 24px;
     border-radius: 2px;
     border: 2px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.45));
     background: transparent;
@@ -761,6 +761,13 @@
     background: #16161f;
     color: #ffffff;
     font-size: 15px;
+}
+
+.neon-configurator__text-input--textarea {
+    resize: none;
+    font-family: inherit;
+    line-height: 1.4;
+    min-height: 62px;
 }
 
 .neon-configurator__swatches {
@@ -1758,5 +1765,90 @@
 @media (max-width: 420px) {
     .neon-configurator__colour-cards {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ---- Outdoor-only-above-60cm warning popup ---- */
+.neon-configurator__modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    padding: 20px;
+}
+
+.neon-configurator__modal-overlay[hidden] {
+    display: none;
+}
+
+.neon-configurator__modal-box {
+    background: #16161f;
+    border: 1px solid #2c2c38;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.neon-configurator__modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    margin: 0 0 10px;
+    color: #ffffff;
+}
+
+.neon-configurator__modal-text {
+    font-size: 13px;
+    color: #b8b8c4;
+    line-height: 1.5;
+    margin: 0 0 18px;
+}
+
+.neon-configurator__modal-close-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* ---- Jumping pin — briefly appears above a letter/symbol when its colour is set in
+   Multicoloured Text mode, so the customer clearly sees which one they just changed. ---- */
+.neon-configurator__colour-pin {
+    position: absolute;
+    z-index: 25;
+    pointer-events: none;
+    font-size: 20px;
+    animation: neon-pin-jump 0.5s ease-out forwards;
+}
+
+@keyframes neon-pin-jump {
+    0% {
+        transform: translate(-50%, 0) scale(0.4);
+        opacity: 0;
+    }
+
+    30% {
+        transform: translate(-50%, -14px) scale(1.15);
+        opacity: 1;
+    }
+
+    60% {
+        transform: translate(-50%, -6px) scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -10px) scale(1);
+        opacity: 0;
     }
 }

@@ -282,10 +282,13 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
 
         if (showPrice) {
             const p = parseFloat(opt.dataset.price) || 0;
-            const price = document.createElement('span');
-            price.className = 'sign3d-configurator__pick-card-price';
-            price.textContent = p > 0 ? '+$' + p.toFixed(2) : 'Included';
-            card.appendChild(price);
+            // showPrice === 'nonzero' -> show the price badge only when the option actually costs something.
+            if (showPrice !== 'nonzero' || p > 0) {
+                const price = document.createElement('span');
+                price.className = 'sign3d-configurator__pick-card-price';
+                price.textContent = p > 0 ? '+$' + p.toFixed(2) : 'Included';
+                card.appendChild(price);
+            }
         }
 
         card.addEventListener('click', () => {
@@ -300,7 +303,9 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
     sync();
 }
 
-// Front + Side colour swatches, grouped: Standard / Gloss / Metallic / Brushed Metal.
+
+
+// Front / Side / Backing colour swatches, grouped: Standard / Gloss / Metallic / Brushed Metal (any other group gets its own heading).
 function sign3dBuildColourSwatches(root) {
     const colours = sign3dReadJson(root, '[data-sign3d-colours]');
     if (!colours.length) return;
@@ -318,13 +323,16 @@ function sign3dBuildColourSwatches(root) {
     });
 
     [
-        { container: '[data-colour-swatches]', label: '[data-colour-name-label]' },
-        { container: '[data-side-colour-swatches]', label: '[data-side-colour-name-label]' }
+        { container: '[data-colour-swatches]', label: '[data-colour-name-label]', prefer: null },
+        { container: '[data-side-colour-swatches]', label: '[data-side-colour-name-label]', prefer: null },
+        // Backing defaults to a colour literally named "Black" (if it exists), otherwise the first swatch.
+        { container: '[data-back-colour-swatches]', label: '[data-back-colour-name-label]', prefer: /^\s*black\s*$/i }
     ].forEach((cfg) => {
         const container = root.querySelector(cfg.container);
         if (!container) return;
         container.innerHTML = '';
-        let first = true;
+        const preferred = cfg.prefer ? colours.find((c) => cfg.prefer.test(c.name)) : null;
+        const defaultColour = preferred || groups[keys[0]][0];
         keys.forEach((g) => {
             const section = document.createElement('div');
             const title = document.createElement('p');
@@ -334,11 +342,12 @@ function sign3dBuildColourSwatches(root) {
             const row = document.createElement('div');
             row.className = 'sign3d-configurator__swatch-row';
             groups[g].forEach((c) => {
+                const isDefault = c === defaultColour;
                 const item = document.createElement('div');
                 item.className = 'sign3d-configurator__swatch-item';
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'sign3d-configurator__swatch finish-' + g + (first ? ' is-selected' : '');
+                btn.className = 'sign3d-configurator__swatch finish-' + g + (isDefault ? ' is-selected' : '');
                 btn.style.backgroundColor = c.hex;
                 btn.dataset.colourHex = c.hex;
                 btn.dataset.colourPrice = c.price || 0;
@@ -352,10 +361,9 @@ function sign3dBuildColourSwatches(root) {
                 item.appendChild(btn);
                 item.appendChild(name);
                 row.appendChild(item);
-                if (first) {
+                if (isDefault) {
                     const labelEl = root.querySelector(cfg.label);
                     if (labelEl) labelEl.textContent = c.name;
-                    first = false;
                 }
             });
             section.appendChild(row);
@@ -364,10 +372,172 @@ function sign3dBuildColourSwatches(root) {
     });
 }
 
+// Resolves a typed colour (hex with/without #, CSS colour name with/without spaces) to '#rrggbb', or null if not recognised.
+function sign3dResolveCssColour(input) {
+    let text = String(input || '').trim();
+    if (!text) return null;
+    if (/^([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(text)) text = '#' + text;
+    const ctx = document.createElement('canvas').getContext('2d');
+    const test = (value) => {
+        ctx.fillStyle = '#010203';
+        ctx.fillStyle = value;
+        const a = ctx.fillStyle;
+        ctx.fillStyle = '#040506';
+        ctx.fillStyle = value;
+        const b = ctx.fillStyle;
+        return (a === b && a.charAt(0) === '#') ? a.toLowerCase() : null;
+    };
+    return test(text) || test(text.replace(/\s+/g, ''));
+}
+
+// ---- Liquid-size fix: options come from ONE JSON block (data-sign3d-options); markup is built here ----
+function sign3dInjectIcons(root) {
+    const svg = (d) => '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + d + '</svg>';
+    const reset = '<path d="M3 12a9 9 0 1 0 3-6.7L3 9"/><path d="M3 3v6h6"/>';
+    const map = {
+        '[data-undo-btn]': '<path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-6.7L3 9"/>',
+        '[data-redo-btn]': '<path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-6.7L21 9"/>',
+        '[data-reset-colour-btn]': reset,
+        '[data-reset-font-btn]': reset
+    };
+    Object.keys(map).forEach((selector) => {
+        const btn = root.querySelector(selector);
+        if (btn) btn.insertAdjacentHTML('afterbegin', svg(map[selector]));
+    });
+}
+
+function sign3dBuildPricingConfig(options) {
+    const pick = (cat) => options.filter((o) => o.c === cat);
+    const s = options.find((o) => o.c === 'pricing_settings') || {};
+    return {
+        widthTiers: pick('width_tier').map((o) => ({ width: o.t, price: o.p, label: o.l })),
+        letterHeightTiers: pick('letter_height_tier').map((o) => ({ height: o.t, adjustment: o.p, label: o.l })),
+        letterCountTiers: pick('letter_count_tier').map((o) => ({ startsAt: o.t, surcharge: o.p, label: o.l })),
+        depthTiers: pick('depth_tier').map((o) => ({ depth: o.t, surcharge: o.p, label: o.l })),
+        settings: {
+            outdoorPercent: s.oz ?? 15,
+            outdoorMin: s.om ?? 200,
+            includedLetters: s.il ?? 20,
+            panelRate: s.pr ?? 0,
+            baseLetterHeight: s.bh ?? 25,
+            baseDepthLabel: s.bd || ''
+        }
+    };
+}
+
+// Builds selects (material, depth, mounting), wallpaper thumbs, add-on checkboxes and the letter-height range from the JSON block.
+function sign3dHydrateOptions(root) {
+    const raw = sign3dReadJson(root, '[data-sign3d-options]');
+    const list = Array.isArray(raw) ? raw : [];
+    // Case/whitespace-insensitive category match — Admin's "Category" field is free text,
+    // so a stray capital letter or trailing space (e.g. "Wallpaper" instead of "wallpaper")
+    // silently made byCat('wallpaper') return zero rows with the old strict === comparison,
+    // even though the entries clearly existed in Admin. This never surfaced as an error —
+    // it just looked like "no wallpapers configured" on the storefront.
+    const normCat = (v) => String(v || '').trim().toLowerCase();
+    const byCat = (cat) => list.filter((o) => normCat(o.c) === normCat(cat));
+
+    const fillSelect = (selector, cat, decorate, dedicatedSelector) => {
+        const select = root.querySelector(selector);
+        if (!select) return;
+        select.innerHTML = '';
+        // Dedicated small JSON block first (independent of the big options JSON); big JSON kept as fallback.
+        const dedicatedList = dedicatedSelector ? sign3dReadJson(root, dedicatedSelector) : [];
+        const source = (Array.isArray(dedicatedList) && dedicatedList.length) ? dedicatedList : byCat(cat);
+        source.forEach((o) => {
+            const opt = document.createElement('option');
+            opt.value = o.l;
+            opt.textContent = o.l;
+            opt.dataset.price = o.p || 0;
+            if (decorate) decorate(opt, o);
+            select.appendChild(opt);
+        });
+        if (select.options.length) select.selectedIndex = 0;
+    };
+    fillSelect('[data-material-select]', 'material', null, '[data-sign3d-materials]');
+    fillSelect('[data-depth-select]', 'depth_tier', (opt, o) => { opt.value = o.t; opt.dataset.label = o.l; });
+    fillSelect('[data-mounting-select]', 'mounting', (opt, o) => {
+        opt.dataset.sortOrder = o.s;
+        opt.dataset.image = o.i || '';
+        opt.dataset.backingType = o.b || '';
+        opt.dataset.description = o.d || '';
+    }, '[data-sign3d-mountings]');
+
+    const lhInput = root.querySelector('[data-letter-height-input]');
+    if (lhInput) {
+        const tiers = byCat('letter_height_tier').map((o) => Number(o.t)).filter(Number.isFinite);
+        lhInput.dataset.minCm = tiers.length ? Math.min.apply(null, tiers) : 10;
+        lhInput.dataset.maxCm = tiers.length ? Math.max.apply(null, tiers) : 100;
+    }
+
+    const thumbs = root.querySelector('[data-bg-thumbs]');
+    if (thumbs) {
+        // Dedicated small JSON block first (independent of the big options JSON); old path kept as fallback.
+        const dedicatedWalls = sign3dReadJson(root, '[data-sign3d-wallpapers]');
+        const walls = (Array.isArray(dedicatedWalls) && dedicatedWalls.length ? dedicatedWalls : byCat('wallpaper'))
+            .map((o, i) => ({ o, i }))
+            .sort((a, b) => ((Number(a.o.s) || 999999) - (Number(b.o.s) || 999999)) || (a.i - b.i))
+            .map((x) => x.o);
+        thumbs.innerHTML = '';
+        walls.forEach((o, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sign3d-configurator__bg-thumb' + (idx === 0 ? ' is-selected' : '');
+            btn.dataset.bgUrl = o.w || o.i || '';
+            btn.title = o.l;
+            btn.setAttribute('aria-label', o.l);
+            const img = document.createElement('img');
+            // "th" is a properly small (120px) thumbnail — fixes the earlier limitation where
+            // the thumbnail strip was loading the full 480px "i" image into a ~50px box.
+            img.src = o.th || o.i || o.w || '';
+            img.alt = o.l;
+            img.width = 60;
+            img.height = 45;
+            img.loading = 'lazy';
+            btn.appendChild(img);
+            thumbs.appendChild(btn);
+        });
+        thumbs.style.display = walls.length ? '' : 'none';
+    }
+
+    const LOCK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+    const addons = byCat('addon');
+    const buildAddons = (boxSel, wrapSel, items, locked) => {
+        const box = root.querySelector(boxSel);
+        const wrap = root.querySelector(wrapSel);
+        if (!box || !wrap) return;
+        box.innerHTML = '';
+        items.forEach((o) => {
+            const label = document.createElement('label');
+            label.className = 'sign3d-configurator__checkbox-row' + (locked ? ' is-locked' : '');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.setAttribute('data-addon-checkbox', '');
+            input.dataset.price = locked ? 0 : (o.p || 0);
+            if (locked) { input.checked = true; input.disabled = true; }
+            const span = document.createElement('span');
+            span.textContent = o.l;
+            label.appendChild(input);
+            label.appendChild(span);
+            if (locked) label.insertAdjacentHTML('beforeend', LOCK_SVG);
+            box.appendChild(label);
+        });
+        wrap.hidden = !items.length;
+    };
+    buildAddons('[data-addon-included]', '[data-addon-included-wrap]', addons.filter((o) => o.f), true);
+    buildAddons('[data-addon-optional]', '[data-addon-optional-wrap]', addons.filter((o) => !o.f), false);
+    const addonField = root.querySelector('[data-addon-field]');
+    if (addonField) addonField.hidden = !addons.length;
+
+    return list;
+}
+
 function initSign3dConfigurator(root) {
+    sign3dInjectIcons(root);
+    const sign3dOptions = sign3dHydrateOptions(root);
     sign3dBuildFontPicker(root);
     sign3dBuildOptionCards(root, '[data-illumination-select]', '[data-illumination-cards]', true);
-    sign3dBuildOptionCards(root, '[data-mounting-select]', '[data-mounting-cards]', true);
+    sign3dBuildOptionCards(root, '[data-mounting-select]', '[data-mounting-cards]', 'nonzero');
     sign3dBuildColourSwatches(root);
     const previewText = root.querySelector('[data-preview-text]');
     const textInput = root.querySelector('[data-text-input]');
@@ -405,7 +575,7 @@ function initSign3dConfigurator(root) {
     const measurementsLabel = root.querySelector('[data-measurements-label]');
     const ledToggle = root.querySelector('[data-led-toggle]');
     const ledLabel = root.querySelector('[data-led-label]');
-    let selectedBgUrl = bgThumbs.length ? bgThumbs[0].dataset.bgUrl : null;
+    let selectedBgUrl = bgThumbs.length ? bgThumbs[0].dataset.bgUrl : ((previewBox && previewBox.dataset.defaultBg) || null);
     let wallpaperHidden = false;
     const alignButtons = root.querySelectorAll('[data-align-btn]');
     const selectAllBtn = root.querySelector('[data-select-all-btn]');
@@ -417,13 +587,34 @@ function initSign3dConfigurator(root) {
     const lhSlider = root.querySelector('[data-lh-slider]');
     const lhValueEl = root.querySelector('[data-lh-value]');
     const metalNoteEl = root.querySelector('[data-metal-note]');
+    const backingEl = root.querySelector('[data-backing]');
+    const backingColourBlock = root.querySelector('[data-backing-colour-block]');
+    const installInfoEl = root.querySelector('[data-install-info]');
+    const installBadgeEl = root.querySelector('[data-install-badge]');
+    const installTextEl = root.querySelector('[data-install-text]');
+    const electricianNoteEl = root.querySelector('[data-electrician-note]');
+    const powerFieldEl = root.querySelector('[data-power-field]');
+    const powerOptionsEl = root.querySelector('[data-power-options]');
+    const letterHeightRangeEl = root.querySelector('[data-lh-range]');
+    const installBadges = (() => {
+        const pickBadge = (cat) => { const o = sign3dOptions.find((x) => x.c === cat); return o ? (o.i || '') : ''; };
+        const b = { electrician: pickBadge('install_electrician'), easy: pickBadge('install_easy') };
+        return (b && !Array.isArray(b)) ? b : {};
+    })();
+    const powerAdapters = (() => {
+        const list = sign3dReadJson(root, '[data-sign3d-power]');
+        return (Array.isArray(list) ? list : [])
+            .map((p, i) => ({ p, i }))
+            .sort((a, b) => ((a.p.sort ?? 999999) - (b.p.sort ?? 999999)) || (a.i - b.i))
+            .map((x) => x.p);
+    })();
 
     // ---- NEW: live-measurement pricing engine (width/letter-height/letter-count/depth,
     // Indoor/Outdoor, logo upload with live scaling, price breakdown, final review) ----
     const pricingConfigEl = root.querySelector('[data-sign3d-pricing-config]');
     let pricingConfig = null;
     try {
-        pricingConfig = pricingConfigEl ? JSON.parse(pricingConfigEl.textContent) : null;
+        pricingConfig = sign3dBuildPricingConfig(sign3dOptions);
     } catch (err) {
         console.error('3D Sign Configurator: failed to parse pricing config JSON.', err);
         pricingConfig = null;
@@ -592,13 +783,15 @@ function initSign3dConfigurator(root) {
 
         // Logo keeps its own proportions and is shown as large as the preview allows.
         // Overall Width still nudges the size a little (0.65x .. 1x).
-        const factor = Math.min(1, 0.65 + 0.35 * ((widthCm || 100) / 200));
+        const factor = Math.min(1.6, Math.max(0.45, 1 + 0.45 * Math.log2(Math.max(widthCm || 100, 1) / 100)));
         let w = maxW;
         let h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
         logoImg.style.width = Math.round(w * factor) + 'px';
         logoImg.style.height = Math.round(h * factor) + 'px';
         logoImg.style.objectFit = 'contain';
+        // Manual placement is off, so always start from a clean scale/offset (zoom is driven by Overall Width now).
+        if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) { logoScale = 1; logoOffsetX = 0; logoOffsetY = 0; }
         applyLogoTransform();
         constrainLogo();
     }
@@ -866,6 +1059,9 @@ function initSign3dConfigurator(root) {
         rows.push(['Material', d.materialLabel]);
 
         rows.push(['Mounting', d.mountingLabel]);
+        if (d.backingColourName) rows.push(['Backing Colour', d.backingColourName]);
+        if (d.powerSupply) rows.push(['Power Supply', escapeHtml(d.powerSupply)]);
+        rows.push(['Installation', d.installNote]);
         if (d.addonLabels.length) rows.push(['Add-ons', d.addonLabels.join(', ')]);
         rows.push(['Construction', d.isOutdoor ? 'Outdoor' : 'Indoor']);
         rows.push(['Total Price', '$' + d.total.toFixed(2)]);
@@ -904,6 +1100,12 @@ function initSign3dConfigurator(root) {
     let selectedSideHex = sideSwatches.length ? sideSwatches[0].dataset.colourHex : '#000000';
     let selectedSideName = sideSwatches.length ? sideSwatches[0].dataset.colourName : '';
     let selectedSideGroup = sideSwatches.length ? (sideSwatches[0].dataset.colourGroup || 'standard') : 'standard';
+    const backSwatches = root.querySelectorAll('[data-back-colour-swatches] .sign3d-configurator__swatch');
+    const backColourNameLabel = root.querySelector('[data-back-colour-name-label]');
+    const defaultBackSwatch = root.querySelector('[data-back-colour-swatches] .sign3d-configurator__swatch.is-selected') || backSwatches[0] || null;
+    let selectedBackHex = defaultBackSwatch ? defaultBackSwatch.dataset.colourHex : '#111111';
+    let selectedBackName = defaultBackSwatch ? defaultBackSwatch.dataset.colourName : '';
+    let selectedBackGroup = defaultBackSwatch ? (defaultBackSwatch.dataset.colourGroup || 'standard') : 'standard';
     let currentTotal = 0;
 
     function applyLetterTransform(span, i) {
@@ -1114,6 +1316,9 @@ function initSign3dConfigurator(root) {
             sideHex: selectedSideHex,
             sideName: selectedSideName,
             sideGroup: selectedSideGroup,
+            backHex: selectedBackHex,
+            backName: selectedBackName,
+            backGroup: selectedBackGroup,
             symbols: selectedSymbols.map((s) => ({ url: s.url, label: s.label })),
             align: selectedAlignBtn ? selectedAlignBtn.dataset.align : 'center',
             letterOffsets: letterOffsets.map((o) => ({ x: o.x, y: o.y })),
@@ -1162,6 +1367,7 @@ function initSign3dConfigurator(root) {
         if (colourNameLabel) colourNameLabel.textContent = state.colourName;
         selectedColourGroup = state.colourGroup || 'standard';
         applySideState(state);
+        applyBackState(state);
         updatePreviewColour();
 
         selectedSymbols = state.symbols.map((s) => ({ url: s.url, label: s.label }));
@@ -1211,6 +1417,8 @@ function initSign3dConfigurator(root) {
         if (colourNameLabel) colourNameLabel.textContent = defaultSwatch.dataset.colourName;
         selectedColourGroup = defaultSwatch.dataset.colourGroup || 'standard';
         resetSideColour();
+        resetBackColour();
+        clearCustomColourInputs();
         updatePreviewColour();
         calculateTotal();
         pushHistory();
@@ -1267,7 +1475,24 @@ function initSign3dConfigurator(root) {
 
         // Font size now driven directly by the actual Letter Height the customer enters —
         // more accurate than the old width-based guess, and reacts live as they type.
-        baseFontSize = Math.min(160, Math.max(16, heightCm * 2.2));
+        const heightBasedSize = Math.min(160, Math.max(16, heightCm * 2.2));
+        // Overall Width zoom: 100 cm = normal size, wider = zoom in, narrower = zoom out.
+        let widthZoom = Math.min(2, Math.max(0.55, 1 + 0.45 * Math.log2(Math.max(widthCm, 1) / 100)));
+        if (widthZoom > 1 && textFlex && previewInner && hasText()) {
+            // Zoom in only as far as the text still fits on one line inside the preview.
+            const prevWidth = textFlex.style.width;
+            const prevWrap = textFlex.style.flexWrap;
+            textFlex.style.fontSize = (heightBasedSize * groupScale) + 'px';
+            textFlex.style.width = 'max-content';
+            textFlex.style.flexWrap = 'nowrap';
+            const naturalWidth = textFlex.getBoundingClientRect().width;
+            textFlex.style.width = prevWidth;
+            textFlex.style.flexWrap = prevWrap;
+            const iconsW = (iconsContainer && (currentSymbolPosition === 'left' || currentSymbolPosition === 'right')) ? iconsContainer.offsetWidth + 12 : 0;
+            const availableWidth = previewInner.clientWidth - iconsW - 8;
+            if (naturalWidth > 0 && availableWidth > 0) widthZoom = Math.max(1, Math.min(widthZoom, availableWidth / naturalWidth));
+        }
+        baseFontSize = Math.min(240, Math.max(12, heightBasedSize * widthZoom));
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
 
         if (widthLabel) widthLabel.textContent = formatDim(widthCm);
@@ -1276,6 +1501,7 @@ function initSign3dConfigurator(root) {
         syncLetterHeightSlider();
 
         updateLogoPreviewSize(widthCm, heightCm);
+        updateMountingInfo();
         updateDimensionLines();
     }
 
@@ -1309,6 +1535,7 @@ function initSign3dConfigurator(root) {
         if (!previewStage) return;
         const stageRect = previewStage.getBoundingClientRect();
         const contentRect = getSignContentRect();
+        updateBackingPanel(contentRect, stageRect);
         if (!contentRect || !contentRect.width || !contentRect.height) return;
 
         if (widthDimLine) {
@@ -1532,6 +1759,7 @@ function initSign3dConfigurator(root) {
         addonLabels.forEach((lbl) => lines.push({ label: lbl, value: addonPriceMap[lbl] || 0, included: !(addonPriceMap[lbl] > 0) }));
         lines.push({ label: 'Front colour: ' + (colourNameLabel ? colourNameLabel.textContent.trim() : '') + ' (' + sign3dPrettyGroup(selectedColourGroup) + ')', value: 0, included: true });
         lines.push({ label: 'Side colour: ' + selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')', value: 0, included: true });
+        if (getBackingType() !== 'none') lines.push({ label: 'Backing colour: ' + selectedBackName + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')', value: 0, included: true });
         lines.push({ label: isOutdoor ? 'Outdoor construction' : 'Indoor', value: outdoorSurcharge, included: !isOutdoor });
         lines.push({ label: 'Standard delivery (Australia-wide)', value: 0, included: true });
 
@@ -1548,6 +1776,9 @@ function initSign3dConfigurator(root) {
             colourName: colourNameLabel ? colourNameLabel.textContent.trim() : '',
             colourGroupLabel: sign3dPrettyGroup(selectedColourGroup),
             sideColourName: selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
+            backingColourName: getBackingType() !== 'none' ? (selectedBackName + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')') : '',
+            powerSupply: getSelectedPower(),
+            installNote: getInstallRequirementText(),
             total
         };
     }
@@ -1588,9 +1819,21 @@ function initSign3dConfigurator(root) {
     function applyWallpaperBackground() {
         if (!previewBox) return;
         if (selectedBgUrl && !wallpaperHidden) {
-            previewBox.style.backgroundImage = "url('" + selectedBgUrl + "')";
+            // setProperty(..., 'important') guarantees this wins over ANY CSS rule painting
+            // a background on this element (e.g. a fallback grid pattern), no matter that
+            // rule's specificity or where it sits in the stylesheet. Plain style.backgroundImage
+            // assignment (previous code) could silently lose to such a CSS rule — this is why
+            // the wallpaper stopped appearing after the JSON/JS refactor removed the old
+            // server-rendered inline style that used to guarantee it on first paint.
+            previewBox.style.setProperty('background-image', "url('" + selectedBgUrl + "')", 'important');
+            previewBox.style.setProperty('background-size', 'cover', 'important');
+            previewBox.style.setProperty('background-position', 'center', 'important');
+            previewBox.style.setProperty('background-repeat', 'no-repeat', 'important');
         } else {
-            previewBox.style.backgroundImage = '';
+            previewBox.style.removeProperty('background-image');
+            previewBox.style.removeProperty('background-size');
+            previewBox.style.removeProperty('background-position');
+            previewBox.style.removeProperty('background-repeat');
         }
     }
 
@@ -1644,7 +1887,7 @@ function initSign3dConfigurator(root) {
         illuminationSelect.addEventListener('change', updateIlluminationEffect);
     }
 
-    sizeSelect.addEventListener('change', updatePreviewScale);
+    if (sizeSelect) sizeSelect.addEventListener('change', updatePreviewScale);
 
     const ALIGN_MAP = { left: 'flex-start', center: 'center', right: 'flex-end' };
     alignButtons.forEach((btn) => {
@@ -1877,6 +2120,13 @@ function initSign3dConfigurator(root) {
                     properties['Symbol Position'] = currentSymbolPosition.charAt(0).toUpperCase() + currentSymbolPosition.slice(1);
                 }
 
+                if (getBackingType() !== 'none') {
+                    properties['Backing Colour'] = (selectedBackName || 'Default') + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')';
+                }
+                const powerChoice = getSelectedPower();
+                if (powerChoice) properties['Power Supply'] = powerChoice;
+                properties['Installation'] = getInstallRequirementText();
+
                 if (currentUnit !== 'cm') {
                     properties['Entered Size'] = 'Width ' + formatDim(getWidthCm()) + ' x Height ' + formatDim(getHeightCm());
                 }
@@ -1950,6 +2200,307 @@ function initSign3dConfigurator(root) {
 
     // ---- v11 additions ----
 
+    // ---- v13 additions: type box, backing panel, install rules, power supply, custom colours ----
+
+    function updateLetterHeightRangeHint() {
+        if (!letterHeightRangeEl || !letterHeightInput) return;
+        const minCm = parseFloat(letterHeightInput.dataset.minCm);
+        const maxCm = parseFloat(letterHeightInput.dataset.maxCm);
+        if (!Number.isFinite(minCm) || !Number.isFinite(maxCm)) return;
+        letterHeightRangeEl.textContent = 'Type your letter height (' + formatDim(minCm) + ' to ' + formatDim(maxCm) + '). The price and preview update automatically.';
+    }
+
+    function initLetterHeightInput() {
+        if (!letterHeightInput) return;
+        letterHeightInput.addEventListener('change', () => {
+            const minCm = parseFloat(letterHeightInput.dataset.minCm);
+            const maxCm = parseFloat(letterHeightInput.dataset.maxCm);
+            let cm = getHeightCm();
+            if (!cm && Number.isFinite(minCm)) cm = minCm;
+            if (Number.isFinite(minCm)) cm = Math.max(minCm, cm);
+            if (Number.isFinite(maxCm) && maxCm > 0) cm = Math.min(maxCm, cm);
+            letterHeightInput.value = roundNice(cm / unitFactor());
+            updatePreviewScale();
+            calculateTotal();
+        });
+    }
+
+    // Mounting type: 'none' | 'raceway' | 'rectangle' | 'circle' (Admin "Backing Type", else auto-detected from the label).
+    function getBackingType() {
+        const opt = mountingSelect ? mountingSelect.options[mountingSelect.selectedIndex] : null;
+        if (!opt) return 'none';
+        const key = String(opt.dataset.backingType || '').trim().toLowerCase();
+        if (['none', 'raceway', 'rectangle', 'circle'].indexOf(key) > -1) return key;
+        const t = opt.textContent.toLowerCase();
+        if (/no\s*backing|without|none/.test(t)) return 'none';
+        if (/raceway/.test(t)) return 'raceway';
+        if (/circle|round/.test(t)) return 'circle';
+        if (/rect|square|panel/.test(t)) return 'rectangle';
+        return 'none';
+    }
+
+    // Draws the metal backing behind the sign, hugging the real sign content (updates on every zoom / text change).
+    function updateBackingPanel(contentRect, stageRect) {
+        if (!backingEl) return;
+        const type = getBackingType();
+        if (type === 'none' || !contentRect || !contentRect.width || !contentRect.height) {
+            backingEl.hidden = true;
+            return;
+        }
+        const cx = (contentRect.left + contentRect.right) / 2 - stageRect.left;
+        const cy = (contentRect.top + contentRect.bottom) / 2 - stageRect.top;
+        let w;
+        let h;
+        if (type === 'raceway') {
+            w = contentRect.width * 1.06;
+            h = Math.max(10, Math.min(30, contentRect.height * 0.16));
+        } else if (type === 'circle') {
+            const d = Math.hypot(contentRect.width, contentRect.height) + 28;
+            w = d;
+            h = d;
+        } else {
+            const pad = Math.max(14, contentRect.height * 0.22);
+            w = contentRect.width + pad * 2;
+            h = contentRect.height + pad * 2;
+        }
+        backingEl.style.left = (cx - w / 2) + 'px';
+        backingEl.style.top = (cy - h / 2) + 'px';
+        backingEl.style.width = w + 'px';
+        backingEl.style.height = h + 'px';
+        const group = selectedBackGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedBackGroup);
+        backingEl.className = 'sign3d-configurator__backing is-' + type + ' finish-' + group;
+        backingEl.style.setProperty('--sign3d-backing', selectedBackHex);
+        backingEl.hidden = false;
+    }
+
+    function getSelectedPower() {
+        if (!powerFieldEl || powerFieldEl.hidden || !powerOptionsEl) return '';
+        const checked = powerOptionsEl.querySelector('input:checked');
+        return checked ? checked.value : '';
+    }
+
+    function getInstallRequirementText() {
+        return (getBackingType() === 'none' || getWidthCm() > 200) ? 'Qualified electrician required' : 'Plug-in connection available';
+    }
+
+    function buildPowerOptions() {
+        if (!powerOptionsEl || !powerAdapters.length) return;
+        powerOptionsEl.innerHTML = '';
+        const groupName = 'sign3d-power-' + (root.dataset.blockId || 'x');
+        powerAdapters.forEach((pa, i) => {
+            const label = document.createElement('label');
+            label.className = 'sign3d-configurator__symbol-position-option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = groupName;
+            input.value = pa.label;
+            if (i === 0) input.checked = true;
+            const span = document.createElement('span');
+            span.textContent = pa.label;
+            label.appendChild(input);
+            label.appendChild(span);
+            powerOptionsEl.appendChild(label);
+        });
+    }
+
+    // Backing colour block, power supply, install badge and the yellow electrician note all follow the mounting + width rules.
+    function updateMountingInfo() {
+        const type = getBackingType();
+        const over2m = getWidthCm() > 200;
+        const needsElectrician = type === 'none' || over2m;
+        const hasMounting = !!(mountingSelect && mountingSelect.options.length);
+
+        if (backingColourBlock) backingColourBlock.hidden = type === 'none';
+
+        if (powerFieldEl) {
+            const showPower = powerAdapters.length > 0 && type !== 'none' && !over2m;
+            if (powerFieldEl.hidden === showPower) {
+                powerFieldEl.hidden = !showPower;
+                renumberSteps();
+            }
+        }
+
+        if (installInfoEl) {
+            installInfoEl.hidden = !hasMounting;
+            const badgeUrl = needsElectrician ? installBadges.electrician : installBadges.easy;
+            if (installBadgeEl) {
+                if (badgeUrl) {
+                    if (installBadgeEl.getAttribute('src') !== badgeUrl) installBadgeEl.src = badgeUrl;
+                    installBadgeEl.alt = needsElectrician ? 'Electrician needed' : 'Easy install';
+                    installBadgeEl.hidden = false;
+                } else {
+                    installBadgeEl.hidden = true;
+                }
+            }
+            if (installTextEl) {
+                installTextEl.textContent = needsElectrician
+                    ? 'Electrician installation required.'
+                    : 'Easy install: smaller signs with a backing panel can use a plug-in connection.';
+            }
+        }
+
+        if (electricianNoteEl) {
+            let msg = '';
+            if (type === 'none') {
+                msg = 'Professional installation required: this mounting option must be installed by a qualified electrician, who will connect the power cables behind the individual 3D pieces. Please also note that any sign wider than 2 metres requires installation by a qualified electrician, regardless of the mounting option selected.';
+            } else if (over2m) {
+                msg = 'Professional installation required: signs wider than 2 metres must be installed by a qualified electrician, regardless of the mounting option selected. A plug-in power supply option is therefore not offered for this size.';
+            }
+            electricianNoteEl.textContent = msg;
+            electricianNoteEl.hidden = !msg;
+        }
+    }
+
+    if (mountingSelect) {
+        mountingSelect.addEventListener('change', () => {
+            updateMountingInfo();
+            updateDimensionLines();
+        });
+    }
+
+    // Backing colour state helpers
+    function resetBackColour() {
+        if (!defaultBackSwatch) return;
+        backSwatches.forEach((s) => s.classList.remove('is-selected'));
+        defaultBackSwatch.classList.add('is-selected');
+        selectedBackHex = defaultBackSwatch.dataset.colourHex;
+        selectedBackName = defaultBackSwatch.dataset.colourName;
+        selectedBackGroup = defaultBackSwatch.dataset.colourGroup || 'standard';
+        if (backColourNameLabel) backColourNameLabel.textContent = selectedBackName;
+        updateDimensionLines();
+    }
+
+    function applyBackState(state) {
+        if (state.backHex === undefined) return;
+        selectedBackHex = state.backHex;
+        selectedBackName = state.backName;
+        selectedBackGroup = state.backGroup || 'standard';
+        backSwatches.forEach((s) => {
+            s.classList.toggle('is-selected', s.dataset.colourHex === state.backHex && s.dataset.colourName === state.backName);
+        });
+        if (backColourNameLabel) backColourNameLabel.textContent = state.backName;
+        updateDimensionLines();
+    }
+
+    backSwatches.forEach((swatch) => {
+        swatch.addEventListener('click', () => {
+            backSwatches.forEach((s) => s.classList.remove('is-selected'));
+            swatch.classList.add('is-selected');
+            selectedBackHex = swatch.dataset.colourHex;
+            selectedBackName = swatch.dataset.colourName;
+            selectedBackGroup = swatch.dataset.colourGroup || 'standard';
+            if (backColourNameLabel) backColourNameLabel.textContent = selectedBackName;
+            updateDimensionLines();
+            calculateTotal();
+            pushHistory();
+        });
+    });
+
+    // Custom colour text box (hex code or colour name) under Front / Side / Backing pickers
+    const customBoxes = [];
+    function clearCustomColourInputs() {
+        customBoxes.forEach((b) => { b.input.value = ''; b.msg.textContent = ''; });
+    }
+
+    function initCustomColourBoxes() {
+        const catalogue = sign3dReadJson(root, '[data-sign3d-colours]');
+        const targets = [
+            {
+                labelEl: colourNameLabel, list: swatches,
+                apply: (hex, name) => {
+                    selectedColourHex = hex; selectedColourPrice = 0; selectedColourGroup = 'custom';
+                    if (colourNameLabel) colourNameLabel.textContent = name;
+                    updatePreviewColour();
+                }
+            },
+            {
+                labelEl: sideColourNameLabel, list: sideSwatches,
+                apply: (hex, name) => {
+                    selectedSideHex = hex; selectedSideName = name; selectedSideGroup = 'custom';
+                    if (sideColourNameLabel) sideColourNameLabel.textContent = name;
+                    updatePreviewColour();
+                }
+            },
+            {
+                labelEl: backColourNameLabel, list: backSwatches,
+                apply: (hex, name) => {
+                    selectedBackHex = hex; selectedBackName = name; selectedBackGroup = 'custom';
+                    if (backColourNameLabel) backColourNameLabel.textContent = name;
+                    updateDimensionLines();
+                }
+            }
+        ];
+
+        targets.forEach((t) => {
+            if (!t.labelEl || !t.labelEl.parentElement) return;
+            const box = document.createElement('div');
+            box.className = 'sign3d-configurator__custom-colour';
+            const row = document.createElement('div');
+            row.className = 'sign3d-configurator__custom-colour-row';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.maxLength = 40;
+            input.className = 'sign3d-configurator__text-input';
+            input.placeholder = 'Custom colour: hex code or name (e.g. #1E90FF, Royal Blue)';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sign3d-configurator__custom-colour-btn';
+            btn.textContent = 'Apply';
+            const msg = document.createElement('p');
+            msg.className = 'sign3d-configurator__custom-colour-msg';
+            row.appendChild(input);
+            row.appendChild(btn);
+            box.appendChild(row);
+            box.appendChild(msg);
+            t.labelEl.parentElement.insertAdjacentElement('afterend', box);
+            customBoxes.push({ input, msg });
+
+            const applyCustom = () => {
+                const text = input.value.replace(/[<>&"']/g, '').trim();
+                msg.classList.remove('is-error');
+                if (!text) { msg.textContent = ''; return; }
+
+                // 1) Same name as one of our Admin colours -> select that swatch
+                const match = catalogue.find((c) => String(c.name).trim().toLowerCase() === text.toLowerCase());
+                if (match) {
+                    const sw = Array.from(t.list).find((s) => s.dataset.colourName === match.name);
+                    if (sw) {
+                        t.busy = true;
+                        sw.click();
+                        t.busy = false;
+                        msg.textContent = 'Selected "' + match.name + '" from our colour range.';
+                        return;
+                    }
+                }
+
+                // 2) Hex code / CSS colour name
+                const hex = sign3dResolveCssColour(text);
+                if (!hex) {
+                    msg.textContent = 'Colour not recognised. Please enter a hex code such as #1E90FF or a standard colour name.';
+                    msg.classList.add('is-error');
+                    return;
+                }
+                const isHex = /^#?[0-9a-fA-F]{3,6}$/.test(text);
+                const name = 'Custom: ' + (isHex ? hex.toUpperCase() : text + ' ' + hex.toUpperCase());
+                t.list.forEach((s) => s.classList.remove('is-selected'));
+                t.apply(hex, name);
+                calculateTotal();
+                pushHistory();
+                msg.textContent = 'Custom colour applied: ' + hex.toUpperCase();
+            };
+
+            btn.addEventListener('click', applyCustom);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); applyCustom(); }
+            });
+            t.list.forEach((s) => s.addEventListener('click', () => {
+                if (t.busy) return;
+                input.value = '';
+                msg.textContent = '';
+            }));
+        });
+    }
+
     function getIlluminationKey() {
         const opt = illuminationSelect ? illuminationSelect.options[illuminationSelect.selectedIndex] : null;
         return (opt && opt.dataset.effectKey) || 'front_lit';
@@ -1963,7 +2514,7 @@ function initSign3dConfigurator(root) {
             return 'brightness(0.7) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal');
         }
         if (key === 'backlit') {
-            return 'brightness(0.3) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'dark')
+            return 'brightness(1) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
                 + ' drop-shadow(0 0 6px ' + sign3dRgba(light, 0.9) + ')'
                 + ' drop-shadow(0 0 18px ' + sign3dRgba(light, 0.7) + ')'
                 + ' drop-shadow(0 0 36px ' + sign3dRgba(light, 0.5) + ')';
@@ -2016,11 +2567,12 @@ function initSign3dConfigurator(root) {
         Array.from(previewInnerForLed.classList)
             .filter((c) => c.indexOf('face-') === 0)
             .forEach((c) => previewInnerForLed.classList.remove(c));
-        previewInnerForLed.classList.add('face-' + sign3dNormalizeGroup(selectedColourGroup));
+        previewInnerForLed.classList.add('face-' + (selectedColourGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedColourGroup)));
     }
 
     // Letter height slider (range comes from the letter_height_tier entries; value is stored in cm)
     function syncLetterHeightSlider() {
+        updateLetterHeightRangeHint();
         if (!lhSlider) return;
         const cm = getHeightCm();
         const min = parseFloat(lhSlider.min);
@@ -2111,6 +2663,10 @@ function initSign3dConfigurator(root) {
     setupDimensionObserver();
     initSizeSlider();
     initLetterHeightSlider();
+    initLetterHeightInput();
+    buildPowerOptions();
+    initCustomColourBoxes();
+    updateMountingInfo();
     updateMetalNote();
     renumberSteps();
     updateDimensionLines();
