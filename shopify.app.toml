@@ -218,6 +218,11 @@ name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
 type = "single_line_text_field"
 
+[metaobjects.app.backboard_style.fields.shelf_image]
+name = "Stand Shelf Photo (optional, Acrylic Stand only)"
+description = "Only used when Shape Type = acrylic-stand-middle. Upload a real wood shelf/stand photo for a realistic look. Leave empty to use the built-in CSS wood-look fallback."
+type = "file_reference"
+
 [metaobjects.app.backboard_colour]
 name = "Backboard Colour"
 description = "Clear, Gloss Black, Gloss White, Frosted White, Silver, Gold"

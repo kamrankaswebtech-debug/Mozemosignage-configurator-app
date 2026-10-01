@@ -1852,3 +1852,75 @@
         opacity: 0;
     }
 }
+
+
+/* ---- "Move Sign" feature removed per client request — text/icons stay fixed, cannot
+   be dragged or resized. The dashed box, resize handles and the "MOVE" badge never show.
+   Click-to-pick-colour (used by Multicoloured Text) is unaffected — it never depended on
+   this box being visible. ---- */
+.neon-configurator__selection-box {
+    display: none !important;
+}
+
+/* ---- Disabled Outdoor card (sizes below 60cm) ---- */
+.neon-configurator__neon-type-card.is-disabled,
+.neon-configurator__neon-type-card:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ---- Floating wood shelf under the Acrylic Stand (real photo if the admin uploaded one,
+   otherwise this CSS wood-look gradient as a fallback) ---- */
+.neon-configurator__wall-shelf {
+    position: absolute;
+    left: 50%;
+    bottom: -22px;
+    transform: translateX(-50%);
+    width: 118%;
+    max-width: 360px;
+    height: 16px;
+    border-radius: 2px;
+    background-color: #4a3829;
+    background-image: linear-gradient(to bottom, #6b5440 0%, #4a3829 55%, #362620 100%);
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    clip-path: polygon(2% 0, 98% 0, 100% 100%, 0% 100%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+.neon-configurator__wall-shelf[hidden] {
+    display: none;
+}
+
+
+/* =====================================================================
+   Wallpaper fit — matches the reference site.
+   The preview box now starts exactly below the theme's sticky header and
+   fills down to the bottom of the screen at full width, so the wallpaper
+   ("cover") keeps a natural ratio instead of zooming/cropping. Wallpaper
+   still continues behind the options panel, like the reference.
+   All values come from the block's Theme Customizer settings via CSS
+   variables set on the root (.neon-configurator) element.
+   ===================================================================== */
+.neon-configurator__preview {
+    box-sizing: border-box;
+    height: calc(var(--moz-preview-height, 100vh) - var(--moz-header-offset, 0px));
+    min-height: 420px;
+    max-height: none;
+    top: var(--moz-header-offset, 0px);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: var(--moz-wallpaper-position, center center);
+}
+
+/* Mobile: panel sits below the preview (not sticky), so keep the original behaviour. */
+@media (max-width: 768px) {
+    .neon-configurator__preview {
+        height: auto;
+        min-height: 420px;
+        top: auto;
+    }
+}

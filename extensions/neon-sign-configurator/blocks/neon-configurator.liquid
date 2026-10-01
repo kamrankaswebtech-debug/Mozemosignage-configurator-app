@@ -28,7 +28,7 @@
   {% endif %}
 {% endfor %}
 
-<div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+<div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}" data-auto-header-offset="{{ block.settings.auto_header_offset }}" style="--moz-header-offset: {{ block.settings.header_offset | default: 90 }}px; --moz-preview-height: {{ block.settings.preview_height | default: 100 }}vh; --moz-wallpaper-position: {{ block.settings.wallpaper_position | default: 'center center' }};">
 
 
 
@@ -120,7 +120,7 @@
       {% for font in metaobjects["app--418838118401--neon_font"].values %}
         {% if font.font_file.value.url %}{% assign fv = "moz-font-" | append: font.system.handle %}{% else %}{% assign fv = font.css_font_family.value %}{% endif %}
         {% if nf_i > 0 %},{% endif %}
-        {"value":{{ fv | json }},"name":{{ font.name.value | json }},"isNew":{{ font.is_new.value | default: false }},"previewImage":{{ font.preview_image.value | image_url: width: 200 | default: "" | json }}}
+        {"value":{{ fv | json }},"name":{{ font.name.value | json }},"isNew":{{ font.is_new.value | default: false }},"previewImage":{% if font.preview_image.value %}{{ font.preview_image.value | image_url: width: 200 | json }}{% else %}""{% endif %}}
         {% assign nf_i = nf_i | plus: 1 %}
       {% endfor %}
     ]
@@ -266,7 +266,7 @@
       {% assign nbs_i = 0 %}
       {% for style in metaobjects["app--418838118401--backboard_style"].values %}
         {% if nbs_i > 0 %},{% endif %}
-        {"label":{{ style.label.value | json }},"price":{{ style.extra_price_decimal.value | default: 0 }},"shape":{{ style.shape_type.value | default: "rectangle" | json }},"sortOrder":{{ style.sort_order.value | default: 999999 }},"previewImage":{{ style.preview_image.value | image_url: width: 160 | default: "" | json }}}
+        {"label":{{ style.label.value | json }},"price":{{ style.extra_price_decimal.value | default: 0 }},"shape":{{ style.shape_type.value | default: "rectangle" | json }},"sortOrder":{{ style.sort_order.value | default: 999999 }},"previewImage":{% if style.preview_image.value %}{{ style.preview_image.value | image_url: width: 160 | json }}{% else %}""{% endif %},"shelfImage":{% if style.shelf_image.value %}{{ style.shelf_image.value | image_url: width: 600 | json }}{% else %}""{% endif %}}
         {% assign nbs_i = nbs_i | plus: 1 %}
       {% endfor %}
     ]
@@ -371,8 +371,8 @@
 
     <div class="neon-configurator__modal-overlay" data-outdoor-warning-modal hidden>
       <div class="neon-configurator__modal-box">
-        <p class="neon-configurator__modal-title">⚠️ Outdoor Sign Required</p>
-        <p class="neon-configurator__modal-text">Signs larger than 60cm are only available for Outdoor use due to structural and weatherproofing requirements. Please select "Outdoor" to continue with this size.</p>
+        <p class="neon-configurator__modal-title">⚠️ Outdoor Not Available</p>
+        <p class="neon-configurator__modal-text">Outdoor acrylic neon is only available for signs 60cm and larger — the acrylic components are too large to fit properly on smaller sizes. This sign has been switched to Indoor, which is available at every size.</p>
         <button type="button" class="neon-configurator__modal-close-btn" data-outdoor-warning-close>Got it</button>
       </div>
     </div>
@@ -392,5 +392,24 @@
 <script src="{{ 'neon-configurator.js' | asset_url }}" defer></script>
 
 {% schema %}
-{ "name": "Neon Sign Configurator", "target": "section", "settings": [] }
+{
+  "name": "Neon Sign Configurator",
+  "target": "section",
+  "settings": [
+    { "type": "header", "content": "Preview wallpaper" },
+    { "type": "range", "id": "preview_height", "label": "Preview height", "min": 50, "max": 100, "step": 1, "unit": "vh", "default": 100 },
+    { "type": "checkbox", "id": "auto_header_offset", "label": "Auto-detect sticky header height", "default": true },
+    { "type": "range", "id": "header_offset", "label": "Sticky header height (used when auto-detect is off)", "min": 0, "max": 200, "step": 2, "unit": "px", "default": 90 },
+    {
+      "type": "select", "id": "wallpaper_position", "label": "Wallpaper focus position", "default": "center center",
+      "options": [
+        { "value": "center center", "label": "Center" },
+        { "value": "center bottom", "label": "Bottom" },
+        { "value": "center top", "label": "Top" },
+        { "value": "left center", "label": "Left" },
+        { "value": "right center", "label": "Right" }
+      ]
+    }
+  ]
+}
 {% endschema %}

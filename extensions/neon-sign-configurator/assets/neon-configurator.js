@@ -158,20 +158,17 @@ function resolveBackboardFinish(option) {
 // Clear = thin grey outline with a faint glass tint. Gloss = reflective edge highlights.
 // Shiny = mirror-like (two lights + sheen). Frosted = dull/matte with fine grain.
 function buildBackboardFilters(blockId, hex, finish, fontSize) {
-    // Radii scale with the CURRENT letter size, instead of a fixed pixel value — a fixed
-    // radius only bridged the gaps between letters/words/the icon at one specific sign
-    // size, and left visible disconnected gaps at every other size (the "not connected as
-    // one sign" issue the client flagged). Tune the multipliers below if a specific font
-    // still needs slightly tighter/looser bridging.
+
+    // never gets clipped at the SVG filter's own bounding box.
     const fs = fontSize || 48;
-    const outlineInner = Math.min(70, Math.max(6, fs * 0.14));
-    const outlineOuter = outlineInner + Math.min(20, Math.max(2, fs * 0.045));
-    const outlineInnerTight = Math.min(40, Math.max(4, fs * 0.08));
-    const outlineOuterTight = outlineInnerTight + Math.min(14, Math.max(1.5, fs * 0.03));
-    const fillRadiusLoose = Math.min(90, Math.max(10, fs * 0.22));
-    const fillRadiusTight = Math.min(55, Math.max(6, fs * 0.12));
-    const regionLoose = Math.min(90, Math.max(40, fs * 0.9));
-    const regionTight = Math.min(70, Math.max(30, fs * 0.7));
+    const outlineInner = Math.min(120, Math.max(10, fs * 0.30));
+    const outlineOuter = outlineInner + Math.min(26, Math.max(3, fs * 0.07));
+    const outlineInnerTight = Math.min(70, Math.max(6, fs * 0.17));
+    const outlineOuterTight = outlineInnerTight + Math.min(18, Math.max(2, fs * 0.045));
+    const fillRadiusLoose = Math.min(150, Math.max(16, fs * 0.42));
+    const fillRadiusTight = Math.min(90, Math.max(10, fs * 0.24));
+    const regionLoose = Math.min(140, Math.max(60, fs * 1.3));
+    const regionTight = Math.min(110, Math.max(45, fs * 1.0));
 
     const region = (p) => 'x="-' + p + '%" y="-' + p + '%" width="' + (100 + p * 2) + '%" height="' + (100 + p * 2) + '%"';
 
@@ -192,6 +189,7 @@ function buildBackboardFilters(blockId, hex, finish, fontSize) {
             '<feMorphology in="SourceAlpha" operator="dilate" radius="' + radius + '" result="shape"/>' +
             '<feFlood flood-color="' + hex + '" result="col"/>' +
             '<feComposite in="col" in2="shape" operator="in" result="base"/>';
+
         if (finish === 'frosted') {
             s += '<feFlood flood-color="#ffffff" flood-opacity="0.10" result="sheen"/>' +
                 '<feComposite in="sheen" in2="shape" operator="in" result="sheenIn"/>' +
@@ -199,24 +197,38 @@ function buildBackboardFilters(blockId, hex, finish, fontSize) {
                 '<feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 -0.12" result="grain"/>' +
                 '<feComposite in="grain" in2="shape" operator="in" result="grainIn"/>' +
                 '<feMerge><feMergeNode in="base"/><feMergeNode in="sheenIn"/><feMergeNode in="grainIn"/></feMerge>';
-        } else if (finish === 'shiny') {
-            s += '<feGaussianBlur in="shape" stdDeviation="3" result="bump"/>' +
-                '<feSpecularLighting in="bump" surfaceScale="8" specularConstant="1.5" specularExponent="10" lighting-color="#ffffff" result="specA"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>' +
-                '<feComposite in="specA" in2="shape" operator="in" result="specAIn"/>' +
-                '<feComposite in="base" in2="specAIn" operator="arithmetic" k1="0" k2="1" k3="0.9" k4="0" result="lit"/>' +
-                '<feSpecularLighting in="bump" surfaceScale="8" specularConstant="1.1" specularExponent="14" lighting-color="#ffffff" result="specB"><feDistantLight azimuth="45" elevation="40"/></feSpecularLighting>' +
-                '<feComposite in="specB" in2="shape" operator="in" result="specBIn"/>' +
-                '<feComposite in="lit" in2="specBIn" operator="arithmetic" k1="0" k2="1" k3="0.7" k4="0" result="lit2"/>' +
-                '<feFlood flood-color="#ffffff" flood-opacity="0.12" result="sheen"/>' +
-                '<feComposite in="sheen" in2="shape" operator="in" result="sheenIn"/>' +
-                '<feMerge><feMergeNode in="lit2"/><feMergeNode in="sheenIn"/></feMerge>';
         } else {
-            // gloss
-            s += '<feGaussianBlur in="shape" stdDeviation="2.5" result="bump"/>' +
-                '<feSpecularLighting in="bump" surfaceScale="5" specularConstant="0.9" specularExponent="22" lighting-color="#ffffff" result="spec"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>' +
-                '<feComposite in="spec" in2="shape" operator="in" result="specIn"/>' +
-                '<feComposite in="base" in2="specIn" operator="arithmetic" k1="0" k2="1" k3="0.85" k4="0"/>';
+            // GLOSS + SHINY: realistic metallic/acrylic sheen using the SAME recipe already
+            // proven on the CSS-driven Rectangle/Open Box backboards (soft-light highlight +
+            // multiply shadow, via diagonal gradient bands) — now reproduced inside the SVG
+            // filter so Cut Around / Cut to Letter / Acrylic Stand get an identical,
+            // hue-preserving look. The previous feSpecularLighting + "arithmetic add" approach
+            // washed most of the interior toward white, leaving only the dilated edge/ring
+            // showing the true colour (the client's "gold only on the border" bug) and made
+            // the overall shape look flat. soft-light/multiply can only ever subtly
+            // lighten/darken — they can never wash the base colour out — so Gold (or any
+            // colour) now stays visible and solid across the WHOLE filled shape, with a
+            // gentle, premium-looking sheen on top.
+            const isShiny = finish === 'shiny';
+            const hlStops = isShiny
+                ? "<stop offset='0%25' stop-color='white' stop-opacity='0'/><stop offset='14%25' stop-color='white' stop-opacity='0.55'/><stop offset='28%25' stop-color='white' stop-opacity='0'/><stop offset='45%25' stop-color='white' stop-opacity='0'/><stop offset='60%25' stop-color='white' stop-opacity='0.45'/><stop offset='76%25' stop-color='white' stop-opacity='0'/><stop offset='92%25' stop-color='white' stop-opacity='0.3'/>"
+                : "<stop offset='0%25' stop-color='white' stop-opacity='0.5'/><stop offset='32%25' stop-color='white' stop-opacity='0.06'/><stop offset='55%25' stop-color='white' stop-opacity='0'/>";
+            const shStops = isShiny
+                ? "<stop offset='0%25' stop-color='black' stop-opacity='0.4'/><stop offset='14%25' stop-color='black' stop-opacity='0'/><stop offset='28%25' stop-color='black' stop-opacity='0.3'/><stop offset='45%25' stop-color='black' stop-opacity='0.5'/><stop offset='60%25' stop-color='black' stop-opacity='0'/><stop offset='76%25' stop-color='black' stop-opacity='0.35'/><stop offset='100%25' stop-color='black' stop-opacity='0.25'/>"
+                : "<stop offset='45%25' stop-color='black' stop-opacity='0'/><stop offset='78%25' stop-color='black' stop-opacity='0.28'/><stop offset='100%25' stop-color='black' stop-opacity='0.5'/>";
+            const svgGrad = (stops, gid) =>
+                "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'>" +
+                "<defs><linearGradient id='" + gid + "' x1='0%25' y1='0%25' x2='90%25' y2='100%25'>" + stops + "</linearGradient></defs>" +
+                "<rect width='100' height='100' fill='url(%23" + gid + ")'/></svg>";
+
+            s += '<feImage href="' + svgGrad(hlStops, 'h') + '" result="hlImg" preserveAspectRatio="none"/>' +
+                '<feComposite in="hlImg" in2="shape" operator="in" result="hlIn"/>' +
+                '<feBlend in="base" in2="hlIn" mode="soft-light" result="lit"/>' +
+                '<feImage href="' + svgGrad(shStops, 's') + '" result="shImg" preserveAspectRatio="none"/>' +
+                '<feComposite in="shImg" in2="shape" operator="in" result="shIn"/>' +
+                '<feBlend in="lit" in2="shIn" mode="multiply"/>';
         }
+
         return s + '</filter>';
     };
 
@@ -346,6 +358,7 @@ function renderNeonDynamicOptions(root) {
             option.dataset.price = s.price;
             option.dataset.shape = s.shape;
             option.dataset.sortOrder = s.sortOrder;
+            option.dataset.shelfImage = s.shelfImage || '';
             option.textContent = s.label;
             if (isDefault) option.selected = true;
             styleSelectEl.appendChild(option);
@@ -391,6 +404,40 @@ function renderNeonDynamicOptions(root) {
     }
 }
 
+// Measures the theme's sticky/fixed header (stuck position + height) so the preview can sit
+// exactly below it instead of hiding its top part under the header. Returns 0 if none found.
+function detectStickyHeaderHeight() {
+    const selectors = 'header, header-component, .header-wrapper, .shopify-section-group-header-group, [id*="header" i]';
+    let maxBottom = 0;
+    document.querySelectorAll(selectors).forEach((el) => {
+        if (el.closest('.neon-configurator')) return;
+        const cs = window.getComputedStyle(el);
+        if (cs.position !== 'sticky' && cs.position !== 'fixed') return;
+        if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        const height = el.getBoundingClientRect().height;
+        if (height <= 0 || height > window.innerHeight / 2) return;
+        const stuckTop = parseFloat(cs.top) || 0;
+        maxBottom = Math.max(maxBottom, stuckTop + height);
+    });
+    return Math.round(maxBottom);
+}
+
+// Only runs when "Auto-detect sticky header height" is ON in the block settings.
+// When OFF, the manual "Sticky header height" setting (set in Liquid) is used as-is.
+function setupAutoHeaderOffset(root) {
+    if (root.dataset.autoHeaderOffset !== 'true') return;
+    const apply = () => {
+        root.style.setProperty('--moz-header-offset', detectStickyHeaderHeight() + 'px');
+    };
+    apply();
+    window.addEventListener('load', apply);
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(apply, 150);
+    });
+}
+
 function initConfigurator(root) {
     renderNeonFontsAndSymbols(root);
     renderNeonDynamicOptions(root);
@@ -428,14 +475,38 @@ function initConfigurator(root) {
     const oversizedNotice = root.querySelector('[data-oversized-notice]');
     const outdoorWarningModal = root.querySelector('[data-outdoor-warning-modal]');
     const outdoorWarningCloseBtn = root.querySelector('[data-outdoor-warning-close]');
-    let outdoorWarningShown = false;
-    function maybeShowOutdoorWarning() {
-        const needsOutdoor = currentNeonType === 'indoor' && currentWidthCm > 60;
-        if (needsOutdoor && !outdoorWarningShown && outdoorWarningModal) {
-            outdoorWarningModal.hidden = false;
-            outdoorWarningShown = true;
-        } else if (!needsOutdoor) {
-            outdoorWarningShown = false;
+    let outdoorUnavailableShown = false;
+
+    // Outdoor acrylic neon only fits 60cm+. Indoor (flex neon) works at every size.
+    function isOutdoorAllowed() { return currentWidthCm >= 60; }
+
+    function updateOutdoorAvailability() {
+        const allowed = isOutdoorAllowed();
+        neonTypeCards.forEach((card) => {
+            if (card.dataset.neonTypeKey === 'outdoor') {
+                card.disabled = !allowed;
+                card.classList.toggle('is-disabled', !allowed);
+            }
+        });
+        if (allowed) {
+            outdoorUnavailableShown = false;
+            return;
+        }
+        if (currentNeonType === 'outdoor') {
+            const indoorCard = Array.from(neonTypeCards).find((c) => c.dataset.neonTypeKey === 'indoor');
+            if (indoorCard) {
+                neonTypeCards.forEach((c) => c.classList.remove('is-selected'));
+                indoorCard.classList.add('is-selected');
+                currentNeonType = 'indoor';
+                currentNeonTypePrice = parseFloat(indoorCard.dataset.neonTypePrice) || 0;
+                updateOutdoorThicknessVisibility();
+                updateSizeFieldsVisibility();
+                calculateTotal();
+            }
+            if (outdoorWarningModal && !outdoorUnavailableShown) {
+                outdoorWarningModal.hidden = false;
+                outdoorUnavailableShown = true;
+            }
         }
     }
     if (outdoorWarningCloseBtn && outdoorWarningModal) {
@@ -592,6 +663,10 @@ function initConfigurator(root) {
     }
 
     function selectNeonType(card) {
+        if (card.dataset.neonTypeKey === 'outdoor' && !isOutdoorAllowed()) {
+            if (outdoorWarningModal) outdoorWarningModal.hidden = false;
+            return;
+        }
         neonTypeCards.forEach((c) => c.classList.remove('is-selected'));
         card.classList.add('is-selected');
         currentNeonType = card.dataset.neonTypeKey;
@@ -599,7 +674,6 @@ function initConfigurator(root) {
         updateOutdoorThicknessVisibility();
         updateSizeFieldsVisibility();
         calculateTotal();
-        maybeShowOutdoorWarning();
     }
 
     neonTypeCards.forEach((card) => {
@@ -895,15 +969,9 @@ function initConfigurator(root) {
             startY = event.clientY;
         });
 
-        span.addEventListener('pointermove', (event) => {
-            if (!span.hasPointerCapture(event.pointerId)) return;
-            const dx = event.clientX - startX;
-            const dy = event.clientY - startY;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
-
-            iconOffsets[i] = { x: startOffX + dx, y: startOffY + dy };
-            applyIconTransform(span, i);
-            showSelectionBoxAround(span);
+        span.addEventListener('pointermove', () => {
+            // "Move Sign" removed per client request — icons stay fixed.
+            return;
         });
 
         span.addEventListener('pointerup', (event) => {
@@ -944,22 +1012,11 @@ function initConfigurator(root) {
             }
         });
 
-        span.addEventListener('pointermove', (event) => {
-            if (!span.hasPointerCapture(event.pointerId)) return;
-            const dx = event.clientX - startX;
-            const dy = event.clientY - startY;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
-
-            if (draggingWholeGroup) {
-                groupOffsetX = startOffX + dx;
-                groupOffsetY = startOffY + dy;
-                refreshAllLetterTransforms();
-                showSelectionBoxAround(textFlex);
-            } else {
-                letterOffsets[i] = { x: startOffX + dx, y: startOffY + dy };
-                applyLetterTransform(span, i);
-                showSelectionBoxAround(span);
-            }
+        span.addEventListener('pointermove', () => {
+            // "Move Sign" removed per client request — letters stay fixed; dragging no
+            // longer repositions anything. Click (pointerup below, moved===false) still
+            // opens the Multicoloured Text colour popup as before.
+            return;
         });
 
         span.addEventListener('pointerup', (event) => {
@@ -1278,7 +1335,7 @@ function initConfigurator(root) {
 
         if (oversizedNotice) oversizedNotice.hidden = currentWidthCm <= 200;
         updateBackboardPanel();
-        maybeShowOutdoorWarning();
+        updateOutdoorAvailability();
     }
 
     // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign box
@@ -1312,6 +1369,16 @@ function initConfigurator(root) {
         dimResizeObserver = new ResizeObserver(() => updateDimensionLines());
         dimResizeObserver.observe(previewInner);
         window.addEventListener('resize', updateDimensionLines);
+    }
+
+    let wallShelfEl = null;
+    function ensureWallShelf() {
+        if (wallShelfEl || !previewInner) return;
+        wallShelfEl = document.createElement('div');
+        wallShelfEl.className = 'neon-configurator__wall-shelf';
+        wallShelfEl.setAttribute('aria-hidden', 'true');
+        wallShelfEl.hidden = true;
+        previewInner.appendChild(wallShelfEl);
     }
 
     function updateBackboardPanel() {
@@ -1382,6 +1449,21 @@ function initConfigurator(root) {
             shapeSource.style.display = isActive ? '' : 'none';
             syncShapeSourceBox();
             applyShapeFilter();
+        }
+
+        // Floating wood shelf under the sign — only for Acrylic Stand. Uses the Admin-
+        // uploaded photo (Backboard Style -> Stand Shelf Photo) if present for an exact
+        // match to the client's reference; otherwise falls back to the CSS wood gradient.
+        ensureWallShelf();
+        if (wallShelfEl) {
+            const isStand = shape === 'acrylic-stand-middle';
+            wallShelfEl.hidden = !isStand;
+            const shelfUrl = styleOption?.dataset.shelfImage || '';
+            if (isStand && shelfUrl) {
+                wallShelfEl.style.backgroundImage = "url('" + shelfUrl + "')";
+            } else {
+                wallShelfEl.style.backgroundImage = '';
+            }
         }
     }
 
@@ -1482,7 +1564,7 @@ function initConfigurator(root) {
         });
     }
 
-    attachResizeHandles();
+    // attachResizeHandles(); // "Move Sign" / resize feature removed per client request.
 
     textInput.addEventListener('input', () => {
         updatePreviewText();
@@ -1951,7 +2033,9 @@ function initConfigurator(root) {
     updateOutdoorThicknessVisibility();
     updateSizeFieldsVisibility();
     calculateTotal();
+    updateOutdoorAvailability();
     setupDimensionObserver();
     setupShapeSourceObserver();
+    setupAutoHeaderOffset(root);
     updateDimensionLines();
 }
