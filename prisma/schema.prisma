@@ -38,6 +38,35 @@ model ProductionBlueprint {
   @@index([shopifyOrderId])
 }
 
+// One row = one installation time slot that is either temporarily HELD (customer picked it
+// on the storefront, not yet ordered) or CONFIRMED (order placed). The unique constraint on
+// (shop, date, timeSlot) is what makes double bookings impossible at the database level.
+// Expired HOLD rows are ignored by availability checks and cleaned up on the next hold.
+model InstallationBooking {
+  id             String    @id @default(cuid())
+  shop           String
+  date           String // YYYY-MM-DD (Sydney local date)
+  timeSlot       String // e.g. "10:00 AM" — same label the storefront shows
+  status         String    @default("HOLD") // HOLD | CONFIRMED
+  holdToken      String    @unique
+  holdExpiresAt  DateTime?
+  address        String?
+  distanceKm     Float?
+  shopifyOrderId String?
+  orderName      String?
+  customerName   String?
+  customerEmail  String?
+  customerPhone  String?
+  productTitle   String?
+  notifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([shop, date, timeSlot])
+  @@index([shop, date])
+  @@index([shopifyOrderId])
+}
+
 model Session {
   id            String    @id
   shop          String

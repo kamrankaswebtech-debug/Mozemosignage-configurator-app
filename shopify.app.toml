@@ -34,9 +34,13 @@ api_version = "2026-07"
   uri = "/webhooks/orders/create"
   topics = [ "orders/create" ]
 
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/cancelled"
+  topics = [ "orders/cancelled" ]
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,read_products,write_products,read_themes,read_orders"
+scopes = "write_app_proxy,write_files,write_metaobject_definitions,write_metaobjects,read_products,write_products,read_themes,read_orders,write_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
@@ -830,6 +834,41 @@ required = true
 [metaobjects.app.installation_settings.fields.slot_interval_minutes]
 name = "Time Slot Interval (minutes)"
 description = "e.g. 60 for hourly slots, 30 for half-hourly slots."
+type = "number_integer"
+
+[metaobjects.app.installation_settings.fields.base_address]
+name = "Base Address"
+description = "Installation service area is measured from this address."
+type = "single_line_text_field"
+
+[metaobjects.app.installation_settings.fields.base_lat]
+name = "Base Latitude"
+description = "Filled automatically from Base Address when saved in the app."
+type = "number_decimal"
+
+[metaobjects.app.installation_settings.fields.base_lng]
+name = "Base Longitude"
+description = "Filled automatically from Base Address when saved in the app."
+type = "number_decimal"
+
+[metaobjects.app.installation_settings.fields.service_radius_km]
+name = "Service Radius (km)"
+description = "Customers outside this distance cannot select installation."
+type = "number_integer"
+
+[metaobjects.app.installation_settings.fields.notify_email]
+name = "Notification Email(s)"
+description = "Comma-separated. Instant email for every installation booking."
+type = "single_line_text_field"
+
+[metaobjects.app.installation_settings.fields.notify_phone]
+name = "Notification Phone(s)"
+description = "Comma-separated, international format e.g. +61452086465. Instant SMS for every booking."
+type = "single_line_text_field"
+
+[metaobjects.app.installation_settings.fields.hold_minutes]
+name = "Slot Hold Time (minutes)"
+description = "How long a selected slot stays reserved for a customer before checkout."
 type = "number_integer"
 
 

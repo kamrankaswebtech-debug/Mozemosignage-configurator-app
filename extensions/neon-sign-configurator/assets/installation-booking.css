@@ -1,0 +1,112 @@
+/* Shared Installation booking UI (LED Neon, UV Graphic LED, UV Print No-LED).
+   Extra elements are created by installation-booking.js. */
+.moz-install__address-row {
+    position: relative;
+}
+
+.moz-install__suggest {
+    position: absolute;
+    z-index: 30;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 4px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: #1d1d28;
+    border: 1px solid #3a3a4a;
+    border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.moz-install__suggest[hidden] {
+    display: none;
+}
+
+.moz-install__suggest-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #ffffff;
+    line-height: 1.3;
+}
+
+.moz-install__suggest-item span {
+    font-size: 12px;
+    color: #9c9cab;
+}
+
+.moz-install__suggest-item:hover {
+    background: #2a2a38;
+}
+
+.moz-install__msg {
+    margin: 2px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #b8b8c4;
+}
+
+.moz-install__msg[hidden] {
+    display: none;
+}
+
+.moz-install__msg[data-tone="ok"] {
+    color: #4ade80;
+}
+
+.moz-install__msg[data-tone="warn"] {
+    color: #fbbf24;
+}
+
+.moz-install__msg[data-tone="error"] {
+    color: #f87171;
+}
+
+.moz-install__locked {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.moz-install__unavailable {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    background: rgba(248, 113, 113, 0.08);
+    color: #fca5a5;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.moz-install__unavailable[hidden] {
+    display: none;
+}
+
+.moz-install__unavailable p {
+    margin: 0 0 8px;
+}
+
+.moz-install__retry {
+    background: transparent;
+    border: 1px solid #fca5a5;
+    color: #fca5a5;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.moz-install__option-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.moz-install__option-disabled * {
+    cursor: not-allowed;
+}

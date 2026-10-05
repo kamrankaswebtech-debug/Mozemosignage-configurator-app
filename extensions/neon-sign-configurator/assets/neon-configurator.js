@@ -163,19 +163,42 @@ function buildBackboardFilters(blockId, hex, finish, fontSize) {
     const fs = fontSize || 48;
     const outlineInner = Math.min(120, Math.max(10, fs * 0.30));
     const outlineOuter = outlineInner + Math.min(26, Math.max(3, fs * 0.07));
-    const outlineInnerTight = Math.min(70, Math.max(6, fs * 0.17));
-    const outlineOuterTight = outlineInnerTight + Math.min(18, Math.max(2, fs * 0.045));
+    const outlineRingTight = Math.min(18, Math.max(2, fs * 0.045));
     const fillRadiusLoose = Math.min(150, Math.max(16, fs * 0.42));
-    const fillRadiusTight = Math.min(90, Math.max(10, fs * 0.24));
     const regionLoose = Math.min(140, Math.max(60, fs * 1.3));
     const regionTight = Math.min(110, Math.max(45, fs * 1.0));
 
+    // Cut to Letter = true custom-fit contour (client request): instead of one big square
+    // dilate (which made it look like a smaller Cut Around with boxy corners and large
+    // unused areas), the mask is built in 3 steps, all relative to the current font size:
+    //  1. Horizontal then vertical "closing" (dilate then erode by the same radius) —
+    //     bridges word gaps (and the gap between lines of 2-line text) ONLY where both sides
+    //     have ink, so the sign stays one connected piece without growing outward or
+    //     filling the space above short letters. Two separate 1-D passes (not one 2-D box)
+    //     so no small holes are left between lines.
+    //  2. Small dilate — guarantees thin script strokes survive step 3.
+    //  3. Gaussian blur + alpha threshold — rounded, smooth edge that follows each letter's
+    //     contour at a tight, even margin (~0.08em) instead of square corners.
+    const tightBridgeX = Math.min(60, Math.max(6, fs * 0.30));
+    const tightBridgeY = Math.min(80, Math.max(6, fs * 0.5));
+    const tightGrow = Math.min(24, Math.max(2, fs * 0.05));
+    const tightBlur = Math.min(12, Math.max(1.5, fs * 0.035));
+    const tightMask = (result) =>
+        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + tightBridgeX + ' 1" result="tbDilX"/>' +
+        '<feMorphology in="tbDilX" operator="erode" radius="' + tightBridgeX + ' 1" result="tbClosedX"/>' +
+        '<feMorphology in="tbClosedX" operator="dilate" radius="1 ' + tightBridgeY + '" result="tbDilY"/>' +
+        '<feMorphology in="tbDilY" operator="erode" radius="1 ' + tightBridgeY + '" result="tbClosed"/>' +
+        '<feMorphology in="tbClosed" operator="dilate" radius="' + tightGrow + '" result="tbGrown"/>' +
+        '<feGaussianBlur in="tbGrown" stdDeviation="' + tightBlur + '" result="tbBlur"/>' +
+        '<feComponentTransfer in="tbBlur" result="' + result + '"><feFuncA type="linear" slope="8" intercept="-2"/></feComponentTransfer>';
+    const dilateMask = (radius, result) =>
+        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + radius + '" result="' + result + '"/>';
+
     const region = (p) => 'x="-' + p + '%" y="-' + p + '%" width="' + (100 + p * 2) + '%" height="' + (100 + p * 2) + '%"';
 
-    const outline = (id, innerR, outerR, p) =>
+    const outline = (id, innerMask, outerMask, p) =>
         '<filter id="' + id + '" ' + region(p) + ' color-interpolation-filters="sRGB">' +
-        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + innerR + '" result="inner"/>' +
-        '<feMorphology in="SourceAlpha" operator="dilate" radius="' + outerR + '" result="outer"/>' +
+        innerMask + outerMask +
         '<feComposite in="outer" in2="inner" operator="out" result="ring"/>' +
         '<feFlood flood-color="#9a9a9a" result="ringFlood"/>' +
         '<feComposite in="ringFlood" in2="ring" operator="in" result="ringColour"/>' +
@@ -184,9 +207,9 @@ function buildBackboardFilters(blockId, hex, finish, fontSize) {
         '<feMerge><feMergeNode in="tintIn"/><feMergeNode in="ringColour"/></feMerge>' +
         '</filter>';
 
-    const fill = (id, radius, p) => {
+    const fill = (id, shapeMask, p) => {
         let s = '<filter id="' + id + '" ' + region(p) + ' color-interpolation-filters="sRGB">' +
-            '<feMorphology in="SourceAlpha" operator="dilate" radius="' + radius + '" result="shape"/>' +
+            shapeMask +
             '<feFlood flood-color="' + hex + '" result="col"/>' +
             '<feComposite in="col" in2="shape" operator="in" result="base"/>';
 
@@ -232,10 +255,11 @@ function buildBackboardFilters(blockId, hex, finish, fontSize) {
         return s + '</filter>';
     };
 
-    return outline('moz-outline-loose-' + blockId, outlineInner, outlineOuter, regionLoose) +
-        outline('moz-outline-tight-' + blockId, outlineInnerTight, outlineOuterTight, regionTight) +
-        fill('moz-solid-fill-loose-' + blockId, fillRadiusLoose, regionLoose) +
-        fill('moz-solid-fill-tight-' + blockId, fillRadiusTight, regionTight);
+    return outline('moz-outline-loose-' + blockId, dilateMask(outlineInner, 'inner'), dilateMask(outlineOuter, 'outer'), regionLoose) +
+        outline('moz-outline-tight-' + blockId, tightMask('inner'),
+            '<feMorphology in="inner" operator="dilate" radius="' + outlineRingTight + '" result="outer"/>', regionTight) +
+        fill('moz-solid-fill-loose-' + blockId, dilateMask(fillRadiusLoose, 'shape'), regionLoose) +
+        fill('moz-solid-fill-tight-' + blockId, tightMask('shape'), regionTight);
 }
 
 // Builds Colour swatches, Backboard Colour/Style options, Size cards, and Add-ons from
@@ -248,6 +272,17 @@ function renderNeonDynamicOptions(root) {
     if (coloursDataEl && swatchesEl) {
         let colours = [];
         try { colours = JSON.parse(coloursDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse colours JSON.', err); }
+        // Show colours in Admin "Sort Order" (ascending). Colours without a sort order go last,
+        // keeping their original relative order (stable tiebreak on original index).
+        colours = colours
+            .map((c, idx) => ({ c, idx, so: (typeof c.sortOrder === 'number' && isFinite(c.sortOrder)) ? c.sortOrder : null }))
+            .sort((a, b) => {
+                if (a.so === null && b.so === null) return a.idx - b.idx;
+                if (a.so === null) return 1;
+                if (b.so === null) return -1;
+                return (a.so - b.so) || (a.idx - b.idx);
+            })
+            .map((x) => x.c);
         colours.forEach((c, i) => {
             const item = document.createElement('div');
             item.className = 'neon-configurator__swatch-item';
@@ -261,6 +296,12 @@ function renderNeonDynamicOptions(root) {
             btn.title = c.name;
             btn.setAttribute('aria-label', c.name);
             item.appendChild(btn);
+            if (typeof c.sortOrder === 'number' && isFinite(c.sortOrder)) {
+                const numSpan = document.createElement('span');
+                numSpan.className = 'neon-configurator__swatch-number';
+                numSpan.textContent = c.sortOrder;
+                item.appendChild(numSpan);
+            }
             const nameSpan = document.createElement('span');
             nameSpan.className = 'neon-configurator__swatch-name';
             nameSpan.textContent = c.name;
@@ -631,6 +672,11 @@ function initConfigurator(root) {
     });
 
     if (installBooking) populateInstallTimeSlots();
+
+    // Shared booking module (installation-booking.js): address/100km check, live slot
+    // availability and slot holds. Null if the module didn't load — the original
+    // installation behaviour above then keeps working unchanged.
+    const installCtrl = (installBooking && window.MozemoInstall) ? window.MozemoInstall.attach(root) : null;
 
     // --- Neon Type (Indoor/Outdoor) + Outdoor Thickness + Size Visibility ---
     const neonTypeCards = root.querySelectorAll('[data-neon-type-cards] .neon-configurator__neon-type-card');
@@ -1922,6 +1968,19 @@ function initConfigurator(root) {
                 properties['Installation Address'] = (installAddressInput && installAddressInput.value.trim())
                     ? installAddressInput.value.trim()
                     : 'Same as shipping address';
+                if (installCtrl) {
+                    addToCartBtn.disabled = true;
+                    setButtonLoadingText(addToCartBtn, 'Checking installation slot...');
+                    const installCheck = await installCtrl.prepareForCart();
+                    if (!installCheck.ok) {
+                        addToCartBtn.disabled = false;
+                        addToCartBtn.textContent = 'Add to Cart';
+                        showTemporaryStatus(addToCartStatus, installCheck.error, 6000);
+                        root.querySelector('[data-install-booking]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                    Object.assign(properties, installCheck.properties);
+                }
             } else {
                 properties['Installation'] = 'No installation — customer will arrange';
             }
@@ -1976,6 +2035,7 @@ function initConfigurator(root) {
 
                 addToCartBtn.textContent = 'Added ✓';
                 showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);
+                if (installationSelected && installCtrl) installCtrl.afterCartAdd(properties);
 
                 // Tell the theme's own cart icon / cart drawer to update themselves —
                 // same event the theme's native product forms dispatch on a successful add.

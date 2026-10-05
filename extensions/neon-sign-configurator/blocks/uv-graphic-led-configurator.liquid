@@ -116,8 +116,12 @@
         data-latest-time="{{ install_settings.latest_time.value | default: '17:00' }}"
         data-slot-interval="{{ install_settings.slot_interval_minutes.value | default: 60 }}">
         <p class="uv-configurator__install-notice">
-          Sydney area installation, up to 100km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.
+          Sydney area installation, up to {{ install_settings.service_radius_km.value | default: 100 }}km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.
         </p>
+        <div class="uv-configurator__install-row">
+          <label class="uv-configurator__install-sublabel" for="uv-install-address-{{ block.id }}">Installation Address</label>
+          <input type="text" id="uv-install-address-{{ block.id }}" class="uv-configurator__select" data-install-address placeholder="Start typing your address…">
+        </div>
         <div class="uv-configurator__install-row">
           <label class="uv-configurator__install-sublabel" for="uv-install-date-{{ block.id }}">Preferred Installation Date</label>
           <input type="date" id="uv-install-date-{{ block.id }}" class="uv-configurator__select" data-install-date>
@@ -125,10 +129,6 @@
         <div class="uv-configurator__install-row">
           <label class="uv-configurator__install-sublabel" for="uv-install-time-{{ block.id }}">Preferred Time Slot</label>
           <select id="uv-install-time-{{ block.id }}" class="uv-configurator__select" data-install-time></select>
-        </div>
-        <div class="uv-configurator__install-row">
-          <label class="uv-configurator__install-sublabel" for="uv-install-address-{{ block.id }}">Installation Address (leave blank to use your shipping address)</label>
-          <input type="text" id="uv-install-address-{{ block.id }}" class="uv-configurator__select" data-install-address placeholder="Optional — defaults to shipping address">
         </div>
       </div>
     </div>
@@ -150,6 +150,8 @@
 </div>
 
 {{ 'uv-graphic-configurator.css' | asset_url | stylesheet_tag }}
+{{ 'installation-booking.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'installation-booking.js' | asset_url }}" defer></script>
 <script src="{{ 'uv-graphic-configurator.js' | asset_url }}" defer></script>
 
 {% schema %}

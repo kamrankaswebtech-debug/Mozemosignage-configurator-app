@@ -202,7 +202,7 @@
       {% assign ncl_i = 0 %}
       {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
         {% if ncl_i > 0 %},{% endif %}
-        {"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"name":{{ colour.name.value | json }}}
+        {"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"name":{{ colour.name.value | json }},"sortOrder":{{ colour.sort_order.value | json }}}
         {% assign ncl_i = ncl_i | plus: 1 %}
       {% endfor %}
     ]
@@ -352,7 +352,11 @@
         <label class="neon-configurator__install-option"><input type="radio" name="neon-install-{{ block.id }}" data-install-radio value="yes" data-install-price="{{ install_settings.price_decimal.value | default: 0 }}"><span>Yes, I need installation — +${{ install_settings.price_decimal.value | default: 0 }}</span></label>
       </div>
       <div class="neon-configurator__install-booking" data-install-booking hidden data-min-lead-days="{{ install_settings.min_lead_days.value | default: 14 }}" data-earliest-time="{{ install_settings.earliest_time.value | default: '10:00' }}" data-latest-time="{{ install_settings.latest_time.value | default: '17:00' }}" data-slot-interval="{{ install_settings.slot_interval_minutes.value | default: 60 }}">
-        <p class="neon-configurator__install-notice">Sydney area installation, up to 100km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.</p>
+        <p class="neon-configurator__install-notice">Sydney area installation, up to {{ install_settings.service_radius_km.value | default: 100 }}km. Simple wall/ceiling mounting only — no electrical work. Installation dates require a minimum {{ install_settings.min_lead_days.value | default: 14 }}-day lead time as your sign is manufactured to order.</p>
+        <div class="neon-configurator__install-row">
+          <label class="neon-configurator__install-sublabel" for="neon-install-address-{{ block.id }}">Installation Address</label>
+          <input type="text" id="neon-install-address-{{ block.id }}" class="neon-configurator__select" data-install-address placeholder="Start typing your address…">
+        </div>
         <div class="neon-configurator__install-row">
           <label class="neon-configurator__install-sublabel" for="neon-install-date-{{ block.id }}">Preferred Installation Date</label>
           <input type="date" id="neon-install-date-{{ block.id }}" class="neon-configurator__select" data-install-date>
@@ -360,10 +364,6 @@
         <div class="neon-configurator__install-row">
           <label class="neon-configurator__install-sublabel" for="neon-install-time-{{ block.id }}">Preferred Time Slot</label>
           <select id="neon-install-time-{{ block.id }}" class="neon-configurator__select" data-install-time></select>
-        </div>
-        <div class="neon-configurator__install-row">
-          <label class="neon-configurator__install-sublabel" for="neon-install-address-{{ block.id }}">Installation Address (leave blank to use your shipping address)</label>
-          <input type="text" id="neon-install-address-{{ block.id }}" class="neon-configurator__select" data-install-address placeholder="Optional — defaults to shipping address">
         </div>
       </div>
     </div>
@@ -389,6 +389,8 @@
 </div>
 
 {{ 'neon-configurator.css' | asset_url | stylesheet_tag }}
+{{ 'installation-booking.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'installation-booking.js' | asset_url }}" defer></script>
 <script src="{{ 'neon-configurator.js' | asset_url }}" defer></script>
 
 {% schema %}

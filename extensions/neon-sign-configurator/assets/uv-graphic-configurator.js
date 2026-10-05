@@ -140,6 +140,11 @@ function initUvConfigurator(root) {
 
     if (installBooking) populateInstallTimeSlots();
 
+    // Shared booking module (installation-booking.js): address/100km check, live slot
+    // availability and slot holds. Null if the module didn't load — the original
+    // installation behaviour above then keeps working unchanged.
+    const installCtrl = (installBooking && window.MozemoInstall) ? window.MozemoInstall.attach(root) : null;
+
     function calculateTotal() {
         let total = 0;
         [sizeSelect, materialSelect, finishSelect].forEach((select) => {
@@ -257,6 +262,19 @@ function initUvConfigurator(root) {
                 properties['Installation Address'] = (installAddressInput && installAddressInput.value.trim())
                     ? installAddressInput.value.trim()
                     : 'Same as shipping address';
+                if (installCtrl) {
+                    addToCartBtn.disabled = true;
+                    setButtonLoadingText(addToCartBtn, 'Checking installation slot...');
+                    const installCheck = await installCtrl.prepareForCart();
+                    if (!installCheck.ok) {
+                        addToCartBtn.disabled = false;
+                        addToCartBtn.textContent = 'Add to Cart';
+                        showTemporaryStatus(addToCartStatus, installCheck.error, 6000);
+                        root.querySelector('[data-install-booking]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                    Object.assign(properties, installCheck.properties);
+                }
             } else {
                 properties['Installation'] = 'No installation — customer will arrange';
             }
@@ -299,6 +317,7 @@ function initUvConfigurator(root) {
 
                 addToCartBtn.textContent = 'Added ✓';
                 showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);
+                if (installationSelected && installCtrl) installCtrl.afterCartAdd(properties);
 
                 try {
                     const themeEvents = await import('@theme/events');
