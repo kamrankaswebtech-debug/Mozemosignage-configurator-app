@@ -114,27 +114,41 @@ function sign3dToneRgb(rgb, tone) {
     return rgb;
 }
 
+// Visible depth in px for the preview: grows gently with the chosen Depth (mm) but is kept
+// subtle (2–6px) so the sign reads as ONE solid 3D piece, not an exaggerated extrusion.
+function sign3dDepthPx(depthMm) {
+    return Math.max(2, Math.min(6, 2 + (depthMm || 10) / 25));
+}
+
+function sign3dShadeRgb(rgb, shade) {
+    return 'rgb(' + Math.round(rgb.r * shade) + ',' + Math.round(rgb.g * shade) + ',' + Math.round(rgb.b * shade) + ')';
+}
+
+// Text depth: a seamless, softly faded return in the SIDE colour. Fine 0.5px steps with a
+// small blur blend into one continuous edge (no visible stacked "acrylic layers"), finished
+// with a soft side-colour fade and a soft ambient wall shadow.
 function sign3dBuildSideShadow(depthMm, sideHex, tone) {
     const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
-    const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
+    const d = sign3dDepthPx(depthMm);
     const layers = [];
-    for (let i = 1; i <= steps; i++) {
-        const shade = 0.92 - (i / steps) * 0.4;
-        layers.push(i + 'px ' + i + 'px 0 rgb(' + Math.round(rgb.r * shade) + ',' + Math.round(rgb.g * shade) + ',' + Math.round(rgb.b * shade) + ')');
+    for (let x = 0.5; x <= d + 0.001; x += 0.5) {
+        const shade = 0.88 - (x / d) * 0.28;
+        layers.push(x.toFixed(1) + 'px ' + x.toFixed(1) + 'px 0.6px ' + sign3dShadeRgb(rgb, shade));
     }
-    layers.push((steps + 2) + 'px ' + (steps + 2) + 'px 6px rgba(0,0,0,0.35)');
+    layers.push((d * 0.9).toFixed(1) + 'px ' + (d * 0.9).toFixed(1) + 'px ' + (d * 1.4).toFixed(1) + 'px ' + 'rgba(' + Math.round(rgb.r * 0.5) + ',' + Math.round(rgb.g * 0.5) + ',' + Math.round(rgb.b * 0.5) + ',0.35)');
+    layers.push((d * 0.6).toFixed(1) + 'px ' + (d * 1.6).toFixed(1) + 'px ' + (d * 3).toFixed(1) + 'px rgba(0,0,0,0.28)');
     return layers.join(', ');
 }
 
+// Logo depth (CSS filter). Chained drop-shadow()s COMPOUND (each one copies everything
+// before it), which is what produced the thick stacked-slab look — so this uses just two
+// soft passes: a blurred side-colour return that fades smoothly off the logo edge, then a
+// soft ambient wall shadow.
 function sign3dBuildSideFilter(depthMm, sideHex, tone) {
     const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
-    const steps = Math.max(3, Math.min(14, Math.round((depthMm || 10) / 1.5)));
-    const layers = [];
-    for (let i = 1; i <= steps; i++) {
-        const shade = 0.92 - (i / steps) * 0.4;
-        layers.push('drop-shadow(' + i + 'px ' + i + 'px 0 rgb(' + Math.round(rgb.r * shade) + ',' + Math.round(rgb.g * shade) + ',' + Math.round(rgb.b * shade) + '))');
-    }
-    return layers.join(' ');
+    const d = sign3dDepthPx(depthMm);
+    return 'drop-shadow(' + (d * 0.75).toFixed(1) + 'px ' + (d * 0.75).toFixed(1) + 'px ' + (d * 0.5).toFixed(1) + 'px ' + sign3dShadeRgb(rgb, 0.72) + ')'
+        + ' drop-shadow(' + (d * 0.4).toFixed(1) + 'px ' + (d * 1.2).toFixed(1) + 'px ' + (d * 2.4).toFixed(1) + 'px rgba(0,0,0,0.3))';
 }
 
 // Sorts <option>s by data-sort-order (Admin "Sort Order") and selects the first one.
@@ -594,7 +608,7 @@ function initSign3dConfigurator(root) {
     const installTextEl = root.querySelector('[data-install-text]');
     const electricianNoteEl = root.querySelector('[data-electrician-note]');
     const powerFieldEl = root.querySelector('[data-power-field]');
-    const powerOptionsEl = root.querySelector('[data-power-options]');
+    const powerSelectEl = root.querySelector('[data-power-select]');
     const letterHeightRangeEl = root.querySelector('[data-lh-range]');
     const installBadges = (() => {
         const pickBadge = (cat) => { const o = sign3dOptions.find((x) => x.c === cat); return o ? (o.i || '') : ''; };
@@ -2274,32 +2288,25 @@ function initSign3dConfigurator(root) {
     }
 
     function getSelectedPower() {
-        if (!powerFieldEl || powerFieldEl.hidden || !powerOptionsEl) return '';
-        const checked = powerOptionsEl.querySelector('input:checked');
-        return checked ? checked.value : '';
+        if (!powerFieldEl || powerFieldEl.hidden || !powerSelectEl) return '';
+        return powerSelectEl.value || '';
     }
 
     function getInstallRequirementText() {
         return (getBackingType() === 'none' || getWidthCm() > 200) ? 'Qualified electrician required' : 'Plug-in connection available';
     }
 
+    // Same dropdown as the Neon configurator's Power Adapter select: Admin "Power Adapters",
+    // in Admin sort order, first option selected by default.
     function buildPowerOptions() {
-        if (!powerOptionsEl || !powerAdapters.length) return;
-        powerOptionsEl.innerHTML = '';
-        const groupName = 'sign3d-power-' + (root.dataset.blockId || 'x');
+        if (!powerSelectEl || !powerAdapters.length) return;
+        powerSelectEl.innerHTML = '';
         powerAdapters.forEach((pa, i) => {
-            const label = document.createElement('label');
-            label.className = 'sign3d-configurator__symbol-position-option';
-            const input = document.createElement('input');
-            input.type = 'radio';
-            input.name = groupName;
-            input.value = pa.label;
-            if (i === 0) input.checked = true;
-            const span = document.createElement('span');
-            span.textContent = pa.label;
-            label.appendChild(input);
-            label.appendChild(span);
-            powerOptionsEl.appendChild(label);
+            const option = document.createElement('option');
+            option.value = pa.label;
+            option.textContent = pa.label;
+            if (i === 0) option.selected = true;
+            powerSelectEl.appendChild(option);
         });
     }
 

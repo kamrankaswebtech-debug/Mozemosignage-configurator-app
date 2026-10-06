@@ -7,8 +7,8 @@ import { authenticate } from "../shopify.server";
 const TOGGLE_KEYS = [
     { key: "choose_size_indoor", label: "Show \"Choose Size\" dropdown — Indoor" },
     { key: "choose_size_outdoor", label: "Show \"Choose Size\" dropdown — Outdoor" },
-    { key: "custom_slider_indoor", label: "Show \"Custom Size Slider\" — Indoor" },
-    { key: "custom_slider_outdoor", label: "Show \"Custom Size Slider\" — Outdoor" },
+    // The Neon custom size slider was removed (size cards are now the only sizing system),
+    // so its custom_slider_indoor/outdoor toggles are no longer shown here.
 ] as const;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

@@ -13,8 +13,6 @@
 {% assign neon_type_first_key = "" %}
 {% assign show_choose_size_indoor = true %}
 {% assign show_choose_size_outdoor = true %}
-{% assign show_slider_indoor = true %}
-{% assign show_slider_outdoor = true %}
 {% for item in metaobjects["app--418838118401--signage_addon"].values %}
   {% if item.category.value == "neon_type" %}
     {% assign neon_type_count = neon_type_count | plus: 1 %}
@@ -23,8 +21,6 @@
   {% if item.category.value == "size_visibility" %}
     {% if item.type_key.value == "choose_size_indoor" %}{% assign show_choose_size_indoor = item.is_free.value %}{% endif %}
     {% if item.type_key.value == "choose_size_outdoor" %}{% assign show_choose_size_outdoor = item.is_free.value %}{% endif %}
-    {% if item.type_key.value == "custom_slider_indoor" %}{% assign show_slider_indoor = item.is_free.value %}{% endif %}
-    {% if item.type_key.value == "custom_slider_outdoor" %}{% assign show_slider_outdoor = item.is_free.value %}{% endif %}
   {% endif %}
 {% endfor %}
 
@@ -224,42 +220,18 @@
     </script>
     <div class="neon-configurator__field" data-size-field="choose-size" data-visible-indoor="{{ show_choose_size_indoor }}" data-visible-outdoor="{{ show_choose_size_outdoor }}">
       <label class="neon-configurator__label">5. Choose Size</label>
+      {% comment %} Measurement units (Admin → Size Units) shown above the size cards; switching converts card labels + preview dimensions live. {% endcomment %}
+      <div class="neon-configurator__unit-tabs" data-unit-tabs>
+        {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
+          {% if u.visibility.value == "3d_only" %}{% continue %}{% endif %}
+          <button type="button" class="neon-configurator__unit-tab" data-unit-tab data-sort-order="{{ u.sort_order.value | default: 999999 }}" data-unit="{{ u.unit.value }}">{{ u.unit.value | upcase }}</button>
+        {% endfor %}
+      </div>
       <div class="neon-configurator__size-cards" data-size-cards></div>
       <select class="neon-configurator__select" data-size-select hidden aria-hidden="true" tabindex="-1"></select>
     </div>
 
-    {% assign size_units_count = 0 %}
-    {% assign default_unit_entry = nil %}
-    {% assign ud_min = 1000000 %}
-    {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
-      {% if u.visibility.value == "3d_only" %}{% continue %}{% endif %}
-      {% assign size_units_count = size_units_count | plus: 1 %}
-      {% assign u_so = u.sort_order.value | default: 999999 %}
-      {% if u_so < ud_min %}{% assign ud_min = u_so %}{% assign default_unit_entry = u %}{% endif %}
-    {% endfor %}
-    <div class="neon-configurator__field" data-size-field="custom-slider" data-visible-indoor="{{ show_slider_indoor }}" data-visible-outdoor="{{ show_slider_outdoor }}">
-      <label class="neon-configurator__label">Or Set a Custom Size (<span data-slider-unit-label>{{ default_unit_entry.unit.value | default: 'cm' }}</span>)</label>
-      {% if size_units_count > 1 %}
-      <div class="neon-configurator__unit-tabs" data-unit-tabs>
-        {% for u in metaobjects["app--418838118401--neon_size_settings"].values %}
-      {% if u.visibility.value == "3d_only" %}{% continue %}{% endif %}
-          <button type="button" class="neon-configurator__unit-tab{% if u.unit.value == default_unit_entry.unit.value %} is-selected{% endif %}" data-unit-tab data-sort-order="{{ u.sort_order.value | default: 999999 }}" data-unit="{{ u.unit.value }}" data-min="{{ u.min_value.value | default: 0 }}" data-max="{{ u.max_value.value | default: 100 }}" data-price-per-unit="{{ u.price_per_unit.value | default: 0 }}" data-height-ratio="{{ u.height_ratio.value | default: 2.6 }}">{{ u.unit.value | upcase }}</button>
-        {% endfor %}
-      </div>
-      {% endif %}
-      <div class="neon-configurator__slider-meta">
-        <span data-slider-width-value>Width: {{ default_unit_entry.min_value.value | default: 20 }} {{ default_unit_entry.unit.value | default: 'cm' }}</span>
-        <span data-slider-height-value>Height: -- {{ default_unit_entry.unit.value | default: 'cm' }}</span>
-      </div>
-      <div class="neon-configurator__slider-row">
-        <button type="button" class="neon-configurator__slider-arrow" data-slider-decrease aria-label="Decrease size">‹</button>
-        <input type="range" class="neon-configurator__slider" data-custom-size-slider min="{{ default_unit_entry.min_value.value | default: 20 }}" max="{{ default_unit_entry.max_value.value | default: 150 }}" step="1" data-price-per-unit="{{ default_unit_entry.price_per_unit.value | default: 0 }}" data-unit="{{ default_unit_entry.unit.value | default: 'cm' }}" data-height-ratio="{{ default_unit_entry.height_ratio.value | default: 2.6 }}" value="{{ default_unit_entry.min_value.value | default: 20 }}">
-        <button type="button" class="neon-configurator__slider-arrow" data-slider-increase aria-label="Increase size">›</button>
-      </div>
-      <p class="neon-configurator__slider-hint">Drag to request a custom width instead of a preset size above.</p>
-    </div>
-
-    <p class="neon-configurator__oversized-notice" data-oversized-notice hidden>⚠️ Signs larger than 2 metres are manufactured and shipped in split sections due to oversized delivery and transportation requirements.</p>
+    <p class="neon-configurator__oversized-notice" data-oversized-notice hidden>⚠️ Signs larger than 2 metres are manufactured and shipped in split sections due to oversized delivery and transportation requirements. Once assembled and mounted on the wall, the sections will seamlessly come together to create one large sign with a clean, flush and professional finish.</p>
 
     <script type="application/json" data-neon-backboard-styles-data>
     [

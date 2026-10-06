@@ -21,7 +21,7 @@ const SECTIONS = [
     { title: "Power Adapters", path: "/app/neon-signs/power-adapters", description: "Manage region-specific power adapter options." },
     { title: "Quick Symbols", path: "/app/neon-signs/quick-symbols", description: "Upload SVG icons (heart, star, moon, etc.) customers can click to add to their design." },
     { title: "Background Images", path: "/app/neon-signs/background-images", description: "Upload room/wall mockup photos shown behind the live preview." },
-    { title: "Custom Size Slider", path: "/app/neon-signs/size-slider", description: "Configure the unit, min/max range, and price-per-unit for the optional custom-size slider." },
+    { title: "Size Units (CM / MM / INCH)", path: "/app/neon-signs/size-slider", description: "Measurement units shown above the Neon size boxes (sort order = default unit). Min/max/price-per-unit are only used by the 3D Sign custom-size slider." },
     { title: "Colour Effect Modes", path: "/app/neon-signs/effect-modes", description: "Manage Single Colour, RGB Colour Changing, and Multicoloured Text options." },
 ];
 

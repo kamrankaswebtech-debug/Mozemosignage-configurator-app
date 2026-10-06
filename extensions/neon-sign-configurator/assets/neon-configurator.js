@@ -141,6 +141,25 @@ function sortBySortOrder(container) {
         .forEach((x) => container.appendChild(x.el));
 }
 
+// Size cards + preview dimensions are stored in cm (Admin "Sizes"); these convert them
+// into whichever measurement unit tab (Admin "Size Units") the customer has selected.
+// The lookup tables live inside the function on purpose: initAllNeonConfigurators() runs at
+// the top of this file (before any top-level const below it is initialised), so a top-level
+// const here would throw "Cannot access before initialization" and abort the whole init.
+function neonFormatLength(cm, unit, separator) {
+    const unitToCm = { cm: 1, mm: 0.1, inch: 2.54, in: 2.54, ft: 30.48 };
+    const unitSuffix = { cm: 'cm', mm: 'mm', inch: 'in', in: 'in', ft: 'ft' };
+    const u = String(unit || 'cm').toLowerCase();
+    const value = Number(((Number(cm) || 0) / (unitToCm[u] || 1)).toFixed(1));
+    return value + (separator || '') + (unitSuffix[u] || u);
+}
+
+// Rewrites every "<number>cm" inside an Admin size label (e.g. "Small - 40cm") into the
+// selected unit, keeping the rest of the Admin-entered text untouched.
+function neonConvertLabelUnits(label, unit) {
+    return String(label || '').replace(/(\d+(?:\.\d+)?)\s*cm\b/gi, (_m, num) => neonFormatLength(parseFloat(num), unit));
+}
+
 // Decides the acrylic finish for a Backboard Colour option: clear / gloss / shiny / frosted.
 // Admin "Finish Type" wins; otherwise auto-detected from the colour name.
 function resolveBackboardFinish(option) {
@@ -351,11 +370,12 @@ function renderNeonDynamicOptions(root) {
             card.className = 'neon-configurator__size-card' + (isDefault ? ' is-selected' : '');
             card.dataset.sortOrder = s.sortOrder;
             card.dataset.sizeWidth = s.width;
+            card.dataset.sizeLabel = s.label;
             let inner = '';
             if (s.badge) inner += '<span class="neon-configurator__size-card-badge">' + s.badge + '</span>';
-            inner += '<span class="neon-configurator__size-card-label">' + s.label + '</span>';
+            inner += '<span class="neon-configurator__size-card-label" data-size-card-label>' + s.label + '</span>';
             inner += '<span class="neon-configurator__size-card-price">$' + s.price + '</span>';
-            inner += '<span class="neon-configurator__size-card-meta">Length: ' + s.width + 'cm</span>';
+            inner += '<span class="neon-configurator__size-card-meta" data-size-card-meta>Length: ' + s.width + 'cm</span>';
             card.innerHTML = inner;
             sizeCardsEl.appendChild(card);
 
@@ -581,14 +601,12 @@ function initConfigurator(root) {
     const measurementsLabel = root.querySelector('[data-measurements-label]');
     const wallpaperToggle = root.querySelector('[data-wallpaper-toggle]');
     const wallpaperLabel = root.querySelector('[data-wallpaper-label]');
-    const customSizeSlider = root.querySelector('[data-custom-size-slider]');
-    const sliderWidthLabel = root.querySelector('[data-slider-width-value]');
-    const sliderHeightLabel = root.querySelector('[data-slider-height-value]');
-    const sliderUnitLabel = root.querySelector('[data-slider-unit-label]');
+    const unitTabsEl = root.querySelector('[data-unit-tabs]');
     const unitTabs = root.querySelectorAll('[data-unit-tab]');
+    // Default unit = first tab in Admin sort order (already sorted above).
+    let currentUnit = unitTabs.length ? (unitTabs[0].dataset.unit || 'cm') : 'cm';
     const rotationSlider = root.querySelector('[data-rotation-slider]');
     const rotationValueLabel = root.querySelector('[data-rotation-value]');
-    let customSizeActive = false;
     const effectModeRadios = root.querySelectorAll('[data-effect-mode-radio]');
     const colourField = root.querySelector('[data-colour-field]');
     // Read whichever radio is actually checked in the DOM — not just the first one in loop order —
@@ -697,14 +715,6 @@ function initConfigurator(root) {
             const attr = currentNeonType === 'outdoor' ? 'visibleOutdoor' : 'visibleIndoor';
             const isVisible = field.dataset[attr] !== 'false';
             field.hidden = !isVisible;
-
-            // If the Custom Size Slider just got hidden while it was the active size source,
-            // fall back to the preset "Choose Size" dropdown so pricing/preview stays correct.
-            if (field.dataset.sizeField === 'custom-slider' && !isVisible && customSizeActive) {
-                customSizeActive = false;
-                updatePreviewScale();
-                calculateTotal();
-            }
         });
     }
 
@@ -1338,23 +1348,11 @@ function initConfigurator(root) {
     });
 
     function updatePreviewScale() {
-        let widthValue;
-        let heightValue;
-        let unit = 'cm';
-
-        if (customSizeActive && customSizeSlider) {
-            widthValue = parseFloat(customSizeSlider.value) || 60;
-            const heightRatio = parseFloat(customSizeSlider.dataset.heightRatio) || 2.6;
-            heightValue = Math.round((widthValue / heightRatio) * 10) / 10;
-            unit = customSizeSlider.dataset.unit || 'cm';
-
-            if (sliderWidthLabel) sliderWidthLabel.textContent = 'Width: ' + widthValue + ' ' + unit;
-            if (sliderHeightLabel) sliderHeightLabel.textContent = 'Height: ' + heightValue + ' ' + unit;
-        } else {
-            const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
-            widthValue = parseFloat(sizeOption?.value) || 60;
-            heightValue = parseFloat(sizeOption?.dataset.height) || Math.round(widthValue / 2.6);
-        }
+        // The selected size card (via the hidden size select) is the only size source.
+        // Sizes are stored in cm; currentUnit only changes how they are displayed.
+        const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
+        const widthValue = parseFloat(sizeOption?.value) || 60;
+        const heightValue = parseFloat(sizeOption?.dataset.height) || Math.round(widthValue / 2.6);
 
         // Non-linear (sqrt-based) scaling instead of a flat multiplier: keeps very small
         // sizes (e.g. 40cm) readable in the preview — the client flagged 40cm text as too
@@ -1366,18 +1364,16 @@ function initConfigurator(root) {
         updateIconSize();
 
         if (widthLabel) {
-            widthLabel.textContent = widthValue + ' ' + unit;
+            widthLabel.textContent = neonFormatLength(widthValue, currentUnit, ' ');
         }
         if (heightLabel) {
-            heightLabel.textContent = heightValue + ' ' + unit;
+            heightLabel.textContent = neonFormatLength(heightValue, currentUnit, ' ');
         }
 
         // The manufacturer blueprint PDF always expects width/height in centimetres,
-        // regardless of which unit the customer used on the custom size slider.
-        const UNIT_TO_CM = { cm: 1, mm: 0.1, inch: 2.54, ft: 30.48 };
-        const cmFactor = UNIT_TO_CM[unit] || 1;
-        currentWidthCm = Math.round(widthValue * cmFactor * 10) / 10;
-        currentHeightCm = Math.round(heightValue * cmFactor * 10) / 10;
+        // regardless of which display unit the customer selected.
+        currentWidthCm = Math.round(widthValue * 10) / 10;
+        currentHeightCm = Math.round(heightValue * 10) / 10;
 
         if (oversizedNotice) oversizedNotice.hidden = currentWidthCm <= 200;
         updateBackboardPanel();
@@ -1455,6 +1451,8 @@ function initConfigurator(root) {
         // filter on every pointermove — only rebuilds when the size changes enough to
         // actually matter for how far the connecting shape needs to bridge.
         const currentFontSizePx = Math.round((baseFontSize * groupScale) / 4) * 4;
+        // Lets the Acrylic Stand base block + floating shelf (CSS) scale with the sign size.
+        previewInner.style.setProperty('--moz-stand-unit', currentFontSizePx + 'px');
         if (backboardDefs) {
             const defsHex = isClear ? '#9a9a9a' : hex;
             const defsKey = blockId + '|' + finish + '|' + defsHex + '|' + currentFontSizePx;
@@ -1497,18 +1495,18 @@ function initConfigurator(root) {
             applyShapeFilter();
         }
 
-        // Floating wood shelf under the sign — only for Acrylic Stand. Uses the Admin-
-        // uploaded photo (Backboard Style -> Stand Shelf Photo) if present for an exact
-        // match to the client's reference; otherwise falls back to the CSS wood gradient.
+        // Floating wood shelf under the sign — only for Acrylic Stand. The shelf shape is
+        // CSS-built; the Admin-uploaded photo (Backboard Style -> Stand Shelf Photo), if any,
+        // is passed as --moz-shelf-photo and used as the wood texture of its surfaces.
         ensureWallShelf();
         if (wallShelfEl) {
             const isStand = shape === 'acrylic-stand-middle';
             wallShelfEl.hidden = !isStand;
             const shelfUrl = styleOption?.dataset.shelfImage || '';
             if (isStand && shelfUrl) {
-                wallShelfEl.style.backgroundImage = "url('" + shelfUrl + "')";
+                wallShelfEl.style.setProperty('--moz-shelf-photo', "url('" + shelfUrl + "')");
             } else {
-                wallShelfEl.style.backgroundImage = '';
+                wallShelfEl.style.removeProperty('--moz-shelf-photo');
             }
         }
     }
@@ -1564,14 +1562,8 @@ function initConfigurator(root) {
     function calculateTotal() {
         let total = 0;
 
-        if (customSizeActive && customSizeSlider) {
-            const widthValue = parseFloat(customSizeSlider.value) || 0;
-            const pricePerUnit = parseFloat(customSizeSlider.dataset.pricePerUnit) || 0;
-            total += widthValue * pricePerUnit;
-        } else {
-            const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
-            total += parseFloat(sizeOption?.dataset.price) || 0;
-        }
+        const sizeOption = sizeSelect.options[sizeSelect.selectedIndex];
+        total += parseFloat(sizeOption?.dataset.price) || 0;
 
         total += selectedColourPrice;
 
@@ -1760,65 +1752,38 @@ function initConfigurator(root) {
     backboardStyleSelect.addEventListener('change', syncBackboardStyleCards);
 
     sizeSelect.addEventListener('change', () => {
-        customSizeActive = false;
         updatePreviewScale();
         calculateTotal();
         syncSizeCards();
     });
 
-    if (customSizeSlider) {
-        customSizeSlider.addEventListener('input', () => {
-            customSizeActive = true;
-            updatePreviewScale();
-            calculateTotal();
+    // --- Measurement unit tabs (above the size cards) ---
+    // Display-only: converts the size card labels and preview dimension lines into the
+    // chosen unit. The selected size, its price and the cm blueprint values are unchanged.
+    function updateSizeCardUnits() {
+        sizeCards.forEach((card) => {
+            const labelEl = card.querySelector('[data-size-card-label]');
+            const metaEl = card.querySelector('[data-size-card-meta]');
+            if (labelEl) labelEl.textContent = neonConvertLabelUnits(card.dataset.sizeLabel, currentUnit);
+            if (metaEl) metaEl.textContent = 'Length: ' + neonFormatLength(card.dataset.sizeWidth, currentUnit);
         });
-
-        unitTabs.forEach((tab) => {
-            tab.addEventListener('click', () => {
-                unitTabs.forEach((t) => t.classList.remove('is-selected'));
-                tab.classList.add('is-selected');
-
-                const newMin = parseFloat(tab.dataset.min) || 0;
-                const newMax = parseFloat(tab.dataset.max) || 100;
-                const newUnit = tab.dataset.unit || 'cm';
-
-                customSizeSlider.min = newMin;
-                customSizeSlider.max = newMax;
-                customSizeSlider.value = newMin;
-                customSizeSlider.dataset.unit = newUnit;
-                customSizeSlider.dataset.pricePerUnit = tab.dataset.pricePerUnit || '0';
-                customSizeSlider.dataset.heightRatio = tab.dataset.heightRatio || '2.6';
-
-                if (sliderUnitLabel) sliderUnitLabel.textContent = newUnit;
-
-                customSizeActive = true;
-                updatePreviewScale();
-                calculateTotal();
-            });
-        });
-
-        const sliderDecreaseBtn = root.querySelector('[data-slider-decrease]');
-        const sliderIncreaseBtn = root.querySelector('[data-slider-increase]');
-
-        function stepSlider(direction) {
-            const min = parseFloat(customSizeSlider.min);
-            const max = parseFloat(customSizeSlider.max);
-            const step = parseFloat(customSizeSlider.step) || 1;
-            const current = parseFloat(customSizeSlider.value) || min;
-            const next = Math.min(max, Math.max(min, current + (direction * step)));
-            customSizeSlider.value = next;
-            customSizeActive = true;
-            updatePreviewScale();
-            calculateTotal();
-        }
-
-        if (sliderDecreaseBtn) {
-            sliderDecreaseBtn.addEventListener('click', () => stepSlider(-1));
-        }
-        if (sliderIncreaseBtn) {
-            sliderIncreaseBtn.addEventListener('click', () => stepSlider(1));
-        }
     }
+
+    function syncUnitTabs() {
+        unitTabs.forEach((t) => t.classList.toggle('is-selected', (t.dataset.unit || 'cm') === currentUnit));
+    }
+
+    // A single unit has nothing to switch between, so the tab row is hidden.
+    if (unitTabsEl) unitTabsEl.hidden = unitTabs.length < 2;
+
+    unitTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            currentUnit = tab.dataset.unit || 'cm';
+            syncUnitTabs();
+            updateSizeCardUnits();
+            updatePreviewScale();
+        });
+    });
 
     if (powerToggle) {
         powerToggle.addEventListener('change', updatePowerState);
@@ -1901,7 +1866,6 @@ function initConfigurator(root) {
             const options = Array.from(sizeSelect.options);
             const matchIndex = options.findIndex((opt) => opt.value === width);
             if (matchIndex === -1) return;
-            customSizeActive = false;
             sizeSelect.selectedIndex = matchIndex;
             sizeSelect.dispatchEvent(new Event('change'));
             syncSizeCards();
@@ -2088,6 +2052,8 @@ function initConfigurator(root) {
     syncBackboardStyleCards();
     syncFontCards();
     syncSizeCards();
+    syncUnitTabs();
+    updateSizeCardUnits();
     updateSymbolPositionClass();
     updateIncludedPowerAdapterText();
     updateOutdoorThicknessVisibility();

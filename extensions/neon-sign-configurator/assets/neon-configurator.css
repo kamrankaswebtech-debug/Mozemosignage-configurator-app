@@ -262,47 +262,49 @@
     transform-origin: left center;
 }
 
+/* Acrylic Stand: the sign stands in a short acrylic base block that sits on a floating
+   wall shelf. --moz-stand-unit is the current sign font size (set by updateBackboardPanel()
+   in neon-configurator.js) so the base + shelf scale in proportion with the chosen size. */
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle {
-    padding-bottom: 62px;
+    /* Only the lower part of the base block shows below the sign — the rest sits behind it. */
+    padding-bottom: max(10px, calc(var(--moz-stand-unit, 48px) * 0.26));
     position: relative;
-    /* Ground-contact shadow — reads as a desk/table-top display, not wall-mounted. */
-    filter: drop-shadow(0 16px 10px rgba(0, 0, 0, 0.3));
+    /* Keeps the z-index:-1 base + shelf inside this sign instead of behind the wallpaper. */
+    isolation: isolate;
 }
 
-/* Support riser physically connecting the letters down to the shelf below — this is what
-   removes the "floating / disconnected pieces" look the client flagged. */
+/* The old central acrylic riser was removed by client request. */
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: 24px;
-    transform: translateX(-50%);
-    width: 30%;
-    height: 32px;
-    border-left: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
-    border-right: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
-    background: linear-gradient(to bottom, var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) 0%, transparent 100%);
-    opacity: 0.5;
-    pointer-events: none;
+    content: none;
 }
 
 .neon-configurator__preview-inner.backboard--acrylic-stand-middle::after {
-    /* Acrylic shelf/base, flush at the bottom and wide enough to visually support the
-       whole sign — connects directly to the riser above so the stand reads as one
-       physically assembled piece, not separate floating parts. */
+    /* Short acrylic base block directly under the sign, half hidden BEHIND the sign
+       (z-index -1) so it reads as the piece physically holding the sign upright. Colour /
+       finish follow the selected Backboard Colour via --moz-backboard-color. */
     content: "";
     position: absolute;
     left: 50%;
-    bottom: 2px;
+    bottom: 0;
     transform: translateX(-50%);
-    width: 76%;
-    height: 24px;
+    width: 72%;
+    height: max(20px, calc(var(--moz-stand-unit, 48px) * 0.56));
+    z-index: -1;
     border: 1.5px solid var(--moz-backboard-color, rgba(255, 255, 255, 0.35));
-    border-radius: 4px;
+    border-radius: 3px 3px 2px 2px;
+    /* Frosted-glass block: visible on light AND dark wallpapers (white tint + subtle dark
+       edge shading), with a bright polished bottom edge where it meets the shelf. */
     background:
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02)),
-        linear-gradient(to bottom, transparent calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 9px), var(--moz-backboard-color, rgba(255, 255, 255, 0.35)) calc(100% - 7.5px), transparent calc(100% - 7.5px));
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.35) 0, rgba(255, 255, 255, 0.35) 1.5px, transparent 1.5px),
+        linear-gradient(to top, rgba(255, 255, 255, 0.55) 0, rgba(255, 255, 255, 0.55) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.1), transparent 12%, transparent 88%, rgba(0, 0, 0, 0.1)),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.32));
+    box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.3);
+    /* The upper part tucked behind the sign is faded, so a Clear sign only shows a faint
+       hint of it through the acrylic instead of a hard line across the sign. */
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.18) 38%, #000 58%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.18) 0%, rgba(0, 0, 0, 0.18) 38%, #000 58%);
+    pointer-events: none;
 }
 
 .neon-configurator__style-cards {
@@ -1059,13 +1061,22 @@
 }
 
 .neon-configurator__unit-tabs {
-    display: flex;
+    display: inline-flex;
+    flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    padding: 5px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.neon-configurator__unit-tabs[hidden] {
+    display: none;
 }
 
 .neon-configurator__unit-tab {
-    padding: 5px 12px;
+    min-width: 52px;
+    padding: 7px 14px;
     border-radius: 6px;
     border: 1px solid #2c2c38;
     background: #16161f;
@@ -1879,25 +1890,69 @@
     pointer-events: none;
 }
 
-/* ---- Floating wood shelf under the Acrylic Stand (real photo if the admin uploaded one,
-   otherwise this CSS wood-look gradient as a fallback) ---- */
+/* ---- Floating wall shelf under the Acrylic Stand ----
+   Built as a real 3D floating shelf: the element itself is the FRONT EDGE, ::before is the
+   TOP SURFACE seen in slight perspective (the base block stands on it), ::after is a soft
+   neutral contact shadow on the wall. No coloured/brown backdrop behind it.
+   The shelf SHAPE is always CSS-built; an Admin-uploaded shelf photo (Backboard Style ->
+   Stand Shelf Photo, passed in as --moz-shelf-photo) is only used as the wood TEXTURE of the
+   top + front surfaces. (Stretching the whole photo into the shelf box squashed it into a
+   thin dark line on the storefront.) Without a photo a CSS walnut grain is used instead. */
 .neon-configurator__wall-shelf {
+    --moz-shelf-top: max(8px, calc(var(--moz-stand-unit, 48px) * 0.2));
+    --moz-shelf-front: max(9px, calc(var(--moz-stand-unit, 48px) * 0.24));
+    --moz-shelf-grain: repeating-linear-gradient(90deg, rgba(30, 18, 8, 0.12) 0 2px, transparent 2px 11px, rgba(255, 255, 255, 0.05) 11px 13px, transparent 13px 29px);
     position: absolute;
     left: 50%;
-    bottom: -22px;
+    /* Base block stands roughly in the middle of the shelf's top surface depth. */
+    top: calc(100% + var(--moz-shelf-top) * 0.5);
     transform: translateX(-50%);
-    width: 118%;
-    max-width: 360px;
-    height: 16px;
-    border-radius: 2px;
-    background-color: #4a3829;
-    background-image: linear-gradient(to bottom, #6b5440 0%, #4a3829 55%, #362620 100%);
-    background-size: cover;
+    width: 136%;
+    min-width: 220px;
+    max-width: calc(100% + 260px);
+    height: var(--moz-shelf-front);
+    border-radius: 0 0 2px 2px;
+    /* Front edge: walnut tone, slightly darker than the top (it faces down/away from light). */
+    background-color: #4f3a2a;
+    background-image:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 0, rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.32) 100%),
+        var(--moz-shelf-photo, var(--moz-shelf-grain));
+    background-size: 100% 100%, cover;
+    background-repeat: no-repeat;
     background-position: center;
-    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    clip-path: polygon(2% 0, 98% 0, 100% 100%, 0% 100%);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
     pointer-events: none;
     z-index: -1;
+}
+
+.neon-configurator__wall-shelf::before {
+    /* Top surface — slightly narrower at the back (wall side) for real depth perspective. */
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--moz-shelf-top);
+    background-color: #6e533d;
+    background-image:
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.12)),
+        var(--moz-shelf-photo, var(--moz-shelf-grain));
+    background-size: 100% 100%, cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    clip-path: polygon(2.5% 0, 97.5% 0, 100% 100%, 0 100%);
+}
+
+.neon-configurator__wall-shelf::after {
+    /* Soft neutral contact shadow cast on the wall just under the shelf. */
+    content: "";
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    top: 100%;
+    height: calc(var(--moz-shelf-front) * 1.6);
+    background: radial-gradient(ellipse at 50% 0, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0) 70%);
+    filter: blur(2px);
 }
 
 .neon-configurator__wall-shelf[hidden] {

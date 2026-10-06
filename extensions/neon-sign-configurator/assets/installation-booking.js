@@ -5,6 +5,9 @@
 //   2. Live time-slot availability — slots held/booked by other customers are disabled.
 //   3. Holding the selected slot for this customer so nobody else can take it.
 //   4. prepareForCart() / afterCartAdd() hooks used by each configurator's Add to Cart.
+//   5. Optional address pop-up (attach(root, { popup: true }) — used by the LED Neon
+//      configurator): selecting "Yes" opens a dialog with live address suggestions and the
+//      100km check; the inline field then just shows the verified address.
 (function () {
     if (window.MozemoInstall) return;
 
@@ -48,7 +51,10 @@
         return { ok: res.ok, status: res.status, data };
     }
 
-    function attach(root) {
+    const UNAVAILABLE_TEXT = 'Installation unavailable at this address due to distance.';
+
+    function attach(root, options) {
+        const usePopup = !!(options && options.popup);
         const booking = root.querySelector('[data-install-booking]');
         const radios = Array.from(root.querySelectorAll('[data-install-radio]'));
         const yesRadio = radios.find((r) => r.value === 'yes');
