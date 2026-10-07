@@ -110,3 +110,275 @@
 .moz-install__option-disabled * {
     cursor: not-allowed;
 }
+
+.moz-install__unavailable-title {
+    font-weight: 700;
+    color: #f87171;
+}
+
+/* Read-only "address picker" field (pop-up mode) — click to open the address pop-up. */
+.moz-install__address-picker input {
+    cursor: pointer;
+}
+
+/* ---- Address pop-up ---- */
+html.moz-install-modal-open,
+html.moz-install-modal-open body {
+    overflow: hidden;
+}
+
+.moz-install-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(5, 5, 10, 0.72);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    font-family: inherit;
+}
+
+.moz-install-modal[hidden] {
+    display: none;
+}
+
+.moz-install-modal__box {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding: 22px 22px 20px;
+    border-radius: 14px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 0, 200, 0.12);
+    box-sizing: border-box;
+    animation: moz-install-modal-in 0.18s ease-out;
+}
+
+@keyframes moz-install-modal-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+
+.moz-install-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.moz-install-modal__title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, #ff4fd8, #b46bff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.moz-install-modal__close {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid #2c2c38;
+    background: #1d1d28;
+    color: #b8b8c4;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.moz-install-modal__close:hover {
+    color: #ffffff;
+    border-color: #ff2ec4;
+}
+
+.moz-install-modal__intro {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #b8b8c4;
+}
+
+.moz-install-modal__field {
+    position: relative;
+}
+
+.moz-install-modal__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #3a3a4a;
+    background: #0f0f16;
+    color: #ffffff;
+    /* 16px stops iOS Safari from zooming into the field on focus. */
+    font-size: 16px;
+    font-family: inherit;
+    outline: none;
+}
+
+.moz-install-modal__input:focus {
+    border-color: #ff2ec4;
+    box-shadow: 0 0 0 3px rgba(255, 46, 196, 0.2);
+}
+
+.moz-install-modal__list {
+    margin: 6px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: #1d1d28;
+    border: 1px solid #3a3a4a;
+    border-radius: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.moz-install-modal__list[hidden] {
+    display: none;
+}
+
+.moz-install-modal__list .moz-install__suggest-item {
+    padding: 11px 14px;
+}
+
+.moz-install-modal__list .moz-install__suggest-item + .moz-install__suggest-item {
+    border-top: 1px solid #262633;
+}
+
+.moz-install-modal__list .moz-install__suggest-item.is-active,
+.moz-install-modal__list .moz-install__suggest-item:hover {
+    background: #2a2a38;
+}
+
+.moz-install-modal .moz-install__msg {
+    margin-top: 8px;
+}
+
+.moz-install-modal__result {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.moz-install-modal__result[hidden] {
+    display: none;
+}
+
+.moz-install-modal__result[data-tone="ok"] {
+    border: 1px solid rgba(74, 222, 128, 0.5);
+    background: rgba(74, 222, 128, 0.08);
+    color: #bbf7d0;
+}
+
+.moz-install-modal__result[data-tone="far"] {
+    border: 1px solid rgba(248, 113, 113, 0.55);
+    background: rgba(248, 113, 113, 0.08);
+    color: #fca5a5;
+}
+
+.moz-install-modal__result p {
+    margin: 0;
+}
+
+.moz-install-modal__result-title {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.moz-install-modal__result[data-tone="ok"] .moz-install-modal__result-title {
+    color: #4ade80;
+}
+
+.moz-install-modal__result[data-tone="far"] .moz-install-modal__result-title {
+    color: #f87171;
+}
+
+.moz-install-modal__result-text {
+    margin-top: 4px !important;
+}
+
+.moz-install-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.moz-install-modal__btn {
+    padding: 11px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.moz-install-modal__btn[hidden] {
+    display: none;
+}
+
+.moz-install-modal__btn--ghost {
+    border: 1px solid #3a3a4a;
+    background: transparent;
+    color: #d6d6e0;
+}
+
+.moz-install-modal__btn--ghost:hover {
+    border-color: #ff2ec4;
+    color: #ffffff;
+}
+
+.moz-install-modal__btn--primary {
+    border: none;
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    color: #ffffff;
+}
+
+.moz-install-modal__btn--primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Mobile: bottom sheet, full-width stacked buttons, roomy tap targets. */
+@media (max-width: 600px) {
+    .moz-install-modal {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .moz-install-modal__box {
+        max-width: none;
+        max-height: 88vh;
+        border-radius: 16px 16px 0 0;
+        padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .moz-install-modal__actions {
+        flex-direction: column-reverse;
+    }
+
+    .moz-install-modal__btn {
+        width: 100%;
+        padding: 13px 18px;
+    }
+
+    .moz-install-modal__list {
+        max-height: 34vh;
+    }
+}

@@ -5,9 +5,10 @@
 //   2. Live time-slot availability — slots held/booked by other customers are disabled.
 //   3. Holding the selected slot for this customer so nobody else can take it.
 //   4. prepareForCart() / afterCartAdd() hooks used by each configurator's Add to Cart.
-//   5. Optional address pop-up (attach(root, { popup: true }) — used by the LED Neon
-//      configurator): selecting "Yes" opens a dialog with live address suggestions and the
-//      100km check; the inline field then just shows the verified address.
+//   5. Address pop-up: selecting "Yes" opens a dialog with live address suggestions and the
+//      100km check; the inline field then shows the verified address (click it to change).
+//      Only used when the Google address lookup is configured — otherwise the original plain
+//      address field is kept. Pass attach(root, { popup: false }) to keep the inline field.
 (function () {
     if (window.MozemoInstall) return;
 
@@ -54,7 +55,7 @@
     const UNAVAILABLE_TEXT = 'Installation unavailable at this address due to distance.';
 
     function attach(root, options) {
-        const usePopup = !!(options && options.popup);
+        const popupOption = !(options && options.popup === false);
         const booking = root.querySelector('[data-install-booking]');
         const radios = Array.from(root.querySelectorAll('[data-install-radio]'));
         const yesRadio = radios.find((r) => r.value === 'yes');
@@ -105,6 +106,21 @@
             return !config || config.addressLookup !== false;
         }
 
+        // The pop-up is used only once the config has confirmed the address lookup really
+        // works — a customer is never shown a dialog that can't find any addresses.
+        function popupActive() {
+            return popupOption && !!config && config.addressLookup !== false;
+        }
+
+        // Pop-up mode: the inline field becomes a read-only "address picker" that shows the
+        // verified address and re-opens the pop-up when clicked.
+        function applyAddressMode() {
+            const picker = popupActive();
+            addressInput.readOnly = picker;
+            addressRow.classList.toggle('moz-install__address-picker', picker);
+            if (picker) addressInput.placeholder = 'Click to enter your installation address';
+        }
+
         function slotsUnlocked() {
             return !lookupEnabled() || addr.eligible === true;
         }
@@ -149,8 +165,27 @@
             syncLock();
         }
 
+        // Shared by the inline field and the pop-up (same server-side Google lookup).
+        async function fetchSuggestions(q) {
+            const res = await getJson(API + '?op=autocomplete&q=' + encodeURIComponent(q) + '&session=' + sessionToken);
+            return (res.data && res.data.suggestions) || [];
+        }
+
+        async function verifyPlace(placeId) {
+            const res = await postJson({ op: 'check-address', placeId, session: sessionToken });
+            sessionToken = newToken(); // Google session ends after a details lookup
+            return res;
+        }
+
+        function acceptAddress(d) {
+            addr = { eligible: true, address: d.formattedAddress, distanceKm: d.distanceKm, proof: d.proof };
+            addressInput.value = d.formattedAddress || addressInput.value;
+            setMsg(addressStatus, '✓ Great — we install at this address (' + d.distanceKm + ' km from our workshop).', 'ok');
+            syncLock();
+        }
+
         addressInput.addEventListener('input', () => {
-            if (!lookupEnabled()) return;
+            if (!lookupEnabled() || popupActive()) return;
             resetEligibility();
             setMsg(addressStatus, '');
             const q = addressInput.value.trim();
@@ -159,9 +194,9 @@
             suggestTimer = setTimeout(async () => {
                 const seq = ++suggestSeq;
                 try {
-                    const res = await getJson(API + '?op=autocomplete&q=' + encodeURIComponent(q) + '&session=' + sessionToken);
+                    const items = await fetchSuggestions(q);
                     if (seq !== suggestSeq) return;
-                    renderSuggestions((res.data && res.data.suggestions) || []);
+                    renderSuggestions(items);
                 } catch (err) {
                     clearSuggestions();
                 }
@@ -169,6 +204,7 @@
         });
 
         addressInput.addEventListener('blur', () => {
+            if (popupActive()) return;
             setTimeout(() => {
                 clearSuggestions();
                 if (lookupEnabled() && addr.eligible === null && addressInput.value.trim().length >= 3) {
@@ -177,7 +213,15 @@
             }, 200);
         });
 
+        addressInput.addEventListener('click', () => {
+            if (popupActive()) openModal();
+        });
+
         addressInput.addEventListener('keydown', (e) => {
+            if (popupActive()) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(); }
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const first = suggestList.querySelector('li');
@@ -211,8 +255,7 @@
         async function checkAddress(placeId) {
             setMsg(addressStatus, 'Checking your address…', '');
             try {
-                const res = await postJson({ op: 'check-address', placeId, session: sessionToken });
-                sessionToken = newToken(); // Google session ends after a details lookup
+                const res = await verifyPlace(placeId);
                 if (!res.ok) {
                     setMsg(addressStatus, (res.data && res.data.error) || 'We could not check this address. Please try again.', 'error');
                     return;
@@ -220,9 +263,7 @@
                 const d = res.data;
                 addressInput.value = d.formattedAddress || addressInput.value;
                 if (d.eligible) {
-                    addr = { eligible: true, address: d.formattedAddress, distanceKm: d.distanceKm, proof: d.proof };
-                    setMsg(addressStatus, '✓ Great — we install at this address (' + d.distanceKm + ' km from our workshop).', 'ok');
-                    syncLock();
+                    acceptAddress(d);
                     await refreshAvailability(true);
                 } else {
                     addr = { eligible: false, address: d.formattedAddress, distanceKm: d.distanceKm, proof: '' };
@@ -238,8 +279,9 @@
         function markUnavailable(distanceKm, radiusKm) {
             releaseHold();
             unavailableBox.innerHTML = '';
+            unavailableBox.appendChild(el('p', 'moz-install__unavailable-title', UNAVAILABLE_TEXT));
             unavailableBox.appendChild(el('p', '',
-                'Sorry — installation is only available within ' + (radiusKm || radiusText()) + ' km of our workshop' +
+                'We install within ' + (radiusKm || radiusText()) + ' km of our workshop' +
                 (config && config.baseAddress ? ' (' + config.baseAddress + ')' : '') +
                 '. Your address is ' + distanceKm + ' km away, so installation has been removed from this order.'));
             const retry = el('button', 'moz-install__retry', 'Use a different address');
@@ -248,12 +290,12 @@
                 unavailableBox.hidden = true;
                 yesRadio.disabled = false;
                 yesRadio.closest('label')?.classList.remove('moz-install__option-disabled');
-                yesRadio.checked = true;
-                yesRadio.dispatchEvent(new Event('change', { bubbles: true }));
                 addressInput.value = '';
                 resetEligibility();
                 setMsg(addressStatus, '');
-                addressInput.focus();
+                yesRadio.checked = true;
+                yesRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                if (!popupActive()) addressInput.focus();
             });
             unavailableBox.appendChild(retry);
             unavailableBox.hidden = false;
@@ -262,6 +304,299 @@
             noRadio.dispatchEvent(new Event('change', { bubbles: true }));
             yesRadio.disabled = true;
             yesRadio.closest('label')?.classList.add('moz-install__option-disabled');
+        }
+
+        // ---- Address pop-up (built once, lazily, on document.body so no theme/section
+        // overflow or transform can clip it) ----
+        let modal = null;
+        let modalState = 'typing'; // typing | checking | ok | far
+        let modalFar = null;       // { distanceKm, radiusKm } of the last out-of-area address
+        let modalItems = [];
+        let modalActive = -1;
+        let modalTimer = null;
+        let modalSeq = 0;
+
+        function buildModal() {
+            const uid = 'moz-install-modal-' + Math.random().toString(36).slice(2, 9);
+            const overlay = el('div', 'moz-install-modal');
+            overlay.hidden = true;
+            const box = el('div', 'moz-install-modal__box');
+            box.setAttribute('role', 'dialog');
+            box.setAttribute('aria-modal', 'true');
+            box.setAttribute('aria-labelledby', uid + '-title');
+
+            const head = el('div', 'moz-install-modal__head');
+            const title = el('h3', 'moz-install-modal__title', 'Installation Address');
+            title.id = uid + '-title';
+            const closeBtn = el('button', 'moz-install-modal__close', '×');
+            closeBtn.type = 'button';
+            closeBtn.setAttribute('aria-label', 'Close');
+            head.appendChild(title);
+            head.appendChild(closeBtn);
+
+            const intro = el('p', 'moz-install-modal__intro');
+
+            const field = el('div', 'moz-install-modal__field');
+            const input = el('input', 'moz-install-modal__input');
+            input.type = 'text';
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('autocorrect', 'off');
+            input.setAttribute('spellcheck', 'false');
+            input.setAttribute('enterkeyhint', 'search');
+            input.setAttribute('role', 'combobox');
+            input.setAttribute('aria-autocomplete', 'list');
+            input.setAttribute('aria-expanded', 'false');
+            input.setAttribute('aria-controls', uid + '-list');
+            input.placeholder = 'Start typing your street number and street name…';
+            const list = el('ul', 'moz-install-modal__list');
+            list.id = uid + '-list';
+            list.setAttribute('role', 'listbox');
+            list.hidden = true;
+            field.appendChild(input);
+            field.appendChild(list);
+
+            const status = el('p', 'moz-install__msg');
+            status.hidden = true;
+            const result = el('div', 'moz-install-modal__result');
+            result.hidden = true;
+
+            const actions = el('div', 'moz-install-modal__actions');
+            const secondary = el('button', 'moz-install-modal__btn moz-install-modal__btn--ghost');
+            secondary.type = 'button';
+            const primary = el('button', 'moz-install-modal__btn moz-install-modal__btn--primary');
+            primary.type = 'button';
+            actions.appendChild(secondary);
+            actions.appendChild(primary);
+
+            box.appendChild(head);
+            box.appendChild(intro);
+            box.appendChild(field);
+            box.appendChild(status);
+            box.appendChild(result);
+            box.appendChild(actions);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+
+            modal = { overlay, intro, input, list, status, result, primary, secondary };
+
+            closeBtn.addEventListener('click', cancelModal);
+            overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) cancelModal(); });
+            primary.addEventListener('click', onModalPrimary);
+            secondary.addEventListener('click', onModalSecondary);
+            input.addEventListener('input', onModalInput);
+            input.addEventListener('keydown', onModalKeydown);
+            // Keep focus in the input while choosing (desktop) — selection itself is on click,
+            // which works the same for mouse and touch.
+            list.addEventListener('mousedown', (e) => e.preventDefault());
+        }
+
+        function setModalState(state) {
+            modalState = state;
+            const m = modal;
+            m.primary.hidden = false;
+            m.secondary.hidden = false;
+            if (state === 'ok') {
+                m.primary.textContent = 'Continue with installation';
+                m.primary.disabled = false;
+                m.secondary.textContent = 'Change address';
+            } else if (state === 'far') {
+                m.primary.textContent = 'Try another address';
+                m.primary.disabled = false;
+                m.secondary.textContent = 'Continue without installation';
+            } else {
+                m.primary.textContent = state === 'checking' ? 'Checking…' : 'Continue';
+                m.primary.disabled = true;
+                m.secondary.textContent = 'Cancel';
+            }
+        }
+
+        function setModalResult(tone, titleText, bodyText) {
+            const r = modal.result;
+            r.innerHTML = '';
+            if (!tone) { r.hidden = true; return; }
+            r.dataset.tone = tone;
+            r.appendChild(el('p', 'moz-install-modal__result-title', titleText));
+            if (bodyText) r.appendChild(el('p', 'moz-install-modal__result-text', bodyText));
+            r.hidden = false;
+        }
+
+        function closeModalList() {
+            modal.list.innerHTML = '';
+            modal.list.hidden = true;
+            modal.input.setAttribute('aria-expanded', 'false');
+            modalItems = [];
+            modalActive = -1;
+        }
+
+        function openModal() {
+            if (!modal) buildModal();
+            if (!modal.overlay.hidden) return;
+            modal.intro.textContent = 'Start typing your street number and street name, then select your exact address from the list. We install within ' +
+                radiusText() + ' km of our workshop' + (config && config.baseAddress ? ' (' + config.baseAddress + ')' : '') + '.';
+            modal.input.value = '';
+            closeModalList();
+            setMsg(modal.status, '');
+            setModalResult('');
+            setModalState('typing');
+            modal.overlay.hidden = false;
+            document.documentElement.classList.add('moz-install-modal-open');
+            setTimeout(() => modal.input.focus(), 60);
+        }
+
+        function closeModal() {
+            if (!modal || modal.overlay.hidden) return;
+            clearTimeout(modalTimer);
+            modalSeq++;
+            modal.overlay.hidden = true;
+            document.documentElement.classList.remove('moz-install-modal-open');
+        }
+
+        // Closing without confirming: keep a verified address, fall back to "No installation"
+        // otherwise (an out-of-area address shows the inline "unavailable" notice).
+        function cancelModal() {
+            if (modalState === 'checking') return;
+            closeModal();
+            if (addr.eligible === true) {
+                refreshAvailability(true);
+            } else if (addr.eligible === false && modalFar) {
+                markUnavailable(modalFar.distanceKm, modalFar.radiusKm);
+            } else if (yesRadio.checked) {
+                noRadio.checked = true;
+                noRadio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+
+        function resetModalSearch() {
+            modal.input.value = '';
+            closeModalList();
+            setMsg(modal.status, '');
+            setModalResult('');
+            setModalState('typing');
+            modal.input.focus();
+        }
+
+        function onModalPrimary() {
+            if (modalState === 'ok') {
+                closeModal();
+                refreshAvailability(true);
+            } else if (modalState === 'far') {
+                resetModalSearch();
+            }
+        }
+
+        function onModalSecondary() {
+            if (modalState === 'ok') resetModalSearch();
+            else cancelModal();
+        }
+
+        function onModalInput() {
+            if (modalState === 'checking') return;
+            if (modalState !== 'typing') {
+                setModalResult('');
+                setModalState('typing');
+            }
+            setMsg(modal.status, '');
+            const q = modal.input.value.trim();
+            clearTimeout(modalTimer);
+            if (q.length < 3) { modalSeq++; closeModalList(); return; }
+            modalTimer = setTimeout(async () => {
+                const seq = ++modalSeq;
+                setMsg(modal.status, 'Searching addresses…', '');
+                try {
+                    const items = await fetchSuggestions(q);
+                    if (seq !== modalSeq) return;
+                    renderModalList(items);
+                } catch (err) {
+                    if (seq !== modalSeq) return;
+                    closeModalList();
+                    setMsg(modal.status, 'We could not load address suggestions — please check your connection.', 'error');
+                }
+            }, 250);
+        }
+
+        function renderModalList(items) {
+            closeModalList();
+            if (!items.length) {
+                setMsg(modal.status, 'No matching address found — please check the spelling.', 'warn');
+                return;
+            }
+            setMsg(modal.status, '');
+            modalItems = items;
+            items.forEach((item, i) => {
+                const li = el('li', 'moz-install__suggest-item');
+                li.setAttribute('role', 'option');
+                li.id = modal.list.id + '-' + i;
+                li.appendChild(el('strong', '', item.main));
+                if (item.secondary) li.appendChild(el('span', '', item.secondary));
+                li.addEventListener('click', () => selectModalItem(item));
+                modal.list.appendChild(li);
+            });
+            modal.list.hidden = false;
+            modal.input.setAttribute('aria-expanded', 'true');
+        }
+
+        function highlightModalItem(index) {
+            const lis = Array.from(modal.list.children);
+            if (!lis.length) return;
+            modalActive = (index + lis.length) % lis.length;
+            lis.forEach((li, i) => li.classList.toggle('is-active', i === modalActive));
+            modal.input.setAttribute('aria-activedescendant', lis[modalActive].id);
+            lis[modalActive].scrollIntoView({ block: 'nearest' });
+        }
+
+        function onModalKeydown(e) {
+            if (e.key === 'Escape') { e.preventDefault(); cancelModal(); return; }
+            if (modal.list.hidden) {
+                if (e.key === 'Enter') e.preventDefault();
+                return;
+            }
+            if (e.key === 'ArrowDown') { e.preventDefault(); highlightModalItem(modalActive + 1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); highlightModalItem(modalActive - 1); }
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                const item = modalItems[modalActive > -1 ? modalActive : 0];
+                if (item) selectModalItem(item);
+            }
+        }
+
+        async function selectModalItem(item) {
+            clearTimeout(modalTimer);
+            modalSeq++;
+            modal.input.value = item.text;
+            closeModalList();
+            setModalResult('');
+            // A new address replaces any previous one (and frees its held time slot).
+            if (addr.eligible !== null) resetEligibility();
+            modalFar = null;
+            setModalState('checking');
+            setMsg(modal.status, 'Checking distance from our installation area…', '');
+            try {
+                const res = await verifyPlace(item.placeId);
+                if (!res.ok) {
+                    setModalState('typing');
+                    setMsg(modal.status, (res.data && res.data.error) || 'We could not check this address. Please try again.', 'error');
+                    return;
+                }
+                const d = res.data;
+                modal.input.value = d.formattedAddress || item.text;
+                setMsg(modal.status, '');
+                if (d.eligible) {
+                    acceptAddress(d);
+                    setModalResult('ok', '✓ Installation available at this address',
+                        d.formattedAddress + ' is ' + d.distanceKm + ' km from our workshop — within our ' + (d.radiusKm || radiusText()) + ' km installation area.');
+                    setModalState('ok');
+                    modal.primary.focus();
+                } else {
+                    addr = { eligible: false, address: d.formattedAddress, distanceKm: d.distanceKm, proof: '' };
+                    modalFar = { distanceKm: d.distanceKm, radiusKm: d.radiusKm };
+                    setModalResult('far', UNAVAILABLE_TEXT,
+                        d.formattedAddress + ' is ' + d.distanceKm + ' km away. We install within ' + (d.radiusKm || radiusText()) + ' km of our workshop.');
+                    setModalState('far');
+                }
+            } catch (err) {
+                setModalState('typing');
+                setMsg(modal.status, 'We could not check this address — please check your connection and try again.', 'error');
+            }
         }
 
         // ---- Availability + hold ----
@@ -372,11 +707,17 @@
                 if (yesRadio.checked) {
                     unavailableBox.hidden = true;
                     await loadConfig();
+                    applyAddressMode();
                     syncLock();
                     if (slotsUnlocked()) await refreshAvailability(true);
+                    else if (popupActive()) {
+                        setMsg(addressStatus, 'Enter your installation address to check availability (within ' + radiusText() + ' km).', '');
+                        openModal();
+                    }
                     else if (!addressInput.value.trim()) setMsg(addressStatus, 'Enter your installation address to check availability (within ' + radiusText() + ' km).', '');
                     startPolling();
                 } else {
+                    closeModal();
                     stopPolling();
                     releaseHold();
                     setMsg(slotStatus, '');
@@ -394,7 +735,9 @@
                     return { ok: true, properties: {} };
                 }
                 await loadConfig();
+                applyAddressMode();
                 if (lookupEnabled() && addr.eligible !== true) {
+                    if (popupActive() && addr.eligible === null) openModal();
                     return { ok: false, error: addr.eligible === false
                         ? 'Installation is not available at your address.'
                         : 'Please enter your installation address and select it from the suggestions.' };
