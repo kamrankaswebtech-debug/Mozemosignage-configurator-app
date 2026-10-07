@@ -43,6 +43,13 @@ export default defineConfig({
     },
     port: Number(process.env.PORT || 3000),
     hmr: hmrConfig,
+    watch: {
+      // The Shopify CLI rebuilds .shopify/dev-bundle (and watches extensions/ itself) on
+      // every extension save. On Windows, Vite trying to watch those files while the CLI is
+      // rewriting them crashes dev with "EBUSY: resource busy or locked". The admin app
+      // never imports anything from these folders, so Vite doesn't need to watch them.
+      ignored: ["**/.shopify/**", "**/extensions/**"],
+    },
     fs: {
       // See https://vitejs.dev/config/server-options.html#server-fs-allow for more information
       allow: ["app", "node_modules"],

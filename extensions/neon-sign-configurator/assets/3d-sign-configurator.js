@@ -321,7 +321,22 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
 
 // Front / Side / Backing colour swatches, grouped: Standard / Gloss / Metallic / Brushed Metal (any other group gets its own heading).
 function sign3dBuildColourSwatches(root) {
-    const colours = sign3dReadJson(root, '[data-sign3d-colours]');
+    // Same rule as the Neon configurator: show colours in Admin "Sort Order" (ascending, so
+    // sort order 1 comes first and is the default). Colours without a sort order go last,
+    // keeping their original relative order (stable tiebreak on original index).
+    const sortNum = (c) => {
+        const n = (c.sortOrder === null || c.sortOrder === undefined || c.sortOrder === '') ? NaN : Number(c.sortOrder);
+        return Number.isFinite(n) ? n : null;
+    };
+    const colours = sign3dReadJson(root, '[data-sign3d-colours]')
+        .map((c, idx) => ({ c, idx, so: sortNum(c) }))
+        .sort((a, b) => {
+            if (a.so === null && b.so === null) return a.idx - b.idx;
+            if (a.so === null) return 1;
+            if (b.so === null) return -1;
+            return (a.so - b.so) || (a.idx - b.idx);
+        })
+        .map((x) => { x.c.sortOrder = x.so; return x.c; });
     if (!colours.length) return;
 
     const ORDER = ['standard', 'gloss', 'metallic', 'brushed_metal'];
@@ -373,6 +388,13 @@ function sign3dBuildColourSwatches(root) {
                 name.className = 'sign3d-configurator__swatch-name';
                 name.textContent = c.name;
                 item.appendChild(btn);
+                // Admin sort order number under the swatch, exactly like the Neon configurator.
+                if (c.sortOrder !== null) {
+                    const num = document.createElement('span');
+                    num.className = 'sign3d-configurator__swatch-number';
+                    num.textContent = c.sortOrder;
+                    item.appendChild(num);
+                }
                 item.appendChild(name);
                 row.appendChild(item);
                 if (isDefault) {

@@ -116,7 +116,7 @@
     </script>
 
     <script type="application/json" data-sign3d-colours>
-    [{% for colour in metaobjects["app--418838118401--sign3d_front_colour"].values %}{% unless forloop.first %},{% endunless %}{"name":{{ colour.name.value | json }},"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"group":{{ colour.colour_group.value | default: "standard" | json }}}{% endfor %}]
+    [{% for colour in metaobjects["app--418838118401--sign3d_front_colour"].values %}{% unless forloop.first %},{% endunless %}{"name":{{ colour.name.value | json }},"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"group":{{ colour.colour_group.value | default: "standard" | json }},"sortOrder":{{ colour.sort_order.value | json }}}{% endfor %}]
     </script>
 
     <div class="sign3d-configurator__field">
