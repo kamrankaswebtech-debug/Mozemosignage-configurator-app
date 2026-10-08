@@ -11,6 +11,10 @@ type Settings = {
     panelRatePerSqm: string;
     baseLetterHeightCm: string;
     baseDepthTierLabel: string;
+    letterHeightMinCm: string;
+    letterHeightMaxCm: string;
+    widthMinCm: string;
+    widthMaxCm: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -34,6 +38,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         panelRatePerSqm: first?.panel_rate_per_sqm || "70",
         baseLetterHeightCm: first?.base_letter_height_cm || "25",
         baseDepthTierLabel: first?.base_depth_tier_label || "",
+        letterHeightMinCm: first?.letter_height_min_cm || "",
+        letterHeightMaxCm: first?.letter_height_max_cm || "",
+        widthMinCm: first?.width_min_cm || "",
+        widthMaxCm: first?.width_max_cm || "",
     };
     const hasEntry = !!first;
     return { settings, hasEntry };
@@ -53,6 +61,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "base_letter_height_cm", value: String(formData.get("baseLetterHeightCm") || "25") },
         { key: "base_depth_tier_label", value: String(formData.get("baseDepthTierLabel") || "") },
     ];
+    // Storefront size limits (cm). 0 / empty = previous behaviour (letter height range from the
+    // Letter Height tiers, width range from each unit's Min/Max on the Size Units page). Empty
+    // inputs are not sent at all (a blank number_decimal value can be rejected by Shopify).
+    ([
+        ["letter_height_min_cm", "letterHeightMinCm"],
+        ["letter_height_max_cm", "letterHeightMaxCm"],
+        ["width_min_cm", "widthMinCm"],
+        ["width_max_cm", "widthMaxCm"],
+    ] as const).forEach(([key, name]) => {
+        const value = String(formData.get(name) || "").trim();
+        if (value !== "") fields.push({ key, value });
+    });
 
     // Self-healing singleton, same pattern as installation_settings — but filtered by
     // category since pricing_settings shares the sign3d_option metaobject type.
@@ -150,6 +170,27 @@ export default function PricingSettingsPage() {
                         <label>
                             Base Depth Tier Label — must exactly match a Depth Tier's Label
                             <input type="text" name="baseDepthTierLabel" defaultValue={settings.baseDepthTierLabel} required />
+                        </label>
+                        <s-heading>Size Limits (storefront)</s-heading>
+                        <s-paragraph>
+                            Customers cannot go outside these limits — entering a value outside them shows a pop-up with the allowed range.
+                            Set a field to 0 to switch that limit off (previous behaviour).
+                        </s-paragraph>
+                        <label>
+                            Letter / Element Height — Minimum (cm), e.g. 10
+                            <input type="number" step="0.01" min="0" name="letterHeightMinCm" defaultValue={settings.letterHeightMinCm} />
+                        </label>
+                        <label>
+                            Letter / Element Height — Maximum (cm), e.g. 60
+                            <input type="number" step="0.01" min="0" name="letterHeightMaxCm" defaultValue={settings.letterHeightMaxCm} />
+                        </label>
+                        <label>
+                            Overall Sign Width / Length — Minimum (cm), e.g. 50
+                            <input type="number" step="0.01" min="0" name="widthMinCm" defaultValue={settings.widthMinCm} />
+                        </label>
+                        <label>
+                            Overall Sign Width / Length — Maximum (cm), e.g. 500 (= 5 metres)
+                            <input type="number" step="0.01" min="0" name="widthMaxCm" defaultValue={settings.widthMaxCm} />
                         </label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                     </s-stack>

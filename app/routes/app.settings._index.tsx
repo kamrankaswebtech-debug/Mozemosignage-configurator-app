@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import { HubCardGrid } from "../components/admin-ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     await authenticate.admin(request);
@@ -7,22 +8,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function SettingsHub() {
+    const cards = [
+        {
+            title: "Select Products",
+            description: "Mark each product as \"Configurator\" (uses a custom app block) or \"Preorder\" (plain, no customization).",
+            path: "/app/settings/products",
+            icon: "box",
+        },
+        {
+            title: "Manage Demo Videos",
+            description: "Add or update the walkthrough videos shown from the \"Demo\" button on your dashboard (YouTube, Vimeo, or an uploaded file). You can add more than one.",
+            path: "/app/settings/demo-videos",
+            icon: "play",
+        },
+    ];
+
     return (
         <s-page heading="Settings">
             <s-section heading="Product Management">
-                <p style={{ marginBottom: "16px" }}>
+                <p className="moz-hub-intro">
                     Manage which products use the custom app configurators, and which are plain ready-to-order products managed entirely from Shopify Admin.
                 </p>
-                <div style={{ border: "1px solid #e1e1e1", borderRadius: "8px", padding: "16px" }}>
-                    <strong>Select Products</strong>
-                    <p style={{ margin: "4px 0" }}>Mark each product as "Configurator" (uses a custom app block) or "Preorder" (plain, no customization).</p>
-                    <s-link href="/app/settings/products">Manage Products →</s-link>
-                </div>
-                <div style={{ border: "1px solid #e1e1e1", borderRadius: "8px", padding: "16px", marginTop: "16px" }}>
-                    <strong>Manage Demo Videos</strong>
-                    <p style={{ margin: "4px 0" }}>Add or update the walkthrough videos shown from the "Demo" button on your dashboard (YouTube, Vimeo, or an uploaded file). You can add more than one.</p>
-                    <s-link href="/app/settings/demo-videos">Manage Demo Videos →</s-link>
-                </div>
+                <HubCardGrid items={cards} />
             </s-section>
         </s-page>
     );

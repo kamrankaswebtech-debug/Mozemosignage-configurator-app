@@ -408,6 +408,68 @@ function sign3dBuildColourSwatches(root) {
     });
 }
 
+// Admin size limits (Pricing Settings): letter height + overall width min/max in cm. 0 = not set.
+// Read quietly — the block is empty when Pricing Settings was never saved.
+function sign3dReadLimits(root) {
+    const el = root.querySelector('[data-sign3d-limits]');
+    let raw = {};
+    try { raw = JSON.parse((el && el.textContent.trim()) || '{}') || {}; } catch (err) { raw = {}; }
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+    return { lmin: num(raw.lmin), lmax: num(raw.lmax), wmin: num(raw.wmin), wmax: num(raw.wmax) };
+}
+
+function sign3dSplitList(value) {
+    return String(value || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+// Finish surface: Admin "Finish Surface", otherwise guessed from the label.
+function sign3dFinishSurface(f) {
+    const k = String((f && f.k) || '').trim().toLowerCase();
+    if (['matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
+    const l = String((f && f.l) || '').toLowerCase();
+    if (/metal/.test(l)) return /gloss|polish|mirror|shiny/.test(l) ? 'gloss_metal' : 'matte_metal';
+    return 'gloss_acrylic';
+}
+
+// Finish surface -> the existing preview finish overlay classes (face-* / backing finish-*).
+function sign3dSurfaceToGroup(surface) {
+    return { matte_metal: 'brushed_metal', gloss_metal: 'metallic', gloss_acrylic: 'gloss' }[surface] || 'standard';
+}
+
+// Built-in line icons for the add-on cards. Admin "Icon" picks one; empty = guessed from the label.
+function sign3dAddonIconSvg(key, label) {
+    const paths = {
+        letters: '<path d="M4 21 11 3h2l7 18"/><path d="M7.5 13h9"/><path d="M10.2 9.5h3.6"/><path d="M8.5 21h7"/>',
+        led: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V17h5v-1.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/><path d="M12 7v4l-1.5 1.5"/><path d="M3 9h1.5M19.5 9H21M5.6 3.6l1 1M18.4 3.6l-1 1"/>',
+        power: '<rect x="4" y="7" width="16" height="10" rx="2"/><path d="M13 9l-3 4h4l-3 4"/><path d="M2 10v4M22 10v4"/>',
+        plug: '<path d="M8 3v5M14 3v5"/><path d="M6 8h10v3a5 5 0 0 1-10 0z"/><path d="M11 16v2a3 3 0 0 0 3 3h1a3 3 0 0 0 3-3v-4a2 2 0 0 1 4 0"/>',
+        studs: '<rect x="4" y="3" width="6" height="18" rx="3"/><ellipse cx="17" cy="15" rx="4" ry="2"/><path d="M13 15v3c0 1.1 1.8 2 4 2s4-.9 4-2v-3"/>',
+        screws: '<path d="M6 3h6l-1 3H7z"/><path d="M7 6h4l-.5 12L9 21l-1.5-3z"/><path d="M7.2 9.5l3.6-1M7.3 13l3.4-1M7.4 16.4l3-1"/><path d="M17.5 11l3 1.7v3.6l-3 1.7-3-1.7v-3.6z"/><circle cx="17.5" cy="14.5" r="1.2"/>',
+        template: '<rect x="2.5" y="5" width="19" height="14" rx="1.5" stroke-dasharray="2.5 2"/><path d="M7 10l1.5-1v6"/><path d="M12 10.5v.01M12 13.5v.01"/><path d="M15 10l1.5-1v6"/>',
+        diagram: '<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/><path d="M9 11h3v3H9zM9 14v3h6M12 12.5h3"/>',
+        guide: '<path d="M2 5c3-1.3 6.5-1.3 10 1 3.5-2.3 7-2.3 10-1v14c-3-1.3-6.5-1.3-10 1-3.5-2.3-7-2.3-10-1z"/><path d="M12 6v14"/>',
+        waterproof: '<path d="M12 2l8 3v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/><path d="M12 8c-1.6 2.2-2.5 3.6-2.5 4.8a2.5 2.5 0 0 0 5 0c0-1.2-.9-2.6-2.5-4.8z"/>',
+        package: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/><path d="M7.5 5.3l9 4.5"/>',
+        tools: '<path d="M14.5 6.5a4 4 0 0 0 5 5L21 13l-8 8-2-2 8-8"/><path d="M14.5 6.5 9 1 7 3l5.5 5.5"/><path d="M3 21l6-6"/>',
+        star: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>'
+    };
+    let k = String(key || '').trim().toLowerCase();
+    if (!paths[k]) {
+        const l = String(label || '').toLowerCase();
+        const rules = [
+            ['diagram', /diagram|schematic/], ['template', /template|1:1|stencil/], ['guide', /guide|manual|instruction|book/],
+            ['waterproof', /waterproof|weather|ip6|outdoor|seal/], ['power', /power|driver|supply|adapter|transformer/],
+            ['studs', /stud|spacer|standoff|stand-off/], ['screws', /screw|hardware|fixing|bolt|anchor/],
+            ['package', /packag|box|crate|shipping|delivery/], ['plug', /wir|electr|cable|connect|plug|switch/],
+            ['letters', /letter|logo|character/], ['led', /\bled\b|light|illumin|bulb|dimmer|remote/], ['letters', /sign|3d/],
+            ['tools', /install|kit|tool|mount/]
+        ];
+        const hit = rules.find((r) => r[1].test(l));
+        k = hit ? hit[0] : 'star';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[k] + '</svg>';
+}
+
 // Resolves a typed colour (hex with/without #, CSS colour name with/without spaces) to '#rrggbb', or null if not recognised.
 function sign3dResolveCssColour(input) {
     let text = String(input || '').trim();
@@ -501,9 +563,18 @@ function sign3dHydrateOptions(root) {
 
     const lhInput = root.querySelector('[data-letter-height-input]');
     if (lhInput) {
+        // Admin Pricing Settings min/max win; otherwise the range comes from the Letter Height tiers (previous behaviour).
+        const limits = sign3dReadLimits(root);
         const tiers = byCat('letter_height_tier').map((o) => Number(o.t)).filter(Number.isFinite);
-        lhInput.dataset.minCm = tiers.length ? Math.min.apply(null, tiers) : 10;
-        lhInput.dataset.maxCm = tiers.length ? Math.max.apply(null, tiers) : 100;
+        const minCm = limits.lmin || (tiers.length ? Math.min.apply(null, tiers) : 10);
+        const maxCm = limits.lmax || (tiers.length ? Math.max.apply(null, tiers) : 100);
+        lhInput.dataset.minCm = minCm;
+        lhInput.dataset.maxCm = maxCm;
+        // Starting value = Admin Pricing Settings "Base Letter Height (cm)" (not the old fixed 25
+        // from the Liquid), kept inside the min/max range. The input is still in cm at this point.
+        const settingsRow = byCat('pricing_settings')[0];
+        const baseCm = settingsRow && Number(settingsRow.bh) > 0 ? Number(settingsRow.bh) : (parseFloat(lhInput.value) || minCm);
+        lhInput.value = Math.min(maxCm, Math.max(minCm, baseCm));
     }
 
     const thumbs = root.querySelector('[data-bg-thumbs]');
@@ -536,26 +607,57 @@ function sign3dHydrateOptions(root) {
         thumbs.style.display = walls.length ? '' : 'none';
     }
 
-    const LOCK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-    const addons = byCat('addon');
+    // Add-ons as visual cards (tick box + icon + label), in Admin "Sort Order".
+    // NOTE: the label text must stay the FIRST <span> inside the <label> — calculateTotal()
+    // and Add to Cart read the add-on name with label.querySelector('span'). The tick box and
+    // icon are <i> elements and the price is an <em> for that reason.
+    const addons = byCat('addon')
+        .map((o, i) => ({ o, i }))
+        .sort((a, b) => ((Number(a.o.s) || 999999) - (Number(b.o.s) || 999999)) || (a.i - b.i))
+        .map((x) => x.o);
     const buildAddons = (boxSel, wrapSel, items, locked) => {
         const box = root.querySelector(boxSel);
         const wrap = root.querySelector(wrapSel);
         if (!box || !wrap) return;
         box.innerHTML = '';
+        box.classList.add('sign3d-configurator__addon-grid');
         items.forEach((o) => {
             const label = document.createElement('label');
-            label.className = 'sign3d-configurator__checkbox-row' + (locked ? ' is-locked' : '');
+            label.className = 'sign3d-configurator__addon-card' + (locked ? ' is-locked is-checked' : '');
             const input = document.createElement('input');
             input.type = 'checkbox';
             input.setAttribute('data-addon-checkbox', '');
             input.dataset.price = locked ? 0 : (o.p || 0);
             if (locked) { input.checked = true; input.disabled = true; }
+            const tick = document.createElement('i');
+            tick.className = 'sign3d-configurator__addon-tick';
+            tick.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+            const icon = document.createElement('i');
+            icon.className = 'sign3d-configurator__addon-icon';
+            if (o.i) {
+                const img = document.createElement('img');
+                img.src = o.i;
+                img.alt = '';
+                img.loading = 'lazy';
+                icon.appendChild(img);
+            } else {
+                icon.innerHTML = sign3dAddonIconSvg(o.ik, o.l);
+            }
             const span = document.createElement('span');
+            span.className = 'sign3d-configurator__addon-text';
             span.textContent = o.l;
             label.appendChild(input);
+            label.appendChild(tick);
+            label.appendChild(icon);
             label.appendChild(span);
-            if (locked) label.insertAdjacentHTML('beforeend', LOCK_SVG);
+            const price = Number(o.p) || 0;
+            if (!locked && price > 0) {
+                const em = document.createElement('em');
+                em.className = 'sign3d-configurator__addon-price';
+                em.textContent = '+$' + price.toFixed(2);
+                label.appendChild(em);
+            }
+            if (!locked) input.addEventListener('change', () => label.classList.toggle('is-checked', input.checked));
             box.appendChild(label);
         });
         wrap.hidden = !items.length;
@@ -671,6 +773,20 @@ function initSign3dConfigurator(root) {
     const reviewCloseBtn = root.querySelector('[data-review-close-btn]');
     const reviewConfirmBtn = root.querySelector('[data-review-confirm-btn]');
     const reviewSummaryEl = root.querySelector('[data-review-summary]');
+
+    // Admin size limits (cm, 0 = not set) — see sign3dReadLimits().
+    const sizeLimits = sign3dReadLimits(root);
+
+    // ---- Material / Finish cards (Front, Side, Backing) ----
+    // Finishes come from Admin "Material / Finish" (sign3d_option, category = finish). Each
+    // illumination type may limit which finish handles are allowed per part (data-ff/sf/bf).
+    const FINISH_SLOTS = ['front', 'side', 'backing'];
+    const FINISH_SLOT_TITLES = { front: 'Front', side: 'Side', backing: 'Backing panel' };
+    const finishList = sign3dReadJson(root, '[data-sign3d-finishes]')
+        .map((f, i) => ({ f, i }))
+        .sort((a, b) => ((Number(a.f.s) || 999999) - (Number(b.f.s) || 999999)) || (a.i - b.i))
+        .map((x) => x.f);
+    const selectedFinish = { front: null, side: null, backing: null };
 
     let currentMode = 'text';
     let logoImg = null;
@@ -1727,6 +1843,20 @@ function initSign3dConfigurator(root) {
             finishLabel = opt ? opt.textContent.trim() : '';
         }
 
+        // Material / Finish cards (Front, Side, Backing) — replaces the old Material dropdown.
+        const finishLines = [];
+        FINISH_SLOTS.forEach((slot) => {
+            const f = activeFinish(slot);
+            if (!f) return;
+            const p = Number(f.p) || 0;
+            finishPrice += p;
+            finishLines.push({ label: FINISH_SLOT_TITLES[slot] + ' finish: ' + f.l, value: p, included: p === 0 });
+        });
+        if (!materialSelect) {
+            materialLabel = finishSummaryText();
+            if (!finishLabel) finishLabel = activeFinish('front') ? activeFinish('front').l : '';
+        }
+
         let mountingPrice = 0;
         let mountingLabel = '';
         if (mountingSelect) {
@@ -1763,12 +1893,15 @@ function initSign3dConfigurator(root) {
 
         // Outdoor = +15% of the BASE width price only (matches the client's worked examples
         // exactly: $999 -> $1199, $1599 -> $1839, $2199 -> $2529), with a $ minimum floor.
+        // Same formula is shown live on the Outdoor card, even while Indoor is selected.
+        const outdoorPct = Number(settings.outdoorPercent) || 0;
+        const outdoorMinimum = Number(settings.outdoorMin) || 0;
+        const potentialOutdoor = Math.round(Math.max(basePrice * (outdoorPct / 100), outdoorMinimum) * 100) / 100;
+        const outdoorPriceEl = root.querySelector('[data-io-outdoor-price]');
+        if (outdoorPriceEl) outdoorPriceEl.textContent = potentialOutdoor > 0 ? '+$' + potentialOutdoor.toFixed(2) : '';
         let outdoorSurcharge = 0;
         if (isOutdoor) {
-            const pct = Number(settings.outdoorPercent) || 0;
-            const min = Number(settings.outdoorMin) || 0;
-            outdoorSurcharge = Math.max(basePrice * (pct / 100), min);
-            outdoorSurcharge = Math.round(outdoorSurcharge * 100) / 100;
+            outdoorSurcharge = potentialOutdoor;
         }
 
         const total = subtotalBeforeOutdoor + outdoorSurcharge;
@@ -1788,7 +1921,8 @@ function initSign3dConfigurator(root) {
 
         lines.push({ label: 'Lighting: ' + illuminationLabel, value: illuminationPrice, included: illuminationPrice === 0 });
         if (depthSurcharge > 0) lines.push({ label: 'Depth: ' + depthLabel, value: depthSurcharge, included: false });
-        lines.push({ label: 'Material: ' + materialLabel, value: materialPrice, included: materialPrice === 0 });
+        if (materialSelect) lines.push({ label: 'Material: ' + materialLabel, value: materialPrice, included: materialPrice === 0 });
+        finishLines.forEach((line) => lines.push(line));
 
         lines.push({ label: 'Mounting: ' + mountingLabel, value: mountingPrice, included: mountingPrice === 0 });
         if (panelSurcharge > 0) lines.push({ label: 'Backing panel (by area)', value: panelSurcharge, included: false });
@@ -1990,6 +2124,15 @@ function initSign3dConfigurator(root) {
         sizeSlider.value = Math.min(max, Math.max(min, Math.round(val)));
         if (sliderWidthValueEl) sliderWidthValueEl.textContent = 'Width: ' + (Math.round(val * 10) / 10) + ' ' + unit;
         if (sliderUnitLabelEl) sliderUnitLabelEl.textContent = unit;
+        // Show the allowed overall length right under the slider (current unit).
+        const widthHintEl = root.querySelector('[data-width-hint]');
+        if (widthHintEl && min > 0 && max > 0) {
+            widthHintEl.textContent = 'Available overall length: ' + rangeText(min * sliderFactor(), max * sliderFactor()) + '. Drag the slider or type the width — the price updates automatically.';
+        }
+        if (widthInput) {
+            widthInput.min = min;
+            widthInput.max = max;
+        }
     }
 
     function applySliderValueToWidth(value) {
@@ -2000,12 +2143,23 @@ function initSign3dConfigurator(root) {
         syncSliderFromWidth();
     }
 
+    // Slider range for a unit tab: the Admin overall width min/max (cm, Pricing Settings) converted
+    // into that unit when set — the same physical limits in every unit — otherwise the unit's own
+    // Min/Max from the Size Units page (previous behaviour).
+    function applyUnitRange(tab) {
+        const unit = tab.dataset.unit || 'cm';
+        const f = SLIDER_UNIT_TO_CM[unit] || 1;
+        const min = sizeLimits.wmin > 0 ? sizeLimits.wmin / f : (parseFloat(tab.dataset.min) || 0);
+        const max = sizeLimits.wmax > 0 ? sizeLimits.wmax / f : (parseFloat(tab.dataset.max) || 100);
+        sizeSlider.min = Math.round(min * 100) / 100;
+        sizeSlider.max = Math.round(max * 100) / 100;
+        sizeSlider.dataset.unit = unit;
+    }
+
     function activateUnitTab(tab) {
         sliderTabs.forEach((t) => t.classList.remove('is-selected'));
         tab.classList.add('is-selected');
-        sizeSlider.min = parseFloat(tab.dataset.min) || 0;
-        sizeSlider.max = parseFloat(tab.dataset.max) || 100;
-        sizeSlider.dataset.unit = tab.dataset.unit || 'cm';
+        applyUnitRange(tab);
         setUnit(tab.dataset.unit || 'cm');
     }
 
@@ -2036,9 +2190,7 @@ function initSign3dConfigurator(root) {
             tab.addEventListener('click', () => {
                 sliderTabs.forEach((t) => t.classList.remove('is-selected'));
                 tab.classList.add('is-selected');
-                sizeSlider.min = parseFloat(tab.dataset.min) || 0;
-                sizeSlider.max = parseFloat(tab.dataset.max) || 100;
-                sizeSlider.dataset.unit = tab.dataset.unit || 'cm';
+                applyUnitRange(tab);
                 setUnit(tab.dataset.unit || 'cm');
             });
         });
@@ -2135,7 +2287,8 @@ function initSign3dConfigurator(root) {
                 'Overall Width': blueprintWidthCm + ' cm',
                 'Overall / Letter Height': blueprintHeightCm + ' cm',
                 'Depth / Thickness': depthOptionForCart ? depthOptionForCart.textContent.trim() : 'Standard',
-                'Material': getSelectedOptionText(materialSelect, 'Standard'),
+                // Blueprint PDF reads "Material" — it now carries the Front / Side / Backing finish summary.
+                'Material': materialSelect ? getSelectedOptionText(materialSelect, 'Standard') : (finishSummaryText() || 'Standard'),
                 'Front Colour': colourNameLabel ? colourNameLabel.textContent.trim() : 'Default',
                 'Side Colour': (selectedSideName || 'Default') + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
                 'Finish': sign3dPrettyGroup(selectedColourGroup),
@@ -2162,6 +2315,10 @@ function initSign3dConfigurator(root) {
                 const powerChoice = getSelectedPower();
                 if (powerChoice) properties['Power Supply'] = powerChoice;
                 properties['Installation'] = getInstallRequirementText();
+                FINISH_SLOTS.forEach((slot) => {
+                    const f = activeFinish(slot);
+                    if (f) properties[FINISH_SLOT_TITLES[slot] + ' Finish'] = f.l;
+                });
 
                 if (currentUnit !== 'cm') {
                     properties['Entered Size'] = 'Width ' + formatDim(getWidthCm()) + ' x Height ' + formatDim(getHeightCm());
@@ -2244,21 +2401,126 @@ function initSign3dConfigurator(root) {
         const maxCm = parseFloat(letterHeightInput.dataset.maxCm);
         if (!Number.isFinite(minCm) || !Number.isFinite(maxCm)) return;
         letterHeightRangeEl.textContent = 'Type your letter height (' + formatDim(minCm) + ' to ' + formatDim(maxCm) + '). The price and preview update automatically.';
+        letterHeightInput.min = roundNice(minCm / unitFactor());
+        letterHeightInput.max = roundNice(maxCm / unitFactor());
     }
 
     function initLetterHeightInput() {
         if (!letterHeightInput) return;
+        // Out-of-range values are brought back into range AND explained with a pop-up
+        // (previously they were silently clamped, which looked like the field "wasn't working").
         letterHeightInput.addEventListener('change', () => {
             const minCm = parseFloat(letterHeightInput.dataset.minCm);
             const maxCm = parseFloat(letterHeightInput.dataset.maxCm);
-            let cm = getHeightCm();
+            const entered = getHeightCm();
+            let cm = entered;
             if (!cm && Number.isFinite(minCm)) cm = minCm;
             if (Number.isFinite(minCm)) cm = Math.max(minCm, cm);
             if (Number.isFinite(maxCm) && maxCm > 0) cm = Math.min(maxCm, cm);
             letterHeightInput.value = roundNice(cm / unitFactor());
             updatePreviewScale();
             calculateTotal();
+            if (entered && Math.abs(cm - entered) > 0.01) {
+                showSizeLimitPopup(
+                    'Letter height not available',
+                    'The available letter / element height is ' + rangeText(minCm, maxCm) + '. This is the height of each individual letter or element — not the overall sign length.'
+                );
+            }
         });
+        // Bring the default value inside the Admin range from the start (no pop-up).
+        const minCm = parseFloat(letterHeightInput.dataset.minCm);
+        const maxCm = parseFloat(letterHeightInput.dataset.maxCm);
+        const startCm = getHeightCm();
+        let fixed = startCm;
+        if (Number.isFinite(minCm) && fixed < minCm) fixed = minCm;
+        if (Number.isFinite(maxCm) && maxCm > 0 && fixed > maxCm) fixed = maxCm;
+        if (fixed !== startCm) {
+            letterHeightInput.value = roundNice(fixed / unitFactor());
+            updatePreviewScale();
+            calculateTotal();
+        }
+    }
+
+    // ---- Overall width: typed entry with the Admin min/max (pop-up when outside) ----
+    function rangeText(minCm, maxCm) {
+        let text = formatDim(minCm) + ' – ' + formatDim(maxCm);
+        if (currentUnit === 'cm' && maxCm >= 100) text += ' (' + roundNice(maxCm / 100) + ' metres)';
+        return text;
+    }
+
+    function widthLimitsCm() {
+        if (sizeSlider) {
+            return { min: parseFloat(sizeSlider.min) * sliderFactor(), max: parseFloat(sizeSlider.max) * sliderFactor() };
+        }
+        return { min: sizeLimits.wmin, max: sizeLimits.wmax };
+    }
+
+    function initWidthInput() {
+        if (!widthInput) return;
+        widthInput.addEventListener('change', () => {
+            const lim = widthLimitsCm();
+            const entered = getWidthCm();
+            let cm = entered;
+            if (lim.min > 0 && (!cm || cm < lim.min)) cm = lim.min;
+            if (lim.max > 0 && cm > lim.max) cm = lim.max;
+            widthInput.value = roundNice(cm / unitFactor());
+            updatePreviewScale();
+            calculateTotal();
+            syncSliderFromWidth();
+            if (Math.abs(cm - entered) > 0.01) {
+                showSizeLimitPopup(
+                    'Sign size not available',
+                    'The available overall sign length is ' + rangeText(lim.min, lim.max) + '. This applies with or without a backing panel. Please enter a size within this range.'
+                );
+            }
+        });
+        // Bring the default width inside the range from the start (no pop-up).
+        const lim = widthLimitsCm();
+        const startCm = getWidthCm();
+        let fixed = startCm;
+        if (lim.min > 0 && fixed < lim.min) fixed = lim.min;
+        if (lim.max > 0 && fixed > lim.max) fixed = lim.max;
+        if (fixed !== startCm) {
+            widthInput.value = roundNice(fixed / unitFactor());
+            updatePreviewScale();
+            calculateTotal();
+            syncSliderFromWidth();
+        }
+    }
+
+    let sizeLimitPopup = null;
+    function showSizeLimitPopup(title, message) {
+        if (!sizeLimitPopup) {
+            const overlay = document.createElement('div');
+            overlay.className = 'sign3d-configurator__alert';
+            overlay.hidden = true;
+            overlay.setAttribute('role', 'alertdialog');
+            overlay.setAttribute('aria-modal', 'true');
+            const box = document.createElement('div');
+            box.className = 'sign3d-configurator__alert-box';
+            const h = document.createElement('p');
+            h.className = 'sign3d-configurator__alert-title';
+            const p = document.createElement('p');
+            p.className = 'sign3d-configurator__alert-text';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sign3d-configurator__alert-btn';
+            btn.textContent = 'OK, got it';
+            box.appendChild(h);
+            box.appendChild(p);
+            box.appendChild(btn);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+            const close = () => { overlay.hidden = true; };
+            btn.addEventListener('click', close);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
+            sizeLimitPopup = { overlay, h, p, btn };
+        }
+        sizeLimitPopup.h.textContent = '⚠️ ' + title;
+        sizeLimitPopup.p.textContent = message;
+        sizeLimitPopup.overlay.hidden = false;
+        setTimeout(() => sizeLimitPopup.btn.focus(), 30);
     }
 
     // Mounting type: 'none' | 'raceway' | 'rectangle' | 'circle' (Admin "Backing Type", else auto-detected from the label).
@@ -2303,7 +2565,11 @@ function initSign3dConfigurator(root) {
         backingEl.style.top = (cy - h / 2) + 'px';
         backingEl.style.width = w + 'px';
         backingEl.style.height = h + 'px';
-        const group = selectedBackGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedBackGroup);
+        // A selected Backing Panel Material / Finish card decides the surface; otherwise the colour's group.
+        const backFinish = activeFinish('backing');
+        const group = backFinish
+            ? sign3dSurfaceToGroup(sign3dFinishSurface(backFinish))
+            : (selectedBackGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedBackGroup));
         backingEl.className = 'sign3d-configurator__backing is-' + type + ' finish-' + group;
         backingEl.style.setProperty('--sign3d-backing', selectedBackHex);
         backingEl.hidden = false;
@@ -2585,19 +2851,143 @@ function initSign3dConfigurator(root) {
         const illOpt = illuminationSelect ? illuminationSelect.options[illuminationSelect.selectedIndex] : null;
         const isFrontlit = !!illOpt && (illOpt.dataset.effectKey || 'front_lit') === 'front_lit';
         const matOpt = materialSelect ? materialSelect.options[materialSelect.selectedIndex] : null;
-        const isMetal = !!matOpt && /metal/i.test(matOpt.textContent);
+        const frontFinish = activeFinish('front');
+        const isMetal = frontFinish
+            ? sign3dFinishSurface(frontFinish).indexOf('metal') > -1
+            : (!!matOpt && /metal/i.test(matOpt.textContent));
         metalNoteEl.hidden = !(isFrontlit && isMetal);
     }
     [illuminationSelect, materialSelect].forEach((s) => { if (s) s.addEventListener('change', updateMetalNote); });
 
-    // Front-face finish class (gloss / metallic / brushed) on the preview
+    // Front-face finish class (gloss / metallic / brushed) on the preview. A selected Front
+    // Material / Finish card decides the surface; otherwise the colour's own group (previous behaviour).
     function updateFinishClasses() {
         if (!previewInnerForLed) return;
         Array.from(previewInnerForLed.classList)
             .filter((c) => c.indexOf('face-') === 0)
             .forEach((c) => previewInnerForLed.classList.remove(c));
-        previewInnerForLed.classList.add('face-' + (selectedColourGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedColourGroup)));
+        const frontFinish = activeFinish('front');
+        const group = frontFinish
+            ? sign3dSurfaceToGroup(sign3dFinishSurface(frontFinish))
+            : (selectedColourGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedColourGroup));
+        previewInnerForLed.classList.add('face-' + group);
     }
+
+    // ---- Material / Finish cards ----
+    // Backing finish only counts while a backing panel is actually selected.
+    function activeFinish(slot) {
+        if (slot === 'backing' && getBackingType() === 'none') return null;
+        return selectedFinish[slot] || null;
+    }
+
+    function finishSummaryText() {
+        return FINISH_SLOTS
+            .map((slot) => { const f = activeFinish(slot); return f ? FINISH_SLOT_TITLES[slot] + ': ' + f.l : ''; })
+            .filter(Boolean)
+            .join(' · ');
+    }
+
+    function allowedFinishHandles(slot) {
+        const opt = illuminationSelect ? illuminationSelect.options[illuminationSelect.selectedIndex] : null;
+        const key = slot === 'front' ? 'ff' : (slot === 'side' ? 'sf' : 'bf');
+        return sign3dSplitList(opt ? opt.dataset[key] : '');
+    }
+
+    // Finishes for one part: offered for that part in Admin ("Applies To", empty = Front + Side)
+    // AND allowed by the selected Illumination Type (nothing ticked there = all).
+    function availableFinishes(slot) {
+        const allowed = allowedFinishHandles(slot);
+        return finishList.filter((f) => {
+            const applies = sign3dSplitList(f.a);
+            const offered = applies.length ? applies.indexOf(slot) > -1 : slot !== 'backing';
+            return offered && (!allowed.length || allowed.indexOf(f.h) > -1);
+        });
+    }
+
+    function buildFinishCard(slot, f) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'sign3d-configurator__finish-card' + (selectedFinish[slot] === f ? ' is-selected' : '');
+        card.setAttribute('aria-pressed', selectedFinish[slot] === f ? 'true' : 'false');
+        const surface = sign3dFinishSurface(f);
+        const visual = document.createElement('span');
+        visual.className = 'sign3d-configurator__finish-visual finish-surface--' + surface;
+        if (f.i) {
+            const img = document.createElement('img');
+            img.src = f.i;
+            img.alt = f.l;
+            img.loading = 'lazy';
+            visual.appendChild(img);
+        } else {
+            const ms = document.createElement('span');
+            ms.className = 'sign3d-configurator__finish-ms';
+            ms.textContent = 'MS';
+            visual.appendChild(ms);
+        }
+        card.appendChild(visual);
+        const label = document.createElement('span');
+        label.className = 'sign3d-configurator__finish-label';
+        label.textContent = f.l;
+        card.appendChild(label);
+        const p = Number(f.p) || 0;
+        if (p > 0) {
+            const price = document.createElement('span');
+            price.className = 'sign3d-configurator__pick-card-price';
+            price.textContent = '+$' + p.toFixed(2);
+            card.appendChild(price);
+        }
+        card.addEventListener('click', () => {
+            selectedFinish[slot] = f;
+            renderFinishCards();
+            onFinishChanged();
+        });
+        return card;
+    }
+
+    // Rebuilds the three card rows for the current illumination type. A selection that is no
+    // longer compatible falls back to the first allowed finish; a part with no finishes is hidden.
+    function renderFinishCards() {
+        FINISH_SLOTS.forEach((slot) => {
+            const container = root.querySelector('[data-finish-cards="' + slot + '"]');
+            const wrap = root.querySelector('[data-finish-wrap="' + slot + '"]');
+            const list = availableFinishes(slot);
+            if (list.indexOf(selectedFinish[slot]) === -1) selectedFinish[slot] = list[0] || null;
+            if (wrap) wrap.hidden = !list.length;
+            if (!container) return;
+            container.innerHTML = '';
+            list.forEach((f) => container.appendChild(buildFinishCard(slot, f)));
+        });
+    }
+
+    function onFinishChanged() {
+        updateFinishClasses();
+        updateMetalNote();
+        if (typeof updateDimensionLines === 'function') updateDimensionLines();
+        calculateTotal();
+    }
+
+    if (illuminationSelect) {
+        illuminationSelect.addEventListener('change', () => {
+            renderFinishCards();
+            onFinishChanged();
+        });
+    }
+
+    // ---- Indoor / Outdoor cards (same visual card layout as the Neon configurator) ----
+    const IO_ICONS = {
+        indoor: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21 24 7l19 14"/><path d="M12 21h24l-2 6H14z"/><path d="M17 21v6M24 21v6M31 21v6"/><path d="M14 27v14h20V27"/><path d="M19 41v-8h5v8"/><path d="M27 32h4v4h-4z"/></svg>',
+        outdoor: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4c0 2-1.6 3-1.6 4.4a1.6 1.6 0 0 0 3.2 0C15.6 7 14 6 14 4zM24 2c0 2-1.6 3-1.6 4.4a1.6 1.6 0 0 0 3.2 0C25.6 5 24 4 24 2zM34 4c0 2-1.6 3-1.6 4.4a1.6 1.6 0 0 0 3.2 0C35.6 7 34 6 34 4z"/><path d="M7 16h28l-2 6H9z"/><path d="M14 16v6M21 16v6M28 16v6"/><path d="M9 22v18h17"/><path d="M14 40v-8h5v8"/><path d="M37 25l8 3v6c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10v-6z" class="sign3d-configurator__io-shield"/><path d="M33.5 34.5l2.5 2.5 5-5" class="sign3d-configurator__io-shield"/></svg>'
+    };
+    function syncIndoorOutdoorCards() {
+        indoorOutdoorRadios.forEach((radio) => {
+            const card = radio.closest('.sign3d-configurator__io-card');
+            if (card) card.classList.toggle('is-selected', radio.checked);
+        });
+    }
+    root.querySelectorAll('[data-io-icon]').forEach((el) => {
+        el.innerHTML = IO_ICONS[el.dataset.ioIcon] || '';
+    });
+    indoorOutdoorRadios.forEach((radio) => radio.addEventListener('change', syncIndoorOutdoorCards));
 
     // Letter height slider (range comes from the letter_height_tier entries; value is stored in cm)
     function syncLetterHeightSlider() {
@@ -2693,6 +3083,11 @@ function initSign3dConfigurator(root) {
     initSizeSlider();
     initLetterHeightSlider();
     initLetterHeightInput();
+    initWidthInput();
+    renderFinishCards();
+    updateFinishClasses();
+    syncIndoorOutdoorCards();
+    calculateTotal();
     buildPowerOptions();
     initCustomColourBoxes();
     updateMountingInfo();

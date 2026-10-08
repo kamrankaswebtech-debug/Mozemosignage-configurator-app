@@ -372,6 +372,21 @@ name = "Short Description (optional)"
 description = "Small text shown under the card label in the 3D configurator."
 type = "single_line_text_field"
 
+[metaobjects.app.illumination_type.fields.front_finishes]
+name = "Allowed Front Finishes"
+description = "Comma-separated 3D Finish handles allowed on the FRONT for this illumination type. Empty = all front finishes."
+type = "single_line_text_field"
+
+[metaobjects.app.illumination_type.fields.side_finishes]
+name = "Allowed Side Finishes"
+description = "Comma-separated 3D Finish handles allowed on the SIDES for this illumination type. Empty = all side finishes."
+type = "single_line_text_field"
+
+[metaobjects.app.illumination_type.fields.backing_finishes]
+name = "Allowed Backing Finishes"
+description = "Comma-separated 3D Finish handles allowed on the BACKING PANEL for this illumination type. Empty = all backing finishes."
+type = "single_line_text_field"
+
 
 [metaobjects.app.sign3d_size]
 name = "3D Sign Size"
@@ -540,6 +555,41 @@ type = "single_line_text_field"
 name = "Short Description (optional)"
 description = "category=mounting only. Small text shown under the mounting card label."
 type = "single_line_text_field"
+
+[metaobjects.app.sign3d_option.fields.finish_surface]
+name = "Finish Surface"
+description = "category=finish only. One of: matte_metal, gloss_metal, gloss_acrylic. Controls the card + live preview surface look."
+type = "single_line_text_field"
+
+[metaobjects.app.sign3d_option.fields.finish_applies_to]
+name = "Finish Applies To"
+description = "category=finish only. Comma-separated: front, side, backing — which colour lists offer this finish."
+type = "single_line_text_field"
+
+[metaobjects.app.sign3d_option.fields.icon_key]
+name = "Icon"
+description = "category=addon only. Built-in icon for the add-on card (letters, led, power, plug, studs, screws, template, diagram, guide, waterproof, package, tools, star). Empty = picked automatically from the label. An uploaded Image always wins."
+type = "single_line_text_field"
+
+[metaobjects.app.sign3d_option.fields.letter_height_min_cm]
+name = "Letter Height Min (cm)"
+description = "category=pricing_settings only. Smallest letter/element height a customer may enter."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.letter_height_max_cm]
+name = "Letter Height Max (cm)"
+description = "category=pricing_settings only. Largest letter/element height a customer may enter."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.width_min_cm]
+name = "Overall Width Min (cm)"
+description = "category=pricing_settings only. Smallest overall sign width/length (all units, with or without backing)."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.width_max_cm]
+name = "Overall Width Max (cm)"
+description = "category=pricing_settings only. Largest overall sign width/length (all units, with or without backing)."
+type = "number_decimal"
 
 [metaobjects.app.uv_size]
 name = "UV Sign Size"

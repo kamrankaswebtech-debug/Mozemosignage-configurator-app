@@ -1,0 +1,592 @@
+/* ==========================================================================
+   Mozemo Signage Configurator — embedded Admin look & feel.
+   Loaded once for every /app route (app/routes/app.tsx). Styles only the plain
+   HTML used inside our pages (forms, tables, cards); Polaris web components keep
+   their own styling. No layout/logic depends on this file.
+   ========================================================================== */
+
+:root {
+    --moz-accent: #e0179f;
+    --moz-accent-2: #7a00ff;
+    --moz-text: #303030;
+    --moz-text-subdued: #616161;
+    --moz-border: #e3e3e3;
+    --moz-border-strong: #c9cccf;
+    --moz-surface: #ffffff;
+    --moz-surface-subdued: #f7f7f7;
+    --moz-focus: #005bd3;
+    --moz-radius: 10px;
+}
+
+/* ---------- Form controls (raw <input>/<select>/<textarea> used across the CRUD pages) ---------- */
+s-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+s-page select,
+s-page textarea {
+    box-sizing: border-box;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--moz-border-strong);
+    border-radius: 8px;
+    background: var(--moz-surface);
+    color: var(--moz-text);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+s-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]):hover,
+s-page select:hover,
+s-page textarea:hover {
+    border-color: #8a8a8a;
+}
+
+s-page input:focus-visible,
+s-page select:focus-visible,
+s-page textarea:focus-visible {
+    outline: none;
+    border-color: var(--moz-focus);
+    box-shadow: 0 0 0 2px rgba(0, 91, 211, 0.25);
+}
+
+s-page select {
+    padding-right: 28px;
+    cursor: pointer;
+}
+
+s-page input::placeholder,
+s-page textarea::placeholder {
+    color: #8a8a8a;
+}
+
+s-page input[type="checkbox"],
+s-page input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #303030;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+s-page input[type="color"] {
+    width: 40px;
+    height: 34px;
+    padding: 2px;
+    border: 1px solid var(--moz-border-strong);
+    border-radius: 8px;
+    background: var(--moz-surface);
+    cursor: pointer;
+}
+
+s-page input[type="file"] {
+    font-size: 12px;
+    color: var(--moz-text-subdued);
+    max-width: 260px;
+}
+
+s-page input[type="file"]::file-selector-button {
+    margin-right: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--moz-border-strong);
+    border-radius: 8px;
+    background: var(--moz-surface);
+    color: var(--moz-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+s-page input[type="file"]::file-selector-button:hover {
+    background: var(--moz-surface-subdued);
+}
+
+/* "Label text <input>" fields (settings pages) stack neatly: label above, input below */
+s-page label:has(> input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])),
+s-page label:has(> select),
+s-page label:has(> textarea) {
+    display: grid;
+    gap: 6px;
+    max-width: 480px;
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--moz-text);
+}
+
+s-page label > input:not([type="checkbox"]):not([type="radio"]),
+s-page label > select,
+s-page label > textarea {
+    width: 100%;
+    font-weight: 400;
+}
+
+s-page small {
+    display: block;
+    margin-top: 6px;
+    color: var(--moz-text-subdued);
+    font-size: 12px;
+}
+
+/* ---------- Data tables (list pages) ---------- */
+s-page table {
+    width: 100%;
+    border-collapse: separate !important;
+    border-spacing: 0;
+    border: 1px solid var(--moz-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--moz-surface);
+    font-size: 13px;
+    color: var(--moz-text);
+}
+
+s-page thead tr {
+    background: var(--moz-surface-subdued);
+}
+
+s-page th {
+    padding: 10px 12px !important;
+    border-bottom: 1px solid var(--moz-border);
+    color: var(--moz-text-subdued);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+}
+
+s-page td {
+    padding: 10px 12px !important;
+    border-bottom: 1px solid #ebebeb;
+    vertical-align: middle;
+}
+
+s-page tbody tr:last-child td {
+    border-bottom: none;
+}
+
+s-page tbody tr {
+    transition: background 0.12s ease;
+}
+
+s-page tbody tr:hover {
+    background: #fafafa;
+}
+
+s-page td img {
+    border-radius: 6px;
+    border: 1px solid var(--moz-border);
+    vertical-align: middle;
+}
+
+/* ---------- Hub pages: grid of option cards (app/components/admin-ui.tsx) ---------- */
+.moz-hub-intro {
+    margin: 0 0 16px;
+    color: var(--moz-text-subdued);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.moz-hub-grid {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.moz-hub-card {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 16px;
+    border: 1px solid var(--moz-border);
+    border-radius: 12px;
+    background: var(--moz-surface);
+    color: var(--moz-text);
+    text-decoration: none;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.moz-hub-card:hover {
+    border-color: var(--moz-accent);
+    box-shadow: 0 6px 18px rgba(224, 23, 159, 0.12);
+    transform: translateY(-1px);
+}
+
+.moz-hub-card:focus-visible {
+    outline: 2px solid var(--moz-focus);
+    outline-offset: 2px;
+}
+
+.moz-hub-card__icon {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--moz-accent);
+    background: linear-gradient(135deg, rgba(224, 23, 159, 0.12), rgba(122, 0, 255, 0.1));
+}
+
+.moz-hub-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.moz-hub-card__title {
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.moz-hub-card__desc {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--moz-text-subdued);
+}
+
+.moz-hub-card__cta {
+    margin-top: 4px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--moz-accent);
+}
+
+/* ---------- Dashboard ---------- */
+.moz-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 24px;
+    border-radius: 14px;
+    color: #ffffff;
+    background:
+        radial-gradient(circle at 85% 20%, rgba(255, 255, 255, 0.18), transparent 45%),
+        linear-gradient(110deg, #1b0b2e 0%, #5a0f8c 45%, #e0179f 100%);
+}
+
+.moz-hero__logo {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ff7ae6;
+    background: rgba(10, 4, 20, 0.55);
+    box-shadow: 0 0 18px rgba(255, 79, 216, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.moz-hero__logo svg {
+    filter: drop-shadow(0 0 6px rgba(255, 122, 230, 0.9));
+}
+
+.moz-hero__title {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.moz-hero__text {
+    margin: 0;
+    font-size: 13.5px;
+    opacity: 0.88;
+}
+
+.moz-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.moz-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 16px;
+    border: 1px solid var(--moz-border);
+    border-radius: 12px;
+    background: var(--moz-surface);
+}
+
+.moz-stat__icon {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--moz-accent);
+    background: linear-gradient(135deg, rgba(224, 23, 159, 0.12), rgba(122, 0, 255, 0.1));
+}
+
+.moz-stat__label {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--moz-text-subdued);
+}
+
+.moz-stat__value {
+    margin: 2px 0 0;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--moz-text);
+}
+
+.moz-stat__hint {
+    margin: 4px 0 0;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--moz-text-subdued);
+}
+
+.moz-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.moz-config-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--moz-border);
+    border-radius: 12px;
+    background: var(--moz-surface);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.moz-config-card:hover {
+    border-color: #d4d4d4;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.moz-config-card__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.moz-config-card__icon {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+}
+
+.moz-config-card__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--moz-text);
+}
+
+.moz-config-card__meta {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: var(--moz-text-subdued);
+}
+
+.moz-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.moz-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.moz-pill--ok {
+    color: #0c7a43;
+    background: #e4f7ec;
+}
+
+.moz-pill--todo {
+    color: #8a6116;
+    background: #fff4d6;
+}
+
+.moz-config-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.moz-activity {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--moz-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--moz-surface);
+    margin-bottom: 12px;
+}
+
+.moz-activity__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #ebebeb;
+}
+
+.moz-activity__row:last-child {
+    border-bottom: none;
+}
+
+.moz-activity__icon {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--moz-text-subdued);
+    background: var(--moz-surface-subdued);
+}
+
+.moz-activity__main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.moz-activity__title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--moz-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.moz-activity__meta {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--moz-text-subdued);
+}
+
+.moz-empty {
+    padding: 22px 16px;
+    border: 1px dashed var(--moz-border-strong);
+    border-radius: 12px;
+    text-align: center;
+    color: var(--moz-text-subdued);
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+/* Setup & Help (aside) */
+.moz-progress {
+    margin: 4px 0 14px;
+}
+
+.moz-progress__top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--moz-text-subdued);
+    margin-bottom: 6px;
+}
+
+.moz-progress__top strong {
+    color: var(--moz-text);
+}
+
+.moz-progress__bar {
+    height: 8px;
+    border-radius: 999px;
+    background: #ebebeb;
+    overflow: hidden;
+}
+
+.moz-progress__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e0179f, #7a00ff);
+    transition: width 0.4s ease;
+}
+
+.moz-checklist {
+    list-style: none;
+    margin: 0 0 14px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.moz-checklist li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--moz-text);
+}
+
+.moz-checklist li svg {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+
+.moz-checklist li.is-done svg {
+    color: #0c7a43;
+}
+
+.moz-checklist li.is-todo {
+    color: var(--moz-text-subdued);
+}
+
+.moz-checklist li.is-todo svg {
+    color: #b5b5b5;
+}
+
+.moz-aside-theme {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    background: var(--moz-surface-subdued);
+    font-size: 12.5px;
+    color: var(--moz-text-subdued);
+}
+
+.moz-aside-theme strong {
+    color: var(--moz-text);
+}
+
+.moz-aside-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}

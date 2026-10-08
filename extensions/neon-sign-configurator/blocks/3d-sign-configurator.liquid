@@ -83,15 +83,19 @@
   <div class="sign3d-configurator__panel">
 
     <script type="application/json" data-sign3d-options>
-    [{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% unless forloop.first %},{% endunless %}{"c":{{ o.category.value | json }},"t":{{ o.threshold_value.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"l":{{ o.label.value | json }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }},"i":{% if o.image.value %}{{ o.image.value | image_url: width: 480 | json }}{% else %}""{% endif %},"b":{{ o.backing_type.value | default: "" | downcase | json }},"d":{{ o.description.value | default: "" | json }},"oz":{{ o.outdoor_surcharge_percent.value | default: 15 }},"om":{{ o.outdoor_minimum_surcharge.value | default: 200 }},"il":{{ o.included_letters_count.value | default: 20 }},"pr":{{ o.panel_rate_per_sqm.value | default: 0 }},"bh":{{ o.base_letter_height_cm.value | default: 25 }},"bd":{{ o.base_depth_tier_label.value | default: "" | json }}}{% endfor %}]
+    [{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% unless forloop.first %},{% endunless %}{"c":{{ o.category.value | json }},"t":{{ o.threshold_value.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"l":{{ o.label.value | json }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }},"i":{% if o.image.value %}{{ o.image.value | image_url: width: 480 | json }}{% else %}""{% endif %},"b":{{ o.backing_type.value | default: "" | downcase | json }},"d":{{ o.description.value | default: "" | json }},"oz":{{ o.outdoor_surcharge_percent.value | default: 15 }},"om":{{ o.outdoor_minimum_surcharge.value | default: 200 }},"il":{{ o.included_letters_count.value | default: 20 }},"pr":{{ o.panel_rate_per_sqm.value | default: 0 }},"bh":{{ o.base_letter_height_cm.value | default: 25 }},"bd":{{ o.base_depth_tier_label.value | default: "" | json }}{% if o.icon_key.value != blank %},"ik":{{ o.icon_key.value | json }}{% endif %}}{% endfor %}]
     </script>
 
     <script type="application/json" data-sign3d-wallpapers>
     [{% assign s3d_w_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}{% endif %}{% endfor %}]
     </script>
 
-    <script type="application/json" data-sign3d-materials>
-    [{% assign s3d_m_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_mc = o.category.value | strip | downcase %}{% if s3d_mc == "material" %}{% unless s3d_m_first %},{% endunless %}{% assign s3d_m_first = false %}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{% endif %}{% endfor %}]
+    <script type="application/json" data-sign3d-finishes>
+    [{% assign s3d_fi_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_fic = o.category.value | strip | downcase %}{% if s3d_fic == "finish" %}{% unless s3d_fi_first %},{% endunless %}{% assign s3d_fi_first = false %}{"h":{{ o.system.handle | json }},"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }},"k":{{ o.finish_surface.value | default: "" | json }},"a":{{ o.finish_applies_to.value | default: "" | json }},"i":{% if o.image.value %}{{ o.image.value | image_url: width: 480 | json }}{% else %}""{% endif %}}{% endif %}{% endfor %}]
+    </script>
+
+    <script type="application/json" data-sign3d-limits>
+    {% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_lc = o.category.value | strip | downcase %}{% if s3d_lc == "pricing_settings" %}{"lmin":{{ o.letter_height_min_cm.value | default: 0 }},"lmax":{{ o.letter_height_max_cm.value | default: 0 }},"wmin":{{ o.width_min_cm.value | default: 0 }},"wmax":{{ o.width_max_cm.value | default: 0 }}}{% break %}{% endif %}{% endfor %}
     </script>
 
     <script type="application/json" data-sign3d-mountings>
@@ -189,17 +193,10 @@
       <p class="sign3d-configurator__note">Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.</p>
       <select data-illumination-select hidden>
         {% for item in metaobjects["app--418838118401--illumination_type"].values %}
-          <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" data-effect-key="{{ item.effect_key.value | default: 'front_lit' }}" data-sort-order="{{ item.sort_order.value | default: 999999 }}" data-image="{{ item.preview_image.value | image_url: width: 480 }}" data-description="{{ item.description.value | escape }}"{% if forloop.first %} selected{% endif %}>{{ item.label.value }}</option>
+          <option value="{{ item.label.value }}" data-price="{{ item.extra_price_decimal.value | default: 0 }}" data-effect-key="{{ item.effect_key.value | default: 'front_lit' }}" data-sort-order="{{ item.sort_order.value | default: 999999 }}" data-image="{{ item.preview_image.value | image_url: width: 480 }}" data-description="{{ item.description.value | escape }}" data-ff="{{ item.front_finishes.value }}" data-sf="{{ item.side_finishes.value }}" data-bf="{{ item.backing_finishes.value }}"{% if forloop.first %} selected{% endif %}>{{ item.label.value }}</option>
         {% endfor %}
       </select>
       <div class="sign3d-configurator__card-grid" data-illumination-cards></div>
-    </div>
-
-    <div class="sign3d-configurator__field" hidden>
-      <div class="sign3d-configurator__measure-row">
-        <input type="number" min="1" step="0.5" class="sign3d-configurator__text-input" data-width-input value="100">
-        <span class="sign3d-configurator__measure-unit">cm</span>
-      </div>
     </div>
 
     {% if s3d_units_count > 0 %}
@@ -213,14 +210,16 @@
         {% endfor %}
       </div>
       {% endif %}
-      <div class="sign3d-configurator__slider-meta"><span data-slider-width-value>Width: -- {{ s3d_default_unit.unit.value | default: 'cm' }}</span></div>
+      <div class="sign3d-configurator__slider-meta sign3d-configurator__width-entry"><span>Width:</span><input type="number" inputmode="decimal" step="any" class="sign3d-configurator__text-input sign3d-configurator__width-input" data-width-input value="100" aria-label="Overall width"><span class="sign3d-configurator__measure-unit">cm</span></div>
       <div class="sign3d-configurator__slider-row">
         <button type="button" class="sign3d-configurator__slider-arrow" data-slider-decrease aria-label="Decrease width">‹</button>
         <input type="range" class="sign3d-configurator__slider" data-custom-size-slider min="{{ s3d_default_unit.min_value.value | default: 20 }}" max="{{ s3d_default_unit.max_value.value | default: 500 }}" step="1" data-unit="{{ s3d_default_unit.unit.value | default: 'cm' }}" value="{{ s3d_default_unit.min_value.value | default: 20 }}">
         <button type="button" class="sign3d-configurator__slider-arrow" data-slider-increase aria-label="Increase width">›</button>
       </div>
-      <p class="sign3d-configurator__slider-hint">Drag the slider to set the overall width. The price updates automatically.</p>
+      <p class="sign3d-configurator__slider-hint" data-width-hint>Drag the slider or type the overall width. The price updates automatically.</p>
     </div>
+    {% else %}
+    <div class="sign3d-configurator__field" hidden><input type="number" data-width-input value="100"><span class="sign3d-configurator__measure-unit">cm</span></div>
     {% endif %}
 
     <div class="sign3d-configurator__field" data-letter-height-field>
@@ -234,9 +233,9 @@
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Indoor or Outdoor</span></label>
-      <div class="sign3d-configurator__symbol-position-options">
-        <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="indoor" checked><span>Indoor</span></label>
-        <label class="sign3d-configurator__symbol-position-option"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor"><span>Outdoor</span></label>
+      <div class="sign3d-configurator__io-cards" data-io-cards>
+        <label class="sign3d-configurator__io-card is-selected"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="indoor" checked><span class="sign3d-configurator__io-icon" data-io-icon="indoor"></span><span class="sign3d-configurator__io-label">Indoor Use Only</span></label>
+        <label class="sign3d-configurator__io-card"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor"><span class="sign3d-configurator__io-icon" data-io-icon="outdoor"></span><span class="sign3d-configurator__io-label">Outdoor Use</span><span class="sign3d-configurator__io-price" data-io-outdoor-price></span></label>
       </div>
     </div>
 
@@ -245,30 +244,28 @@
     </div>
 
     <div class="sign3d-configurator__field">
-      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Material</span></label>
-      <select class="sign3d-configurator__select" data-material-select></select>
-    </div>
-    <p class="sign3d-configurator__oversized-notice" data-metal-note hidden>Frontlit Metal Signs: An acrylic face will be used to allow the light to shine through, as solid metal does not transmit light.</p>
-
-    <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Colours</span></label>
       <p class="sign3d-configurator__subheading">Front Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-colour-swatches></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-colour-name-label></span></p>
+      <div data-finish-wrap="front" hidden><p class="sign3d-configurator__subheading">Front Material / Finish</p><div class="sign3d-configurator__finish-cards" data-finish-cards="front"></div></div>
+      <p class="sign3d-configurator__oversized-notice" data-metal-note hidden>Frontlit Metal Signs: An acrylic face will be used to allow the light to shine through, as solid metal does not transmit light.</p>
       <p class="sign3d-configurator__subheading">Side Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-side-colour-swatches></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-side-colour-name-label></span></p>
-      <div data-backing-colour-block hidden>
-        <p class="sign3d-configurator__subheading">Backing Colour</p>
-        <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
-        <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
-      </div>
+      <div data-finish-wrap="side" hidden><p class="sign3d-configurator__subheading">Side Material / Finish</p><div class="sign3d-configurator__finish-cards" data-finish-cards="side"></div></div>
     </div>
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Mounting</span></label>
       <select data-mounting-select hidden></select>
       <div class="sign3d-configurator__card-grid" data-mounting-cards></div>
+      <div class="sign3d-configurator__backing-block" data-backing-colour-block hidden>
+        <p class="sign3d-configurator__subheading">Backing Panel Colour</p>
+        <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
+        <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
+        <div data-finish-wrap="backing" hidden><p class="sign3d-configurator__subheading">Backing Panel Material / Finish</p><div class="sign3d-configurator__finish-cards" data-finish-cards="backing"></div></div>
+      </div>
       <div class="sign3d-configurator__install-info" data-install-info hidden>
         <img class="sign3d-configurator__install-badge" data-install-badge alt="" width="64" height="64" hidden>
         <p class="sign3d-configurator__install-text" data-install-text></p>

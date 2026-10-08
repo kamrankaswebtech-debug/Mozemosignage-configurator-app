@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, useLocation } from "react-router";
 import { authenticate } from "../shopify.server";
+import { HubCardGrid } from "../components/admin-ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     await authenticate.admin(request);
@@ -31,15 +32,7 @@ export default function UvGraphicLedHub() {
                     Manage all the dynamic options shown in the UV Graphic LED Sign live configurator on your storefront.
                     Sizes, Materials, Finish, and Add-ons here are shared with the UV Graphic (No LED) configurator.
                 </s-paragraph>
-                <s-stack direction="block" gap="base">
-                    {SECTIONS.map((section) => (
-                        <s-box key={section.path} padding="base" borderWidth="base" borderRadius="base" background="subdued">
-                            <s-heading>{section.title}</s-heading>
-                            <s-paragraph>{section.description}</s-paragraph>
-                            <s-link href={section.path}>Manage {section.title} →</s-link>
-                        </s-box>
-                    ))}
-                </s-stack>
+                <HubCardGrid items={SECTIONS.map((section) => ({ title: section.title, description: section.description, path: section.path }))} />
             </s-section>
         </s-page>
     );

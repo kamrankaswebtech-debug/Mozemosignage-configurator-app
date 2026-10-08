@@ -1724,3 +1724,394 @@
     flex-direction: column;
     gap: 8px;
 }
+/* =====================================================================
+   Material / Finish cards, Indoor / Outdoor cards, width entry, size pop-up
+   ===================================================================== */
+
+/* ---- Overall width: typed entry next to the slider ---- */
+.sign3d-configurator__width-entry {
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.sign3d-configurator__width-entry .sign3d-configurator__width-input {
+    width: 110px;
+    padding: 6px 10px;
+    font-size: 14px;
+}
+
+/* ---- Material / Finish cards (Front, Side, Backing) ---- */
+.sign3d-configurator__finish-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.sign3d-configurator__finish-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 6px 10px;
+    border-radius: 10px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    font-family: inherit;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sign3d-configurator__finish-card:hover {
+    border-color: #4a4a5c;
+}
+
+.sign3d-configurator__finish-card.is-selected {
+    border-color: #ff2ec4;
+    background: linear-gradient(135deg, rgba(255, 46, 196, 0.2), rgba(122, 0, 255, 0.16));
+    box-shadow: 0 0 0 1px rgba(255, 46, 196, 0.35);
+}
+
+.sign3d-configurator__finish-visual {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 7px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Dark textured "wall" behind the sample letters, like the client's reference */
+    background:
+        radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.07), transparent 70%),
+        #121217;
+}
+
+.sign3d-configurator__finish-visual img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* CSS-rendered "MS" sample (used when no card image is uploaded in Admin) */
+.sign3d-configurator__finish-ms {
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
+    font-size: clamp(26px, 6vw, 44px);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Matte Metal: non-reflective brushed grey */
+.finish-surface--matte_metal .sign3d-configurator__finish-ms {
+    background-image:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 1px, rgba(0, 0, 0, 0.1) 1px 2px, rgba(255, 255, 255, 0.04) 2px 3px),
+        linear-gradient(180deg, #a9abae 0%, #8d9094 55%, #6f7276 100%);
+    filter: drop-shadow(1.5px 2px 0 #4c4e52) drop-shadow(0 4px 5px rgba(0, 0, 0, 0.55));
+}
+
+/* Gloss Metal: smooth, highly reflective (sharp bright/dark reflection bands) */
+.finish-surface--gloss_metal .sign3d-configurator__finish-ms {
+    background-image: linear-gradient(180deg,
+        #f4f5f6 0%, #c9ccd0 18%, #5b5f64 36%, #e9ebed 50%, #7d8186 62%, #33363a 78%, #b9bcc0 100%);
+    filter: drop-shadow(1.5px 2px 0 #2b2d30) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+}
+
+/* Gloss Acrylic: smooth, glossy grey with a soft highlight */
+.finish-surface--gloss_acrylic .sign3d-configurator__finish-ms {
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.15) 38%, rgba(255, 255, 255, 0) 50%),
+        linear-gradient(180deg, #d9dadc 0%, #c3c5c8 60%, #aeb0b4 100%);
+    filter: drop-shadow(1.5px 2px 0 #8e9094) drop-shadow(0 4px 5px rgba(0, 0, 0, 0.5));
+}
+
+.sign3d-configurator__finish-label {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.sign3d-configurator__backing-block {
+    margin-top: 10px;
+}
+
+.sign3d-configurator__backing-block[hidden],
+[data-finish-wrap][hidden] {
+    display: none;
+}
+
+/* ---- Indoor / Outdoor cards (same look as the Neon configurator) ---- */
+.sign3d-configurator__io-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.sign3d-configurator__io-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 116px;
+    padding: 14px 10px;
+    border-radius: 12px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #d6d6e0;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sign3d-configurator__io-card:hover {
+    border-color: #4a4a5c;
+}
+
+.sign3d-configurator__io-card input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.sign3d-configurator__io-card.is-selected {
+    border-color: #ff2ec4;
+    background: linear-gradient(135deg, rgba(255, 46, 196, 0.16), rgba(122, 0, 255, 0.12));
+    color: #ffffff;
+}
+
+.sign3d-configurator__io-card:focus-within {
+    outline: 2px solid rgba(255, 46, 196, 0.6);
+    outline-offset: 2px;
+}
+
+.sign3d-configurator__io-icon {
+    width: 46px;
+    height: 46px;
+    color: #b8b8c4;
+}
+
+.sign3d-configurator__io-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.sign3d-configurator__io-card.is-selected .sign3d-configurator__io-icon {
+    color: #ff4fd8;
+}
+
+.sign3d-configurator__io-shield {
+    stroke: #b46bff;
+}
+
+.sign3d-configurator__io-label {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.sign3d-configurator__io-price {
+    font-size: 12px;
+    color: #9a9aa8;
+}
+
+/* ---- Size limit pop-up ---- */
+.sign3d-configurator__alert {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(5, 5, 10, 0.7);
+}
+
+.sign3d-configurator__alert[hidden] {
+    display: none;
+}
+
+.sign3d-configurator__alert-box {
+    width: 100%;
+    max-width: 420px;
+    padding: 22px 22px 18px;
+    border-radius: 14px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #ffffff;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    font-family: inherit;
+}
+
+.sign3d-configurator__alert-title {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 800;
+    color: #fbbf24;
+}
+
+.sign3d-configurator__alert-text {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #d6d6e0;
+}
+
+.sign3d-configurator__alert-btn {
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+@media (max-width: 480px) {
+    .sign3d-configurator__finish-cards {
+        gap: 6px;
+    }
+
+    .sign3d-configurator__finish-label {
+        font-size: 11px;
+    }
+}
+
+/* ---- Add-on cards (Included With Your Order + Optional Add-ons) ---- */
+.sign3d-configurator__addon-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+/* "Included With Your Order" sits in one glowing pink panel, like the client's reference */
+[data-addon-included].sign3d-configurator__addon-grid {
+    padding: 10px;
+    border-radius: 14px;
+    border: 2px solid #ff2ec4;
+    background: linear-gradient(180deg, rgba(255, 46, 196, 0.05), rgba(122, 0, 255, 0.05));
+    box-shadow: 0 0 18px rgba(255, 46, 196, 0.22);
+}
+
+.sign3d-configurator__addon-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid #2c2c38;
+    background: #13131b;
+    color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sign3d-configurator__addon-card.is-locked {
+    cursor: default;
+}
+
+.sign3d-configurator__addon-card:not(.is-locked):hover {
+    border-color: #4a4a5c;
+}
+
+.sign3d-configurator__addon-card:not(.is-locked).is-checked {
+    border-color: #ff2ec4;
+    background: linear-gradient(135deg, rgba(255, 46, 196, 0.14), rgba(122, 0, 255, 0.1));
+}
+
+/* The real checkbox stays in the DOM (pricing + cart read it) but is visually replaced */
+.sign3d-configurator__addon-card input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.sign3d-configurator__addon-card:focus-within {
+    outline: 2px solid rgba(255, 46, 196, 0.55);
+    outline-offset: 1px;
+}
+
+.sign3d-configurator__addon-tick {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    border: 1.5px solid #4a4a5c;
+    background: transparent;
+    color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sign3d-configurator__addon-tick svg {
+    width: 15px;
+    height: 15px;
+}
+
+.sign3d-configurator__addon-card.is-checked .sign3d-configurator__addon-tick {
+    border-color: transparent;
+    background: linear-gradient(135deg, #ff4fd8, #c000ff);
+    color: #ffffff;
+}
+
+.sign3d-configurator__addon-icon {
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    color: #ff4fd8;
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sign3d-configurator__addon-icon svg,
+.sign3d-configurator__addon-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.sign3d-configurator__addon-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.sign3d-configurator__addon-price {
+    flex: 0 0 auto;
+    font-style: normal;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #ff2ec4;
+}
+
+@media (max-width: 480px) {
+    .sign3d-configurator__addon-grid {
+        grid-template-columns: 1fr;
+    }
+}

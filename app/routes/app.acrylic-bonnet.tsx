@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, useLocation } from "react-router";
 import { authenticate } from "../shopify.server";
+import { HubCardGrid } from "../components/admin-ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     await authenticate.admin(request);
@@ -29,15 +30,7 @@ export default function AcrylicBonnetHub() {
                     Manage all the dynamic options shown in the Acrylic Neon Bonnet live configurator on your
                     storefront. Changes here appear immediately on your store — no code changes needed.
                 </s-paragraph>
-                <s-stack direction="block" gap="base">
-                    {SECTIONS.map((section) => (
-                        <s-box key={section.path} padding="base" borderWidth="base" borderRadius="base" background="subdued">
-                            <s-heading>{section.title}</s-heading>
-                            <s-paragraph>{section.description}</s-paragraph>
-                            <s-link href={section.path}>Manage {section.title} →</s-link>
-                        </s-box>
-                    ))}
-                </s-stack>
+                <HubCardGrid items={SECTIONS.map((section) => ({ title: section.title, description: section.description, path: section.path }))} />
             </s-section>
         </s-page>
     );

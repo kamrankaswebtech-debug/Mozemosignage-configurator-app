@@ -1653,6 +1653,8 @@ function initConfigurator(root) {
         });
     }
 
+    // Quick Symbols are now always shown (client request — no dropdown), so the Liquid no
+    // longer renders a trigger button and this toggle simply doesn't attach.
     if (symbolDropdownTrigger && symbolDropdownPanel) {
         symbolDropdownTrigger.addEventListener('click', () => {
             const isOpen = !symbolDropdownPanel.hidden;
