@@ -66,7 +66,7 @@
         const optionsEl = root.querySelector('[data-install-options]');
         if (!booking || !yesRadio || !noRadio || !dateInput || !timeSelect || !addressInput) return null;
 
-        let config = null;           // { radiusKm, baseAddress, holdMinutes, addressLookup }
+        let config = null;           // { radiusKm, workshopLocation, holdMinutes, addressLookup }
         let configFailed = false;
         let token = newToken();
         let sessionToken = newToken();
@@ -130,6 +130,11 @@
             slotRows.forEach((row) => row.classList.toggle('moz-install__locked', !unlocked));
             dateInput.disabled = !unlocked;
             timeSelect.disabled = !unlocked;
+        }
+
+        // Public workshop location only (suburb, state, postcode) — never the street address.
+        function workshopText() {
+            return (config && config.workshopLocation) ? 'Our Workshop – ' + config.workshopLocation : 'our workshop';
         }
 
         function radiusText() {
@@ -281,8 +286,7 @@
             unavailableBox.innerHTML = '';
             unavailableBox.appendChild(el('p', 'moz-install__unavailable-title', UNAVAILABLE_TEXT));
             unavailableBox.appendChild(el('p', '',
-                'We install within ' + (radiusKm || radiusText()) + ' km of our workshop' +
-                (config && config.baseAddress ? ' (' + config.baseAddress + ')' : '') +
+                'We install within ' + (radiusKm || radiusText()) + ' km of ' + workshopText() +
                 '. Your address is ' + distanceKm + ' km away, so installation has been removed from this order.'));
             const retry = el('button', 'moz-install__retry', 'Use a different address');
             retry.type = 'button';
@@ -432,7 +436,7 @@
             if (!modal) buildModal();
             if (!modal.overlay.hidden) return;
             modal.intro.textContent = 'Start typing your street number and street name, then select your exact address from the list. We install within ' +
-                radiusText() + ' km of our workshop' + (config && config.baseAddress ? ' (' + config.baseAddress + ')' : '') + '.';
+                radiusText() + ' km of ' + workshopText() + '.';
             modal.input.value = '';
             closeModalList();
             setMsg(modal.status, '');

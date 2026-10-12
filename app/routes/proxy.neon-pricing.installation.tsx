@@ -45,6 +45,20 @@ function readProof(proof: string): { address: string; distanceKm: number; eligib
     }
 }
 
+// Public workshop location for the storefront: suburb, state + postcode only — the street
+// address is never sent to the browser. "81 Clare Street, Blacktown NSW 2148" -> "Blacktown, NSW 2148".
+function publicWorkshopLocation(baseAddress: string): string {
+    const parts = String(baseAddress || "").split(",").map((p) => p.trim()).filter(Boolean);
+    // The "Suburb STATE 1234" part (works with or without a trailing ", Australia").
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const m = parts[i].match(/^(.*?)\s+([A-Za-z]{2,3})\s+(\d{4})$/);
+        if (m && !/^\d/.test(m[1])) return `${m[1]}, ${m[2].toUpperCase()} ${m[3]}`;
+    }
+    // Fallback: the last part that is not a street (doesn't start with a number) or the country.
+    const rest = parts.filter((p) => !/^\d/.test(p) && !/^australia$/i.test(p));
+    return rest[rest.length - 1] || "";
+}
+
 async function getContext(request: Request) {
     const { admin, session } = await authenticate.public.appProxy(request);
     if (!admin || !session) return null;
@@ -63,7 +77,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     if (op === "config") {
         return Response.json({
             radiusKm: settings.radiusKm,
-            baseAddress: settings.baseAddress,
+            workshopLocation: publicWorkshopLocation(settings.baseAddress),
             holdMinutes: settings.holdMinutes,
             addressLookup: isGoogleConfigured(),
         });

@@ -1988,3 +1988,11 @@
         top: auto;
     }
 }
+/* ---- Small, subtle digital-preview disclaimer under "6. Backboard Style" ---- */
+.neon-configurator__backboard-note {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    font-style: italic;
+    color: #8a8a98;
+}

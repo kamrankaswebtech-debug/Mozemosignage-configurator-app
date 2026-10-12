@@ -15,6 +15,7 @@ type Settings = {
     letterHeightMaxCm: string;
     widthMinCm: string;
     widthMaxCm: string;
+    currencyLabel: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -42,6 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         letterHeightMaxCm: first?.letter_height_max_cm || "",
         widthMinCm: first?.width_min_cm || "",
         widthMaxCm: first?.width_max_cm || "",
+        currencyLabel: first?.currency_label || "",
     };
     const hasEntry = !!first;
     return { settings, hasEntry };
@@ -60,6 +62,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "panel_rate_per_sqm", value: String(formData.get("panelRatePerSqm") || "70") },
         { key: "base_letter_height_cm", value: String(formData.get("baseLetterHeightCm") || "25") },
         { key: "base_depth_tier_label", value: String(formData.get("baseDepthTierLabel") || "") },
+        // Shown after every storefront price, e.g. "AUD" -> "+$199.99 AUD". Empty = no label.
+        { key: "currency_label", value: String(formData.get("currencyLabel") || "").trim().toUpperCase() },
     ];
     // Storefront size limits (cm). 0 / empty = previous behaviour (letter height range from the
     // Letter Height tiers, width range from each unit's Min/Max on the Size Units page). Empty
@@ -170,6 +174,10 @@ export default function PricingSettingsPage() {
                         <label>
                             Base Depth Tier Label — must exactly match a Depth Tier's Label
                             <input type="text" name="baseDepthTierLabel" defaultValue={settings.baseDepthTierLabel} required />
+                        </label>
+                        <label>
+                            Currency Label — shown after every price in the 3D configurator, e.g. AUD → +$199.99 AUD (leave empty for no label)
+                            <input type="text" name="currencyLabel" maxLength={8} placeholder="AUD" defaultValue={settings.currencyLabel} />
                         </label>
                         <s-heading>Size Limits (storefront)</s-heading>
                         <s-paragraph>

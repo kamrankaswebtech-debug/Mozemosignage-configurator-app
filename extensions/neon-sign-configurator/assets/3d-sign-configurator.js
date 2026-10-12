@@ -300,7 +300,7 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
             if (showPrice !== 'nonzero' || p > 0) {
                 const price = document.createElement('span');
                 price.className = 'sign3d-configurator__pick-card-price';
-                price.textContent = p > 0 ? '+$' + p.toFixed(2) : 'Included';
+                price.textContent = p > 0 ? sign3dMoney(root, p, true) : 'Included';
                 card.appendChild(price);
             }
         }
@@ -415,7 +415,16 @@ function sign3dReadLimits(root) {
     let raw = {};
     try { raw = JSON.parse((el && el.textContent.trim()) || '{}') || {}; } catch (err) { raw = {}; }
     const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
-    return { lmin: num(raw.lmin), lmax: num(raw.lmax), wmin: num(raw.wmin), wmax: num(raw.wmax) };
+    const cur = String(raw.cur || '').trim().toUpperCase();
+    return { lmin: num(raw.lmin), lmax: num(raw.lmax), wmin: num(raw.wmin), wmax: num(raw.wmax), cur };
+}
+
+// Price text with the Admin "Currency Label" (Pricing Settings), e.g. AUD -> "+$199.99 AUD".
+// plus = true for add-on style prices ("+$..."). Empty label = plain "$199.99" as before.
+function sign3dMoney(root, value, plus) {
+    if (root._sign3dCur === undefined) root._sign3dCur = sign3dReadLimits(root).cur;
+    const n = Number(value) || 0;
+    return (plus ? '+$' : '$') + n.toFixed(2) + (root._sign3dCur ? ' ' + root._sign3dCur : '');
 }
 
 function sign3dSplitList(value) {
@@ -423,17 +432,25 @@ function sign3dSplitList(value) {
 }
 
 // Finish surface: Admin "Finish Surface", otherwise guessed from the label.
+// Surfaces: glossy / matte / chrome (current client set) + the earlier matte_metal /
+// gloss_metal / gloss_acrylic, which keep working for finishes already saved in Admin.
 function sign3dFinishSurface(f) {
     const k = String((f && f.k) || '').trim().toLowerCase();
-    if (['matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
+    if (['glossy', 'matte', 'chrome', 'matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
     const l = String((f && f.l) || '').toLowerCase();
-    if (/metal/.test(l)) return /gloss|polish|mirror|shiny/.test(l) ? 'gloss_metal' : 'matte_metal';
-    return 'gloss_acrylic';
+    if (/chrome|mirror/.test(l)) return 'chrome';
+    if (/metal/.test(l)) return /gloss|polish|shiny/.test(l) ? 'gloss_metal' : 'matte_metal';
+    if (/matt?e|satin|flat/.test(l)) return 'matte';
+    if (/acrylic/.test(l)) return 'gloss_acrylic';
+    return 'glossy';
 }
 
 // Finish surface -> the existing preview finish overlay classes (face-* / backing finish-*).
 function sign3dSurfaceToGroup(surface) {
-    return { matte_metal: 'brushed_metal', gloss_metal: 'metallic', gloss_acrylic: 'gloss' }[surface] || 'standard';
+    return {
+        glossy: 'gloss', matte: 'standard', chrome: 'metallic',
+        matte_metal: 'brushed_metal', gloss_metal: 'metallic', gloss_acrylic: 'gloss'
+    }[surface] || 'standard';
 }
 
 // Built-in line icons for the add-on cards. Admin "Icon" picks one; empty = guessed from the label.
@@ -654,7 +671,7 @@ function sign3dHydrateOptions(root) {
             if (!locked && price > 0) {
                 const em = document.createElement('em');
                 em.className = 'sign3d-configurator__addon-price';
-                em.textContent = '+$' + price.toFixed(2);
+                em.textContent = sign3dMoney(root, price, true);
                 label.appendChild(em);
             }
             if (!locked) input.addEventListener('change', () => label.classList.toggle('is-checked', input.checked));
@@ -781,7 +798,7 @@ function initSign3dConfigurator(root) {
     // Finishes come from Admin "Material / Finish" (sign3d_option, category = finish). Each
     // illumination type may limit which finish handles are allowed per part (data-ff/sf/bf).
     const FINISH_SLOTS = ['front', 'side', 'backing'];
-    const FINISH_SLOT_TITLES = { front: 'Front', side: 'Side', backing: 'Backing panel' };
+    const FINISH_SLOT_TITLES = { front: 'Front', side: 'Side', backing: 'Backing Mount' };
     const finishList = sign3dReadJson(root, '[data-sign3d-finishes]')
         .map((f, i) => ({ f, i }))
         .sort((a, b) => ((Number(a.f.s) || 999999) - (Number(b.f.s) || 999999)) || (a.i - b.i))
@@ -1184,7 +1201,7 @@ function initSign3dConfigurator(root) {
             const labelSpan = document.createElement('span');
             labelSpan.textContent = line.label + (line.note ? ' ' + line.note : '');
             const valueSpan = document.createElement('span');
-            valueSpan.textContent = line.included ? 'Included' : ('+$' + line.value.toFixed(2));
+            valueSpan.textContent = line.included ? 'Included' : sign3dMoney(root, line.value, true);
             if (line.included) valueSpan.classList.add('is-included');
             row.appendChild(labelSpan);
             row.appendChild(valueSpan);
@@ -1216,7 +1233,7 @@ function initSign3dConfigurator(root) {
         rows.push(['Installation', d.installNote]);
         if (d.addonLabels.length) rows.push(['Add-ons', d.addonLabels.join(', ')]);
         rows.push(['Construction', d.isOutdoor ? 'Outdoor' : 'Indoor']);
-        rows.push(['Total Price', '$' + d.total.toFixed(2)]);
+        rows.push(['Total Price', sign3dMoney(root, d.total)]);
 
         reviewSummaryEl.innerHTML = rows.map((r) =>
             '<div class="sign3d-configurator__review-row"><span>' + r[0] + '</span><strong>' + r[1] + '</strong></div>'
@@ -1898,7 +1915,7 @@ function initSign3dConfigurator(root) {
         const outdoorMinimum = Number(settings.outdoorMin) || 0;
         const potentialOutdoor = Math.round(Math.max(basePrice * (outdoorPct / 100), outdoorMinimum) * 100) / 100;
         const outdoorPriceEl = root.querySelector('[data-io-outdoor-price]');
-        if (outdoorPriceEl) outdoorPriceEl.textContent = potentialOutdoor > 0 ? '+$' + potentialOutdoor.toFixed(2) : '';
+        if (outdoorPriceEl) outdoorPriceEl.textContent = potentialOutdoor > 0 ? sign3dMoney(root, potentialOutdoor, true) : '';
         let outdoorSurcharge = 0;
         if (isOutdoor) {
             outdoorSurcharge = potentialOutdoor;
@@ -1935,7 +1952,7 @@ function initSign3dConfigurator(root) {
 
         renderBreakdown(lines);
 
-        totalPriceEl.textContent = '$' + total.toFixed(2);
+        totalPriceEl.textContent = sign3dMoney(root, total);
         currentTotal = total;
 
         lastReviewData = {
@@ -2296,7 +2313,7 @@ function initSign3dConfigurator(root) {
                 'Add-ons': selectedAddons || 'None',
                 'Construction': isOutdoorForCart ? 'Outdoor' : 'Indoor',
 
-                'Configured Total': '$' + currentTotal.toFixed(2),
+                'Configured Total': sign3dMoney(root, currentTotal),
                 '_blueprint_width_cm': blueprintWidthCm,
                 '_blueprint_height_cm': blueprintHeightCm
             };
@@ -2605,7 +2622,17 @@ function initSign3dConfigurator(root) {
         const needsElectrician = type === 'none' || over2m;
         const hasMounting = !!(mountingSelect && mountingSelect.options.length);
 
-        if (backingColourBlock) backingColourBlock.hidden = type === 'none';
+        // The Backing Mount colour + finish lists always stay visible directly under Mounting.
+        // With "No Backing Panel" they are greyed out with a short hint (nothing to colour), and
+        // activeFinish('backing') / the cart skip them exactly as before.
+        if (backingColourBlock) {
+            backingColourBlock.hidden = false;
+            backingColourBlock.classList.toggle('is-inactive', type === 'none');
+            const note = backingColourBlock.querySelector('[data-backing-note]');
+            if (note) note.hidden = type !== 'none';
+            const lists = backingColourBlock.querySelector('[data-backing-lists]');
+            if (lists) lists.setAttribute('aria-disabled', type === 'none' ? 'true' : 'false');
+        }
 
         if (powerFieldEl) {
             const showPower = powerAdapters.length > 0 && type !== 'none' && !over2m;
@@ -2933,7 +2960,7 @@ function initSign3dConfigurator(root) {
         if (p > 0) {
             const price = document.createElement('span');
             price.className = 'sign3d-configurator__pick-card-price';
-            price.textContent = '+$' + p.toFixed(2);
+            price.textContent = sign3dMoney(root, p, true);
             card.appendChild(price);
         }
         card.addEventListener('click', () => {

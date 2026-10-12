@@ -20,6 +20,9 @@ type Entry = {
 };
 
 const SURFACES = [
+    { value: "glossy", label: "Glossy (smooth, shiny)" },
+    { value: "matte", label: "Matte (flat, non-reflective)" },
+    { value: "chrome", label: "Chrome Shine (mirror-like, highly reflective)" },
     { value: "matte_metal", label: "Matte Metal (brushed, non-reflective)" },
     { value: "gloss_metal", label: "Gloss Metal (smooth, highly reflective)" },
     { value: "gloss_acrylic", label: "Gloss Acrylic (smooth, glossy)" },
@@ -241,18 +244,18 @@ export default function FinishesPage() {
                 <s-link href="/app/3d-signs">← Back to 3D Illuminated Signs</s-link>
                 <s-paragraph>
                     Finishes show as visual cards under the Front colour, Side colour and Backing colour lists of the 3D configurator
-                    (e.g. Matte Metal Finish, Gloss Metal Finish, Gloss Acrylic Finish). "Surface" controls how the card and the live
+                    (e.g. Glossy, Matte, Chrome Shine). They show in Sort Order — lowest number first. "Surface" controls how the card and the live
                     preview look; upload an image to use your own photo on the card instead. Which finishes each Illumination Type
                     allows is set on the Illumination Type page.
                 </s-paragraph>
                 <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
-                        <input type="text" name="label" placeholder="Label (e.g. Matte Metal Finish)" required />
-                        <SurfaceSelect defaultValue="matte_metal" />
+                        <input type="text" name="label" placeholder="Label (e.g. Glossy)" required />
+                        <SurfaceSelect defaultValue="glossy" />
                         <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
-                        <AppliesToBoxes selected={["front", "side"]} />
+                        <AppliesToBoxes selected={["front", "side", "backing"]} />
                         <input type="file" name="imageFile" accept="image/*" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>

@@ -95,7 +95,7 @@
     </script>
 
     <script type="application/json" data-sign3d-limits>
-    {% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_lc = o.category.value | strip | downcase %}{% if s3d_lc == "pricing_settings" %}{"lmin":{{ o.letter_height_min_cm.value | default: 0 }},"lmax":{{ o.letter_height_max_cm.value | default: 0 }},"wmin":{{ o.width_min_cm.value | default: 0 }},"wmax":{{ o.width_max_cm.value | default: 0 }}}{% break %}{% endif %}{% endfor %}
+    {% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_lc = o.category.value | strip | downcase %}{% if s3d_lc == "pricing_settings" %}{"lmin":{{ o.letter_height_min_cm.value | default: 0 }},"lmax":{{ o.letter_height_max_cm.value | default: 0 }},"wmin":{{ o.width_min_cm.value | default: 0 }},"wmax":{{ o.width_max_cm.value | default: 0 }},"cur":{{ o.currency_label.value | default: "" | strip | json }}}{% break %}{% endif %}{% endfor %}
     </script>
 
     <script type="application/json" data-sign3d-mountings>
@@ -260,11 +260,14 @@
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Mounting</span></label>
       <select data-mounting-select hidden></select>
       <div class="sign3d-configurator__card-grid" data-mounting-cards></div>
-      <div class="sign3d-configurator__backing-block" data-backing-colour-block hidden>
-        <p class="sign3d-configurator__subheading">Backing Panel Colour</p>
-        <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
-        <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
-        <div data-finish-wrap="backing" hidden><p class="sign3d-configurator__subheading">Backing Panel Material / Finish</p><div class="sign3d-configurator__finish-cards" data-finish-cards="backing"></div></div>
+      <div class="sign3d-configurator__backing-block" data-backing-colour-block>
+        <p class="sign3d-configurator__subheading">Backing Mount Colour</p>
+        <p class="sign3d-configurator__backing-note" data-backing-note hidden>Choose a backing mount option above (e.g. Raceway, Rectangle or Circle Backing Panel) to select its colour and material finish.</p>
+        <div class="sign3d-configurator__backing-lists" data-backing-lists>
+          <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
+          <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
+          <div data-finish-wrap="backing" hidden><p class="sign3d-configurator__subheading">Backing Mount Material / Finish</p><div class="sign3d-configurator__finish-cards" data-finish-cards="backing"></div></div>
+        </div>
       </div>
       <div class="sign3d-configurator__install-info" data-install-info hidden>
         <img class="sign3d-configurator__install-badge" data-install-badge alt="" width="64" height="64" hidden>

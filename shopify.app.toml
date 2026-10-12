@@ -571,6 +571,11 @@ name = "Icon"
 description = "category=addon only. Built-in icon for the add-on card (letters, led, power, plug, studs, screws, template, diagram, guide, waterproof, package, tools, star). Empty = picked automatically from the label. An uploaded Image always wins."
 type = "single_line_text_field"
 
+[metaobjects.app.sign3d_option.fields.currency_label]
+name = "Currency Label"
+description = "category=pricing_settings only. Shown after every price in the 3D configurator, e.g. AUD -> +$199.99 AUD. Empty = no label."
+type = "single_line_text_field"
+
 [metaobjects.app.sign3d_option.fields.letter_height_min_cm]
 name = "Letter Height Min (cm)"
 description = "category=pricing_settings only. Smallest letter/element height a customer may enter."
