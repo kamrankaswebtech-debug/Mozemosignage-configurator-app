@@ -571,6 +571,11 @@ name = "Icon"
 description = "category=addon only. Built-in icon for the add-on card (letters, led, power, plug, studs, screws, template, diagram, guide, waterproof, package, tools, star). Empty = picked automatically from the label. An uploaded Image always wins."
 type = "single_line_text_field"
 
+[metaobjects.app.sign3d_option.fields.content_bg_color]
+name = "Content Background Colour"
+description = "category=wallpaper only. Colour behind the options panel when this wallpaper is selected, as #rrggbb. Leave empty = picked automatically from the wallpaper."
+type = "single_line_text_field"
+
 [metaobjects.app.sign3d_option.fields.currency_label]
 name = "Currency Label"
 description = "category=pricing_settings only. Shown after every price in the 3D configurator, e.g. AUD -> +$199.99 AUD. Empty = no label."
@@ -774,6 +779,11 @@ type = "number_integer"
 [metaobjects.app.neon_background_image.fields.visibility]
 name = "Visibility"
 description = "Must be exactly one of: both, neon_only, 3d_only. Leave empty for both (default)."
+type = "single_line_text_field"
+
+[metaobjects.app.neon_background_image.fields.content_bg_color]
+name = "Content Background Colour"
+description = "Neon only. Colour behind the options panel when this wallpaper is selected, as #rrggbb. Leave empty = picked automatically from the wallpaper."
 type = "single_line_text_field"
 
 [metaobjects.app.neon_size_settings]

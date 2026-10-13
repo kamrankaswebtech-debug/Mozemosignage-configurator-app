@@ -2157,3 +2157,268 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* =====================================================================
+   Split wallpaper / content background (same look as the Neon configurator).
+   .moz-split (set in the Liquid) — the wallpaper fills only the preview
+   area; the strip behind the options panel is a solid colour matching the
+   wallpaper (--moz-content-bg: Admin "Content Background Colour" or picked
+   from the image by JS). The preview keeps its inline background-image
+   (JS sets background-size 0 0 so it isn't painted on the box itself) and
+   ::before paints it, sized to the area left of the panel
+   (--moz-content-strip, set by JS). With no wallpaper (.moz-no-wallpaper)
+   the original grid look is untouched.
+   ===================================================================== */
+.sign3d-configurator:not(.moz-no-wallpaper) {
+    background-color: var(--moz-content-bg, #0a0a0f);
+    transition: background-color 0.4s ease;
+}
+
+.sign3d-configurator:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split {
+    background-color: var(--moz-content-bg, #08081a);
+    transition: background-color 0.4s ease;
+}
+
+.sign3d-configurator:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: var(--moz-content-strip, calc(35% + 48px));
+    background-image: inherit;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Mobile: panel sits below the preview — wallpaper fills the whole preview,
+   the matching colour shows behind the panel underneath. */
+@media (max-width: 768px) {
+    .sign3d-configurator:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split::before {
+        right: 0;
+    }
+}
+
+/* =====================================================================
+   Sign centred in the visible wallpaper on every screen size (same as Neon).
+   The stage / thumbs / toolbar used to reserve a fixed "35% + 96px" for the
+   panel, but the real panel width varies with the screen. Now they use the
+   measured panel strip (--moz-content-strip, set by JS on the preview, also
+   when the wallpaper is off), with equal side padding, so the sign sits in
+   the middle of the area left of the panel. 72px each side leaves room for
+   the height line.
+   ===================================================================== */
+@media (min-width: 769px) {
+    .sign3d-configurator__preview.moz-split .sign3d-configurator__preview-stage {
+        padding-left: 72px;
+        padding-right: calc(var(--moz-content-strip, calc(35% + 48px)) + 72px);
+    }
+
+    .sign3d-configurator__preview.moz-split .sign3d-configurator__bg-thumbs,
+    .sign3d-configurator__preview.moz-split .sign3d-configurator__toolbar {
+        right: calc(var(--moz-content-strip, calc(35% + 48px)) + 16px);
+    }
+}
+
+/* =====================================================================
+   Material / Finish realism (client references) + full-strength colours
+   - Shine  (surface "chrome"): mirror-like face with sharp reflections,
+     polished chrome rim on the backing panel.
+   - Gloss  (surface "glossy"): deep glossy face with soft reflections,
+     polished edge in the panel's own colour.
+   - Matte  (surface "matte"): flat, fine-textured, no reflections.
+   Classes: surf-<surface> on the backing (JS) and on the preview inner
+   (front finish). Other surfaces keep their previous look.
+   ===================================================================== */
+
+/* ---- Exact front colour (no white mixed in). --sign3d-int = Colour Intensity (100% default) ---- */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__letter,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__letter,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__letter,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) var(--sign3d-int, 100%), #ffffff);
+}
+
+/* Plain colours: only a faint top sheen, so the colour stays fully saturated */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.face-standard .sign3d-configurator__letter::after {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 55%);
+}
+
+/* ---- Letter faces ---- */
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-chrome .sign3d-configurator__letter::after {
+    background-image: linear-gradient(172deg,
+        rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.28) 18%, rgba(255, 255, 255, 0) 30%,
+        rgba(0, 0, 0, 0) 44%, rgba(0, 0, 0, 0.22) 50%, rgba(255, 255, 255, 0.4) 55%,
+        rgba(255, 255, 255, 0.06) 64%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-glossy .sign3d-configurator__letter::after {
+    background-image: linear-gradient(180deg,
+        rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.18) 26%, rgba(255, 255, 255, 0) 44%,
+        rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.14) 100%);
+}
+
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-matte .sign3d-configurator__letter::after {
+    background-image: none;
+}
+
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-chrome .sign3d-configurator__preview-icon {
+    background-image: linear-gradient(172deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 32%, rgba(0, 0, 0, 0.2) 50%, rgba(255, 255, 255, 0.35) 56%, rgba(0, 0, 0, 0.25) 100%);
+}
+
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-glossy .sign3d-configurator__preview-icon {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.12) 100%);
+}
+
+.sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.surf-matte .sign3d-configurator__preview-icon {
+    background-image: none;
+}
+
+/* ---- Backing panel: SHINE — mirror face + polished chrome rim ---- */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-chrome {
+    box-sizing: border-box;
+    border: var(--s3d-rim, 6px) solid transparent;
+    background:
+        linear-gradient(118deg,
+            rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) 16%, rgba(255, 255, 255, 0.34) 21%,
+            rgba(255, 255, 255, 0.1) 27%, rgba(255, 255, 255, 0) 33%, rgba(255, 255, 255, 0) 58%,
+            rgba(255, 255, 255, 0.18) 64%, rgba(255, 255, 255, 0.04) 70%, rgba(255, 255, 255, 0) 76%) padding-box,
+        radial-gradient(70% 55% at 24% 20%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%) padding-box,
+        radial-gradient(60% 45% at 82% 88%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 70%) padding-box,
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.25)) padding-box,
+        linear-gradient(var(--sign3d-backing, #111111), var(--sign3d-backing, #111111)) padding-box,
+        conic-gradient(from 215deg, #fbfcfd, #9ca2aa 10%, #ffffff 20%, #50555c 31%, #eef1f4 43%, #80868e 55%, #ffffff 66%, #3f444b 78%, #e3e7eb 90%, #fbfcfd) border-box;
+    box-shadow:
+        0 22px 44px rgba(0, 0, 0, 0.5),
+        0 6px 14px rgba(0, 0, 0, 0.35),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+        inset 0 10px 22px rgba(255, 255, 255, 0.07),
+        inset 0 -14px 28px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Backing panel: GLOSS — deep glossy face + polished edge in the panel colour ---- */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-glossy {
+    box-sizing: border-box;
+    border: calc(var(--s3d-rim, 6px) * 0.55) solid transparent;
+    background:
+        linear-gradient(125deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) 10%, rgba(255, 255, 255, 0.2) 15%, rgba(255, 255, 255, 0.05) 24%, rgba(255, 255, 255, 0) 30%) padding-box,
+        linear-gradient(125deg, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, 0.12) 68%, rgba(255, 255, 255, 0) 78%) padding-box,
+        radial-gradient(65% 50% at 26% 22%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 70%) padding-box,
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.2)) padding-box,
+        linear-gradient(var(--sign3d-backing, #111111), var(--sign3d-backing, #111111)) padding-box,
+        conic-gradient(from 200deg,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 75%, #000000),
+            color-mix(in srgb, var(--sign3d-backing, #111111) 45%, #ffffff) 8%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 80%, #000000) 18%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 15%, #ffffff) 27%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 85%, #000000) 37%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 90%, #000000) 55%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 30%, #ffffff) 66%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 75%, #000000) 78%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 70%, #ffffff) 90%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 75%, #000000)) border-box;
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.48),
+        0 5px 12px rgba(0, 0, 0, 0.32),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+        inset 0 -12px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Backing panel: MATTE — flat, fine texture, no reflections ---- */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-matte {
+    box-sizing: border-box;
+    border: 0;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.055 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+        radial-gradient(90% 75% at 35% 25%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 70%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.16) 100%),
+        var(--sign3d-backing, #111111);
+    background-size: 180px 180px, auto, auto;
+    box-shadow:
+        0 18px 36px rgba(0, 0, 0, 0.45),
+        0 4px 10px rgba(0, 0, 0, 0.3),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ---- Colour swatches in the menu: true colour, only a light highlight ---- */
+.sign3d-configurator .sign3d-configurator__swatch.finish-gloss {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 42%);
+}
+
+.sign3d-configurator .sign3d-configurator__swatch.finish-metallic {
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 38%, rgba(0, 0, 0, 0.14) 100%);
+}
+
+.sign3d-configurator .sign3d-configurator__swatch.finish-brushed_metal {
+    background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0 1px, rgba(0, 0, 0, 0.08) 1px 2px), linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.12));
+}
+
+/* ---- Colour Intensity control (under Front Colour) ---- */
+.sign3d-configurator__intensity {
+    margin: 10px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #2c2c38;
+    border-radius: 10px;
+    background: #16161f;
+}
+
+.sign3d-configurator__intensity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.sign3d-configurator__intensity-head .sign3d-configurator__subheading {
+    margin: 0;
+}
+
+.sign3d-configurator__intensity-value {
+    font-size: 14px;
+    color: #ff2ec4;
+}
+
+.sign3d-configurator__intensity-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.sign3d-configurator__intensity-range {
+    flex: 1;
+    min-width: 0;
+    accent-color: #ff2ec4;
+    cursor: pointer;
+}
+
+.sign3d-configurator__intensity-full {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid #3a3a4a;
+    background: transparent;
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sign3d-configurator__intensity-full.is-selected {
+    border-color: #ff2ec4;
+    background: linear-gradient(135deg, rgba(255, 46, 196, 0.25), rgba(122, 0, 255, 0.2));
+}
+
+.sign3d-configurator__intensity-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #9a9aa8;
+}

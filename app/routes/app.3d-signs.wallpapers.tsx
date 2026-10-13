@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { ContentBgCell, ContentBgField, readContentBgColor } from "../components/content-bg-field";
 
 const CATEGORY = "wallpaper";
 
@@ -11,6 +12,7 @@ type WallpaperEntry = {
     label: string;
     imageUrl: string;
     sortOrder: string;
+    contentBgColor: string;
 };
 
 // Uploads a file to Shopify Files via the 3-step staged upload process,
@@ -99,6 +101,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 label: f.label || "",
                 imageUrl: f.image || "",
                 sortOrder: f.sort_order || "0",
+                contentBgColor: f.content_bg_color || "",
             };
         })
         .filter((item: any) => item.category === CATEGORY);
@@ -144,6 +147,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             { key: "label", value: label },
                             { key: "image", value: imageFileId },
                             { key: "sort_order", value: sortOrder },
+                            // Only sent when a custom colour is chosen — empty = auto.
+                            ...(readContentBgColor(formData) ? [{ key: "content_bg_color", value: readContentBgColor(formData) }] : []),
                         ],
                     },
                 },
@@ -165,6 +170,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "category", value: CATEGORY },
             { key: "label", value: label },
             { key: "sort_order", value: sortOrder },
+            // "" clears a previous custom colour, switching back to auto.
+            { key: "content_bg_color", value: readContentBgColor(formData) },
         ];
 
         if (imageFile && imageFile.size > 0) {
@@ -240,6 +247,7 @@ export default function Sign3dWallpapersPage() {
                         <input type="text" name="label" placeholder="Label (e.g. Store Front)" required />
                         <input type="file" name="image" accept="image/*" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={wallpapers.length + 1} />
+                        <ContentBgField initial="" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Wallpaper</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -252,6 +260,7 @@ export default function Sign3dWallpapersPage() {
                             <th style={{ padding: "8px" }}>Preview</th>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
+                            <th style={{ padding: "8px" }}>Content BG</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
                     </thead>
@@ -259,7 +268,7 @@ export default function Sign3dWallpapersPage() {
                         {wallpapers.map((w) => (
                             <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === w.id ? (
-                                    <td colSpan={4} style={{ padding: "8px" }}>
+                                    <td colSpan={5} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={w.id} />
@@ -268,6 +277,7 @@ export default function Sign3dWallpapersPage() {
                                                 <input type="file" name="image" accept="image/*" />
                                                 <span style={{ fontSize: "11px", color: "#888" }}>(leave empty to keep current image)</span>
                                                 <input type="number" name="sortOrder" defaultValue={w.sortOrder} />
+                                                <ContentBgField initial={w.contentBgColor} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -280,6 +290,7 @@ export default function Sign3dWallpapersPage() {
                                         </td>
                                         <td style={{ padding: "8px" }}>{w.label}</td>
                                         <td style={{ padding: "8px" }}>{w.sortOrder}</td>
+                                        <td style={{ padding: "8px" }}><ContentBgCell color={w.contentBgColor} /></td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">
                                                 <s-button variant="tertiary" onClick={() => setEditingId(w.id)}>Edit</s-button>

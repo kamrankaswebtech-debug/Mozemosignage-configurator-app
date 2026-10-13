@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { ContentBgCell, ContentBgField, readContentBgColor } from "../components/content-bg-field";
 
 type BgEntry = {
     id: string;
@@ -10,6 +11,7 @@ type BgEntry = {
     imageUrl: string;
     sortOrder: string;
     visibility: string;
+    contentBgColor: string;
 };
 
 async function uploadBgImage(admin: any, file: File): Promise<string> {
@@ -89,6 +91,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             imageUrl: f.image || "",
             sortOrder: f.sort_order || "0",
             visibility: f.visibility || "both",
+            contentBgColor: f.content_bg_color || "",
         };
     });
     images.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -133,6 +136,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             { key: "image", value: imageFileId },
                             { key: "sort_order", value: sortOrder },
                             { key: "visibility", value: String(formData.get("visibility") || "both") },
+                            // Only sent when a custom colour is chosen — empty = auto.
+                            ...(readContentBgColor(formData) ? [{ key: "content_bg_color", value: readContentBgColor(formData) }] : []),
                         ],
                     },
                 },
@@ -154,6 +159,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "label", value: label },
             { key: "sort_order", value: sortOrder },
             { key: "visibility", value: String(formData.get("visibility") || "both") },
+            // "" clears a previous custom colour, switching back to auto.
+            { key: "content_bg_color", value: readContentBgColor(formData) },
         ];
 
         if (imageFile && imageFile.size > 0) {
@@ -232,6 +239,7 @@ export default function BackgroundImagesPage() {
                             <option value="neon_only">Neon Only</option>
                             <option value="3d_only">3D Only</option>
                         </select>
+                        <ContentBgField initial="" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Image</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -244,6 +252,7 @@ export default function BackgroundImagesPage() {
                             <th style={{ padding: "8px" }}>Preview</th>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
+                            <th style={{ padding: "8px" }}>Content BG</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
                     </thead>
@@ -251,7 +260,7 @@ export default function BackgroundImagesPage() {
                         {images.map((img) => (
                             <tr key={img.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === img.id ? (
-                                    <td colSpan={4} style={{ padding: "8px" }}>
+                                    <td colSpan={5} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={img.id} />
@@ -265,6 +274,7 @@ export default function BackgroundImagesPage() {
                                                     <option value="neon_only">Neon Only</option>
                                                     <option value="3d_only">3D Only</option>
                                                 </select>
+                                                <ContentBgField initial={img.contentBgColor} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -277,6 +287,7 @@ export default function BackgroundImagesPage() {
                                         </td>
                                         <td style={{ padding: "8px" }}>{img.label}</td>
                                         <td style={{ padding: "8px" }}>{img.sortOrder}</td>
+                                        <td style={{ padding: "8px" }}><ContentBgCell color={img.contentBgColor} /></td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">
                                                 <s-button variant="tertiary" onClick={() => setEditingId(img.id)}>Edit</s-button>

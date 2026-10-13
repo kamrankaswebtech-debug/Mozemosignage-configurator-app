@@ -438,7 +438,7 @@ function sign3dFinishSurface(f) {
     const k = String((f && f.k) || '').trim().toLowerCase();
     if (['glossy', 'matte', 'chrome', 'matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
     const l = String((f && f.l) || '').toLowerCase();
-    if (/chrome|mirror/.test(l)) return 'chrome';
+    if (/chrome|mirror|shine/.test(l)) return 'chrome';
     if (/metal/.test(l)) return /gloss|polish|shiny/.test(l) ? 'gloss_metal' : 'matte_metal';
     if (/matt?e|satin|flat/.test(l)) return 'matte';
     if (/acrylic/.test(l)) return 'gloss_acrylic';
@@ -608,6 +608,9 @@ function sign3dHydrateOptions(root) {
             btn.type = 'button';
             btn.className = 'sign3d-configurator__bg-thumb' + (idx === 0 ? ' is-selected' : '');
             btn.dataset.bgUrl = o.w || o.i || '';
+            // Admin "Content Background Colour" (empty = auto from the image).
+            btn.dataset.contentBg = o.cb || '';
+            btn.dataset.sampleUrl = o.th || '';
             btn.title = o.l;
             btn.setAttribute('aria-label', o.l);
             const img = document.createElement('img');
@@ -942,22 +945,19 @@ function initSign3dConfigurator(root) {
         }
     }
 
-    function updateLogoPreviewSize(widthCm, heightCm) {
+    // Logo keeps its own proportions; its width follows the same size share as the wording
+    // (targetW from updatePreviewScale), limited by the free preview height.
+    function updateLogoPreviewSize(widthCm, heightCm, targetW) {
         if (!logoImg) return;
         const aspect = (logoImg.naturalWidth || 1) / (logoImg.naturalHeight || 1);
-        const innerW = (previewInner ? previewInner.clientWidth : 600) - 24;
-        const maxW = Math.max(120, Math.min(innerW, 640));
-        let maxH = Math.max(170, Math.min(280, window.innerHeight * 0.34));
-        if (currentMode === 'both') maxH *= 0.6; // leave room for the text below the logo
-
-        // Logo keeps its own proportions and is shown as large as the preview allows.
-        // Overall Width still nudges the size a little (0.65x .. 1x).
-        const factor = Math.min(1.6, Math.max(0.45, 1 + 0.45 * Math.log2(Math.max(widthCm || 100, 1) / 100)));
-        let w = maxW;
+        const area = previewFreeArea();
+        let maxH = area.h * 0.95;
+        if (currentMode === 'both') maxH *= 0.55; // leave room for the text below the logo
+        let w = Math.max(100, targetW || area.w * 0.7);
         let h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
-        logoImg.style.width = Math.round(w * factor) + 'px';
-        logoImg.style.height = Math.round(h * factor) + 'px';
+        logoImg.style.width = Math.round(w) + 'px';
+        logoImg.style.height = Math.round(h) + 'px';
         logoImg.style.objectFit = 'contain';
         // Manual placement is off, so always start from a clean scale/offset (zoom is driven by Overall Width now).
         if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) { logoScale = 1; logoOffsetX = 0; logoOffsetY = 0; }
@@ -1224,6 +1224,7 @@ function initSign3dConfigurator(root) {
 
         rows.push(['Lighting', d.illuminationLabel]);
         rows.push(['Front Colour', d.colourName + ' (' + d.colourGroupLabel + ')']);
+        rows.push(['Colour Intensity', colourIntensity + '%']);
         rows.push(['Side Colour', d.sideColourName]);
         rows.push(['Material', d.materialLabel]);
 
@@ -1276,6 +1277,8 @@ function initSign3dConfigurator(root) {
     let selectedBackName = defaultBackSwatch ? defaultBackSwatch.dataset.colourName : '';
     let selectedBackGroup = defaultBackSwatch ? (defaultBackSwatch.dataset.colourGroup || 'standard') : 'standard';
     let currentTotal = 0;
+    // Front colour intensity (%): 100 = the exact colour at full saturation; lower = softer / lighter.
+    let colourIntensity = 100;
 
     function applyLetterTransform(span, i) {
         const off = letterOffsets[i] || { x: 0, y: 0 };
@@ -1488,6 +1491,7 @@ function initSign3dConfigurator(root) {
             backHex: selectedBackHex,
             backName: selectedBackName,
             backGroup: selectedBackGroup,
+            intensity: colourIntensity,
             symbols: selectedSymbols.map((s) => ({ url: s.url, label: s.label })),
             align: selectedAlignBtn ? selectedAlignBtn.dataset.align : 'center',
             letterOffsets: letterOffsets.map((o) => ({ x: o.x, y: o.y })),
@@ -1537,6 +1541,7 @@ function initSign3dConfigurator(root) {
         selectedColourGroup = state.colourGroup || 'standard';
         applySideState(state);
         applyBackState(state);
+        if (state.intensity !== undefined) setColourIntensity(state.intensity);
         updatePreviewColour();
 
         selectedSymbols = state.symbols.map((s) => ({ url: s.url, label: s.label }));
@@ -1553,6 +1558,7 @@ function initSign3dConfigurator(root) {
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
         const value = state.text.trim() || (currentMode === 'both' ? '' : 'Your Brand');
         rebuildLetterDOM(value);
+        updatePreviewScale();
 
         calculateTotal();
     }
@@ -1587,6 +1593,7 @@ function initSign3dConfigurator(root) {
         selectedColourGroup = defaultSwatch.dataset.colourGroup || 'standard';
         resetSideColour();
         resetBackColour();
+        setColourIntensity(100);
         clearCustomColourInputs();
         updatePreviewColour();
         calculateTotal();
@@ -1618,7 +1625,8 @@ function initSign3dConfigurator(root) {
 
     function updatePreviewText() {
         renderLetters();
-        updateDimensionLines();
+        // Wording length changes the letter size (overall width stays the same).
+        updatePreviewScale();
     }
 
     function updatePreviewColour() {
@@ -1635,41 +1643,116 @@ function initSign3dConfigurator(root) {
     function updatePreviewFont() {
         if (fontSelect && textFlex) textFlex.style.fontFamily = fontSelect.value;
         if (fontSelect && fontSelect._sign3dSync) fontSelect._sign3dSync();
-        updateDimensionLines();
+        updatePreviewScale();
+        // Web fonts load async: re-measure once the chosen font is ready.
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => updatePreviewScale());
+    }
+
+    // ---- Preview size: large by default and clearly growing / shrinking with the size ----
+    // The sign fills a share of the free preview area that follows the Overall Width on a
+    // log scale between the Admin min and max width: smallest size = SIZE_MIN_FILL of the
+    // free width, largest = SIZE_MAX_FILL. Letter Height nudges it a little. Measured from
+    // the real preview, so it fits every screen. Visual only — order data and pricing
+    // still use the cm values.
+    let sizeFontSize = baseFontSize;
+    const SIZE_MIN_FILL = 0.5;
+    const SIZE_MAX_FILL = 0.94;
+
+    // Overall width range in cm: Admin Pricing Settings, else the size slider's range.
+    function previewWidthRangeCm() {
+        let min = sizeLimits.wmin;
+        let max = sizeLimits.wmax;
+        const slider = root.querySelector('[data-custom-size-slider]');
+        if ((!min || !max) && slider) {
+            const f = UNIT_FACTORS[slider.dataset.unit || 'cm'] || 1;
+            if (!min) min = (parseFloat(slider.min) || 0) * f;
+            if (!max) max = (parseFloat(slider.max) || 0) * f;
+        }
+        min = min > 0 ? min : 30;
+        max = max > min ? max : Math.max(min * 10, 500);
+        return { min, max };
+    }
+
+    // 0..1 position of value between min and max (log scale, so small sizes still differ visibly).
+    function rangePos(value, min, max) {
+        if (!(max > min) || !(value > 0)) return 0.5;
+        return Math.min(1, Math.max(0, Math.log(value / min) / Math.log(max / min)));
+    }
+
+    function previewFillShare() {
+        const wr = previewWidthRangeCm();
+        let share = SIZE_MIN_FILL + (SIZE_MAX_FILL - SIZE_MIN_FILL) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
+        const lmin = parseFloat(letterHeightInput && letterHeightInput.dataset.minCm);
+        const lmax = parseFloat(letterHeightInput && letterHeightInput.dataset.maxCm);
+        if (lmin > 0 && lmax > lmin) share *= 0.92 + 0.16 * rangePos(getHeightCm() || lmin, lmin, lmax);
+        return Math.min(SIZE_MAX_FILL, share);
+    }
+
+    // Free area for the sign (px): the inner width, and a height that keeps the sign clear
+    // of the toggles at the top and the wallpaper thumbnails at the bottom.
+    function previewFreeArea() {
+        const boxH = previewBox ? previewBox.clientHeight : 520;
+        return {
+            w: Math.max(160, previewInner ? previewInner.clientWidth : 600),
+            h: Math.max(140, boxH - 250),
+            boxH
+        };
+    }
+
+    function applyFittedFontSize() {
+        baseFontSize = Math.max(12, sizeFontSize);
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+    }
+
+    // Screen / preview area resized: resize the sign to the new area (no price or option changes).
+    let lastFitWidth = 0;
+    function refitToStage() {
+        if (!previewStage) return;
+        const w = previewStage.clientWidth;
+        if (!w || w === lastFitWidth) return;
+        lastFitWidth = w;
+        updatePreviewScale();
+    }
+
+    if (previewStage && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(refitToStage).observe(previewStage);
     }
 
     function updatePreviewScale() {
         const widthCm = getWidthCm() || 100;
         const heightCm = getHeightCm() || 25;
 
-        // Font size now driven directly by the actual Letter Height the customer enters —
-        // more accurate than the old width-based guess, and reacts live as they type.
-        const heightBasedSize = Math.min(160, Math.max(16, heightCm * 2.2));
-        // Overall Width zoom: 100 cm = normal size, wider = zoom in, narrower = zoom out.
-        let widthZoom = Math.min(2, Math.max(0.55, 1 + 0.45 * Math.log2(Math.max(widthCm, 1) / 100)));
-        if (widthZoom > 1 && textFlex && previewInner && hasText()) {
-            // Zoom in only as far as the text still fits on one line inside the preview.
+        const area = previewFreeArea();
+        let targetW = area.w * previewFillShare();
+        // A round backing panel is as tall as the sign is wide: keep the whole circle in view.
+        if (getBackingType() === 'circle') targetW = Math.min(targetW, Math.max(140, area.boxH - 130) / 1.18);
+
+        let fontSize = baseFontSize;
+        if (textFlex && hasText()) {
+            // Measure the wording on one line at a reference size, then scale it to the target width.
+            const REF = 100;
             const prevWidth = textFlex.style.width;
             const prevWrap = textFlex.style.flexWrap;
-            textFlex.style.fontSize = (heightBasedSize * groupScale) + 'px';
+            textFlex.style.fontSize = REF + 'px';
             textFlex.style.width = 'max-content';
             textFlex.style.flexWrap = 'nowrap';
             const naturalWidth = textFlex.getBoundingClientRect().width;
             textFlex.style.width = prevWidth;
             textFlex.style.flexWrap = prevWrap;
             const iconsW = (iconsContainer && (currentSymbolPosition === 'left' || currentSymbolPosition === 'right')) ? iconsContainer.offsetWidth + 12 : 0;
-            const availableWidth = previewInner.clientWidth - iconsW - 8;
-            if (naturalWidth > 0 && availableWidth > 0) widthZoom = Math.max(1, Math.min(widthZoom, availableWidth / naturalWidth));
+            const textTargetW = Math.max(40, targetW - iconsW);
+            if (naturalWidth > 0) fontSize = REF * textTargetW / naturalWidth;
+            fontSize = Math.min(fontSize, area.h * (currentMode === 'both' ? 0.42 : 0.75));
         }
-        baseFontSize = Math.min(240, Math.max(12, heightBasedSize * widthZoom));
-        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+        sizeFontSize = Math.max(12, fontSize);
+        applyFittedFontSize();
 
         if (widthLabel) widthLabel.textContent = formatDim(widthCm);
         if (oversizedNoticeEl) oversizedNoticeEl.hidden = widthCm <= 200;
         if (heightLabel) heightLabel.textContent = formatDim(heightCm);
         syncLetterHeightSlider();
 
-        updateLogoPreviewSize(widthCm, heightCm);
+        updateLogoPreviewSize(widthCm, heightCm, targetW);
         updateMountingInfo();
         updateDimensionLines();
     }
@@ -1773,6 +1856,7 @@ function initSign3dConfigurator(root) {
             if (!radio.checked) return;
             currentSymbolPosition = radio.value;
             updateSymbolPositionClass();
+            updatePreviewScale();
         });
     });
 
@@ -1999,6 +2083,7 @@ function initSign3dConfigurator(root) {
                 btn.classList.add('is-selected');
             }
             renderIcons();
+            updatePreviewScale();
             pushHistory();
         });
     });
@@ -2013,7 +2098,9 @@ function initSign3dConfigurator(root) {
             // the wallpaper stopped appearing after the JSON/JS refactor removed the old
             // server-rendered inline style that used to guarantee it on first paint.
             previewBox.style.setProperty('background-image', "url('" + selectedBgUrl + "')", 'important');
-            previewBox.style.setProperty('background-size', 'cover', 'important');
+            // 0 0 = not painted on the box itself: .moz-split::before (CSS) paints it "cover"
+            // inside the preview area only, leaving the panel strip for the content colour.
+            previewBox.style.setProperty('background-size', previewBox.classList.contains('moz-split') ? '0 0' : 'cover', 'important');
             previewBox.style.setProperty('background-position', 'center', 'important');
             previewBox.style.setProperty('background-repeat', 'no-repeat', 'important');
         } else {
@@ -2022,6 +2109,8 @@ function initSign3dConfigurator(root) {
             previewBox.style.removeProperty('background-position');
             previewBox.style.removeProperty('background-repeat');
         }
+        // No wallpaper (Off / none uploaded): original grid look + dark strip behind the panel.
+        root.classList.toggle('moz-no-wallpaper', !(selectedBgUrl && !wallpaperHidden));
     }
 
     bgThumbs.forEach((thumb) => {
@@ -2030,8 +2119,92 @@ function initSign3dConfigurator(root) {
             thumb.classList.add('is-selected');
             selectedBgUrl = thumb.dataset.bgUrl;
             applyWallpaperBackground();
+            applyContentBgFor(thumb);
         });
     });
+
+    // ---- Content background (same look as the Neon configurator) ----
+    // Desktop: the wallpaper fills only the preview area (left); the strip behind the options
+    // panel gets a solid colour matching the wallpaper. Colour = Admin "Content Background
+    // Colour" for that wallpaper, else picked automatically from the image's right-hand side
+    // (the side that meets the panel).
+    const contentBgCache = {};
+    let contentBgRequest = 0;
+
+    function setContentBg(colour) {
+        if (colour) root.style.setProperty('--moz-content-bg', colour);
+    }
+
+    function sampleWallpaperColour(url) {
+        return new Promise((resolve) => {
+            if (!url) return resolve(null);
+            if (contentBgCache[url]) return resolve(contentBgCache[url]);
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const w = 48;
+                    const h = Math.max(1, Math.round(w * (img.naturalHeight / img.naturalWidth || 0.75)));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const startX = Math.floor(w * 0.66);
+                    const data = ctx.getImageData(startX, 0, w - startX, h).data;
+                    let r = 0, g = 0, b = 0, n = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] < 128) continue;
+                        r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+                    }
+                    if (!n) return resolve(null);
+                    const colour = 'rgb(' + Math.round(r / n) + ', ' + Math.round(g / n) + ', ' + Math.round(b / n) + ')';
+                    contentBgCache[url] = colour;
+                    resolve(colour);
+                } catch (err) {
+                    // Cross-origin/tainted canvas: keep the current colour.
+                    resolve(null);
+                }
+            };
+            img.onerror = () => resolve(null);
+            img.src = url;
+        });
+    }
+
+    // thumb = a wallpaper button; null = the server-rendered default (no thumbs built).
+    function applyContentBgFor(thumb) {
+        const requestId = ++contentBgRequest;
+        const manual = thumb ? (thumb.dataset.contentBg || '').trim() : '';
+        if (manual) {
+            setContentBg(manual);
+            return;
+        }
+        const url = thumb ? (thumb.dataset.sampleUrl || thumb.dataset.bgUrl) : selectedBgUrl;
+        sampleWallpaperColour(url).then((colour) => {
+            // Ignore a slow result if the customer already picked another wallpaper.
+            if (requestId === contentBgRequest) setContentBg(colour);
+        });
+    }
+
+    // Strip width = from just left of the panel to the preview's right edge (preview is 100vw).
+    function updateContentStrip() {
+        if (!previewBox) return;
+        const panel = root.querySelector('.sign3d-configurator__panel');
+        if (!panel || window.innerWidth <= 768) {
+            previewBox.style.removeProperty('--moz-content-strip');
+            return;
+        }
+        const previewRect = previewBox.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const strip = Math.max(0, Math.round(previewRect.right - panelRect.left + 24));
+        previewBox.style.setProperty('--moz-content-strip', strip + 'px');
+    }
+
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(updateContentStrip).observe(root);
+    } else {
+        window.addEventListener('resize', updateContentStrip);
+    }
 
     if (wallpaperToggle) {
         wallpaperToggle.addEventListener('change', () => {
@@ -2307,6 +2480,7 @@ function initSign3dConfigurator(root) {
                 // Blueprint PDF reads "Material" — it now carries the Front / Side / Backing finish summary.
                 'Material': materialSelect ? getSelectedOptionText(materialSelect, 'Standard') : (finishSummaryText() || 'Standard'),
                 'Front Colour': colourNameLabel ? colourNameLabel.textContent.trim() : 'Default',
+                'Colour Intensity': colourIntensity + '%',
                 'Side Colour': (selectedSideName || 'Default') + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
                 'Finish': sign3dPrettyGroup(selectedColourGroup),
                 'Mounting': getSelectedOptionText(mountingSelect, 'Standard'),
@@ -2570,7 +2744,8 @@ function initSign3dConfigurator(root) {
             w = contentRect.width * 1.06;
             h = Math.max(10, Math.min(30, contentRect.height * 0.16));
         } else if (type === 'circle') {
-            const d = Math.hypot(contentRect.width, contentRect.height) + 28;
+            // Comfortable margin around the wording, like a real round panel.
+            const d = Math.hypot(contentRect.width, contentRect.height) * 1.1 + 24;
             w = d;
             h = d;
         } else {
@@ -2587,8 +2762,11 @@ function initSign3dConfigurator(root) {
         const group = backFinish
             ? sign3dSurfaceToGroup(sign3dFinishSurface(backFinish))
             : (selectedBackGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedBackGroup));
-        backingEl.className = 'sign3d-configurator__backing is-' + type + ' finish-' + group;
+        backingEl.className = 'sign3d-configurator__backing is-' + type + ' finish-' + group
+            + (backFinish ? ' surf-' + sign3dFinishSurface(backFinish) : '');
         backingEl.style.setProperty('--sign3d-backing', selectedBackHex);
+        // Polished rim thickness follows the panel size (Shine / Gloss edge).
+        backingEl.style.setProperty('--s3d-rim', Math.max(2, Math.min(14, Math.min(w, h) * 0.022)).toFixed(1) + 'px');
         backingEl.hidden = false;
     }
 
@@ -2675,8 +2853,8 @@ function initSign3dConfigurator(root) {
 
     if (mountingSelect) {
         mountingSelect.addEventListener('change', () => {
-            updateMountingInfo();
-            updateDimensionLines();
+            // Re-fit the sign too (a round backing panel limits how wide it can be shown).
+            updatePreviewScale();
         });
     }
 
@@ -2848,7 +3026,7 @@ function initSign3dConfigurator(root) {
                 + ' drop-shadow(0 0 46px ' + sign3dRgba(light, 0.3) + ')';
         }
         if (key === 'fully_illuminated') {
-            return 'brightness(1.3) saturate(0.85) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'lit')
+            return 'brightness(1.12) saturate(1.05) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'lit')
                 + ' drop-shadow(0 0 12px ' + sign3dRgba(light, 0.6) + ')'
                 + ' drop-shadow(0 0 30px ' + sign3dRgba(light, 0.4) + ')'
                 + ' drop-shadow(0 0 56px ' + sign3dRgba(light, 0.25) + ')';
@@ -2893,11 +3071,16 @@ function initSign3dConfigurator(root) {
         Array.from(previewInnerForLed.classList)
             .filter((c) => c.indexOf('face-') === 0)
             .forEach((c) => previewInnerForLed.classList.remove(c));
+        Array.from(previewInnerForLed.classList)
+            .filter((c) => c.indexOf('surf-') === 0)
+            .forEach((c) => previewInnerForLed.classList.remove(c));
         const frontFinish = activeFinish('front');
         const group = frontFinish
             ? sign3dSurfaceToGroup(sign3dFinishSurface(frontFinish))
             : (selectedColourGroup === 'custom' ? 'standard' : sign3dNormalizeGroup(selectedColourGroup));
         previewInnerForLed.classList.add('face-' + group);
+        // Exact surface (Shine / Gloss / Matte ...) for the realistic letter-face rendering.
+        if (frontFinish) previewInnerForLed.classList.add('surf-' + sign3dFinishSurface(frontFinish));
     }
 
     // ---- Material / Finish cards ----
@@ -3049,6 +3232,43 @@ function initSign3dConfigurator(root) {
         syncLetterHeightSlider();
     }
 
+    // ---- Colour Intensity (Front colour): 100% = exact colour, full saturation (default) ----
+    let intensityUi = null;
+    function setColourIntensity(value) {
+        colourIntensity = Math.min(100, Math.max(50, Math.round(Number(value) || 100)));
+        if (previewInnerForLed) previewInnerForLed.style.setProperty('--sign3d-int', colourIntensity + '%');
+        if (intensityUi) {
+            intensityUi.range.value = colourIntensity;
+            intensityUi.value.textContent = colourIntensity + '%';
+            intensityUi.full.classList.toggle('is-selected', colourIntensity === 100);
+        }
+    }
+
+    function initColourIntensity() {
+        const anchor = root.querySelector('[data-finish-wrap="front"]');
+        if (anchor) {
+            const box = document.createElement('div');
+            box.className = 'sign3d-configurator__intensity';
+            box.innerHTML = '<div class="sign3d-configurator__intensity-head">'
+                + '<span class="sign3d-configurator__subheading">Colour Intensity</span>'
+                + '<strong class="sign3d-configurator__intensity-value"></strong></div>'
+                + '<div class="sign3d-configurator__intensity-row">'
+                + '<input type="range" min="50" max="100" step="5" class="sign3d-configurator__intensity-range" aria-label="Colour intensity">'
+                + '<button type="button" class="sign3d-configurator__intensity-full">100%</button></div>'
+                + '<p class="sign3d-configurator__intensity-hint">100% shows your colour exactly, at full strength. Lower values give a softer, lighter tone.</p>';
+            anchor.insertAdjacentElement('beforebegin', box);
+            intensityUi = {
+                range: box.querySelector('input'),
+                value: box.querySelector('.sign3d-configurator__intensity-value'),
+                full: box.querySelector('button')
+            };
+            intensityUi.range.addEventListener('input', () => setColourIntensity(intensityUi.range.value));
+            intensityUi.range.addEventListener('change', () => pushHistory());
+            intensityUi.full.addEventListener('click', () => { setColourIntensity(100); pushHistory(); });
+        }
+        setColourIntensity(colourIntensity);
+    }
+
     // Side colour
     function resetSideColour() {
         if (!sideSwatches.length) return;
@@ -3103,6 +3323,8 @@ function initSign3dConfigurator(root) {
     updateIlluminationEffect();
     updateDepthVisual();
     applyWallpaperBackground();
+    applyContentBgFor(bgThumbs.length ? bgThumbs[0] : null);
+    updateContentStrip();
     calculateTotal();
     pushHistory();
     updateUndoRedoButtons();
@@ -3117,6 +3339,7 @@ function initSign3dConfigurator(root) {
     calculateTotal();
     buildPowerOptions();
     initCustomColourBoxes();
+    initColourIntensity();
     updateMountingInfo();
     updateMetalNote();
     renumberSteps();

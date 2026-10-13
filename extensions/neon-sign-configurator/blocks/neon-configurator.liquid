@@ -5,6 +5,8 @@
 {% endfor %}
 
 {% assign default_bg_url = metaobjects["app--418838118401--neon_background_image"].values.first.image.value | image_url %}
+{% comment %} Admin "Content Background Colour" of the default wallpaper — set up front so there's no colour flash; empty = JS picks it from the image. {% endcomment %}
+{% assign default_content_bg = metaobjects["app--418838118401--neon_background_image"].values.first.content_bg_color.value | strip %}
 
 
 
@@ -24,7 +26,7 @@
   {% endif %}
 {% endfor %}
 
-<div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}" data-auto-header-offset="{{ block.settings.auto_header_offset }}" style="--moz-header-offset: {{ block.settings.header_offset | default: 90 }}px; --moz-preview-height: {{ block.settings.preview_height | default: 100 }}vh; --moz-wallpaper-position: {{ block.settings.wallpaper_position | default: 'center center' }};">
+<div class="neon-configurator" id="neon-configurator-{{ block.id }}" data-block-id="{{ block.id }}" data-auto-header-offset="{{ block.settings.auto_header_offset }}" style="--moz-header-offset: {{ block.settings.header_offset | default: 90 }}px; --moz-preview-height: {{ block.settings.preview_height | default: 100 }}vh; --moz-wallpaper-position: {{ block.settings.wallpaper_position | default: 'center center' }};{% if default_content_bg != blank %} --moz-content-bg: {{ default_content_bg | escape }};{% endif %}">
 
 
 
@@ -32,7 +34,7 @@
     <defs data-backboard-defs></defs>
   </svg>
 
-  <div class="neon-configurator__preview" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
+  <div class="neon-configurator__preview moz-split" data-preview-box{% if default_bg_url %} style="background-image: url('{{ default_bg_url }}');"{% endif %}>
     <div class="neon-configurator__toggle-group">
       <div class="neon-configurator__toggle-row">
         <label class="neon-configurator__switch">
@@ -99,7 +101,7 @@
     {% if bg_images.size > 0 %}
       <div class="neon-configurator__bg-thumbs" data-bg-thumbs>
         {% for bg in bg_images %}
-          <button type="button" class="neon-configurator__bg-thumb{% if forloop.first %} is-selected{% endif %}" data-bg-url="{{ bg.image.value | image_url }}" title="{{ bg.label.value }}" aria-label="{{ bg.label.value }}">
+          <button type="button" class="neon-configurator__bg-thumb{% if forloop.first %} is-selected{% endif %}" data-bg-url="{{ bg.image.value | image_url }}" data-content-bg="{{ bg.content_bg_color.value | strip | escape }}" title="{{ bg.label.value }}" aria-label="{{ bg.label.value }}">
             <img src="{{ bg.image.value | image_url: width: 120 }}" alt="{{ bg.label.value }}" width="60" height="45" loading="lazy">
           </button>
         {% endfor %}

@@ -3,6 +3,7 @@
 
 {% comment %} Default wallpaper fallback (trimmed + downcased category match). {% endcomment %}
 {% assign sign3d_default_bg_url = "" %}
+{% assign sign3d_default_content_bg = "" %}
 {% assign sign3d_bg_min_sort = 1000000 %}
 {% for o in metaobjects["app--418838118401--sign3d_option"].values %}
   {% assign sign3d_cat_norm = o.category.value | strip | downcase %}
@@ -11,6 +12,8 @@
     {% if sign3d_o_sort < sign3d_bg_min_sort %}
       {% assign sign3d_bg_min_sort = sign3d_o_sort %}
       {% assign sign3d_default_bg_url = o.image.value | image_url %}
+      {% comment %} Admin "Content Background Colour" of the default wallpaper (no colour flash); empty = JS picks it from the image. {% endcomment %}
+      {% assign sign3d_default_content_bg = o.content_bg_color.value | strip %}
     {% endif %}
   {% endif %}
 {% endfor %}
@@ -25,9 +28,9 @@
   {% if s3d_u_so < s3d_ud_min %}{% assign s3d_ud_min = s3d_u_so %}{% assign s3d_default_unit = u %}{% endif %}
 {% endfor %}
 
-<div class="sign3d-configurator" id="sign3d-configurator-{{ block.id }}" data-block-id="{{ block.id }}">
+<div class="sign3d-configurator{% if sign3d_default_bg_url == blank %} moz-no-wallpaper{% endif %}" id="sign3d-configurator-{{ block.id }}" data-block-id="{{ block.id }}"{% if sign3d_default_content_bg != blank %} style="--moz-content-bg: {{ sign3d_default_content_bg | escape }};"{% endif %}>
 
-  <div class="sign3d-configurator__preview" data-preview-box data-default-bg="{{ sign3d_default_bg_url }}"{% if sign3d_default_bg_url != blank %} style="background-image: url('{{ sign3d_default_bg_url }}'); background-size: cover; background-position: center;"{% endif %}>
+  <div class="sign3d-configurator__preview moz-split" data-preview-box data-default-bg="{{ sign3d_default_bg_url }}"{% if sign3d_default_bg_url != blank %} style="background-image: url('{{ sign3d_default_bg_url }}'); background-size: 0 0; background-position: center;"{% endif %}>
     <div class="sign3d-configurator__preview-badge">
       <p class="sign3d-configurator__preview-badge-title">VISUAL ESTIMATE</p>
       <p class="sign3d-configurator__preview-badge-sub">Mock-up for visual estimate only. Final professional artwork supplied for approval before manufacturing.</p>
@@ -87,7 +90,7 @@
     </script>
 
     <script type="application/json" data-sign3d-wallpapers>
-    [{% assign s3d_w_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}{% endif %}{% endfor %}]
+    [{% assign s3d_w_first = true %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }},"cb":{{ o.content_bg_color.value | default: "" | strip | json }}}{% endif %}{% endfor %}]
     </script>
 
     <script type="application/json" data-sign3d-finishes>

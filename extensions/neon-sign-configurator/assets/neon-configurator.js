@@ -1347,6 +1347,47 @@ function initConfigurator(root) {
         });
     });
 
+    // ---- Fit the sign to the screen ----
+    // sizeFontSize = font size from the chosen sign size (unchanged rule). It's designed for a
+    // ~640px-wide sign area; on smaller screens / narrower preview areas the sign shrinks in
+    // proportion (never below half), so it always sits nicely centred in the visible wallpaper
+    // instead of crowding the panel. Visual only — order data uses the cm values.
+    let sizeFontSize = baseFontSize;
+    const FIT_REFERENCE_WIDTH = 640;
+
+    function stageFitFactor() {
+        if (!previewStage) return 1;
+        const cs = getComputedStyle(previewStage);
+        const availW = previewStage.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        if (!(availW > 0)) return 1;
+        return Math.min(1, Math.max(0.5, availW / FIT_REFERENCE_WIDTH));
+    }
+
+    function applyFittedFontSize() {
+        baseFontSize = Math.max(18, sizeFontSize * stageFitFactor());
+        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+    }
+
+    // Screen / preview area resized: refit only (no size, price or option changes).
+    let lastFitWidth = 0;
+    function refitToStage() {
+        if (!previewStage) return;
+        const w = previewStage.clientWidth;
+        if (!w || w === lastFitWidth) return;
+        lastFitWidth = w;
+        const before = baseFontSize;
+        applyFittedFontSize();
+        if (baseFontSize === before) return;
+        syncShapeSourceStyle();
+        updateIconSize();
+        updateBackboardPanel();
+        updateDimensionLines();
+    }
+
+    if (previewStage && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(refitToStage).observe(previewStage);
+    }
+
     function updatePreviewScale() {
         // The selected size card (via the hidden size select) is the only size source.
         // Sizes are stored in cm; currentUnit only changes how they are displayed.
@@ -1358,8 +1399,8 @@ function initConfigurator(root) {
         // sizes (e.g. 40cm) readable in the preview — the client flagged 40cm text as too
         // tiny to read — while still growing sensibly for large signs without the text
         // becoming huge relative to the fixed-size preview stage.
-        baseFontSize = Math.min(130, Math.max(34, Math.sqrt(widthValue) * 6.3));
-        if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
+        sizeFontSize = Math.min(130, Math.max(34, Math.sqrt(widthValue) * 6.3));
+        applyFittedFontSize();
         syncShapeSourceStyle();
         updateIconSize();
 
@@ -1556,6 +1597,8 @@ function initConfigurator(root) {
         if (!previewBox) return;
         const isOn = !wallpaperToggle || wallpaperToggle.checked;
         previewBox.classList.toggle('no-wallpaper', !isOn);
+        // Content strip goes back to the dark default while the wallpaper is off.
+        root.classList.toggle('moz-no-wallpaper', !isOn);
         if (wallpaperLabel) wallpaperLabel.textContent = isOn ? 'Wallpaper On' : 'Wallpaper Off';
     }
 
@@ -1831,8 +1874,93 @@ function initConfigurator(root) {
             if (previewBox) {
                 previewBox.style.backgroundImage = "url('" + thumb.dataset.bgUrl + "')";
             }
+            applyContentBgFor(thumb);
         });
     });
+
+    // ---- Content background (reference-site look) ----
+    // Desktop: the wallpaper fills only the preview area (left); the strip behind the options
+    // panel gets a solid colour matching the wallpaper. Colour = Admin "Content Background
+    // Colour" for that wallpaper, else picked automatically from the image's right-hand side
+    // (the side that meets the panel). The image is drawn by .moz-split::before (CSS), which
+    // inherits the preview's inline background-image, so the existing thumb/toggle code is unchanged.
+    const contentBgCache = {};
+    let contentBgRequest = 0;
+
+    function setContentBg(colour) {
+        if (colour) root.style.setProperty('--moz-content-bg', colour);
+    }
+
+    function sampleWallpaperColour(url) {
+        return new Promise((resolve) => {
+            if (!url) return resolve(null);
+            if (contentBgCache[url]) return resolve(contentBgCache[url]);
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const w = 48;
+                    const h = Math.max(1, Math.round(w * (img.naturalHeight / img.naturalWidth || 0.75)));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const startX = Math.floor(w * 0.66);
+                    const data = ctx.getImageData(startX, 0, w - startX, h).data;
+                    let r = 0, g = 0, b = 0, n = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] < 128) continue;
+                        r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+                    }
+                    if (!n) return resolve(null);
+                    const colour = 'rgb(' + Math.round(r / n) + ', ' + Math.round(g / n) + ', ' + Math.round(b / n) + ')';
+                    contentBgCache[url] = colour;
+                    resolve(colour);
+                } catch (err) {
+                    // Cross-origin/tainted canvas: keep the current colour.
+                    resolve(null);
+                }
+            };
+            img.onerror = () => resolve(null);
+            // A small rendition is plenty for an average colour.
+            img.src = url + (url.indexOf('?') > -1 ? '&' : '?') + 'width=96';
+        });
+    }
+
+    function applyContentBgFor(thumb) {
+        if (!thumb) return;
+        const requestId = ++contentBgRequest;
+        const manual = (thumb.dataset.contentBg || '').trim();
+        if (manual) {
+            setContentBg(manual);
+            return;
+        }
+        sampleWallpaperColour(thumb.dataset.bgUrl).then((colour) => {
+            // Ignore a slow result if the customer already picked another wallpaper.
+            if (requestId === contentBgRequest) setContentBg(colour);
+        });
+    }
+
+    // Strip width = from just left of the panel to the preview's right edge (preview is 100vw).
+    function updateContentStrip() {
+        if (!previewBox) return;
+        const panel = root.querySelector('.neon-configurator__panel');
+        if (!panel || window.innerWidth <= 768) {
+            previewBox.style.removeProperty('--moz-content-strip');
+            return;
+        }
+        const previewRect = previewBox.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const strip = Math.max(0, Math.round(previewRect.right - panelRect.left + 24));
+        previewBox.style.setProperty('--moz-content-strip', strip + 'px');
+    }
+
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(updateContentStrip).observe(root);
+    } else {
+        window.addEventListener('resize', updateContentStrip);
+    }
 
     symbolButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -2042,6 +2170,8 @@ function initConfigurator(root) {
 
     // Initial render
     applyDefaultBackground();
+    applyContentBgFor(bgThumbs[0]);
+    updateContentStrip();
     updatePreviewText();
     updatePreviewFont();
     updatePreviewColour();

@@ -91,19 +91,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 .neon-configurator__text-wrap {
     /* CSS Grid stacking: shape-source and text-flex share the SAME grid cell, so the
        browser guarantees them the exact same width every time — this is what makes the
@@ -1995,4 +1982,75 @@
     line-height: 1.45;
     font-style: italic;
     color: #8a8a98;
+}
+
+/* =====================================================================
+   Split wallpaper / content background (reference-site look).
+   .moz-split (set in the Liquid) — the wallpaper fills only the preview
+   area; the strip behind the options panel is a solid colour matching the
+   wallpaper (--moz-content-bg: Admin "Content Background Colour" or picked
+   from the image by JS). The preview keeps its inline background-image (so
+   thumbs / Wallpaper toggle work as before) but draws it via ::before,
+   sized to the area left of the panel (--moz-content-strip, set by JS).
+   ===================================================================== */
+.neon-configurator {
+    background-color: var(--moz-content-bg, #0a0a0f);
+    transition: background-color 0.4s ease;
+}
+
+.neon-configurator__preview.moz-split {
+    background-color: var(--moz-content-bg, #0a0a0f);
+    background-size: 0 0; /* not painted here — ::before paints it */
+    transition: background-color 0.4s ease;
+}
+
+.neon-configurator__preview.moz-split::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: var(--moz-content-strip, calc(35% + 48px));
+    background-image: inherit;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: var(--moz-wallpaper-position, center center);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Wallpaper Off: dark studio gradient on the preview, dark strip behind the panel. */
+.neon-configurator.moz-no-wallpaper,
+.neon-configurator.moz-no-wallpaper .neon-configurator__preview.moz-split {
+    background-color: #0a0a0f;
+}
+
+/* Mobile: panel sits below the preview — wallpaper fills the whole preview,
+   the matching colour shows behind the panel underneath. */
+@media (max-width: 768px) {
+    .neon-configurator__preview.moz-split::before {
+        right: 0;
+    }
+}
+
+/* =====================================================================
+   Sign centred in the visible wallpaper on every screen size.
+   The stage used to reserve a fixed "35% + 96px" for the panel, but the
+   real panel width varies with the screen, so the sign drifted toward /
+   under the panel on mid-size screens. Now the reserved space is the
+   measured panel strip (--moz-content-strip, set by JS on the preview),
+   with equal side padding, so the sign sits exactly in the middle of the
+   wallpaper area. JS also shrinks the sign on narrow areas (see
+   applyFittedFontSize). 72px each side leaves room for the height line.
+   ===================================================================== */
+@media (min-width: 769px) {
+    .neon-configurator__preview.moz-split .neon-configurator__preview-stage {
+        padding-left: 72px;
+        padding-right: calc(var(--moz-content-strip, calc(35% + 48px)) + 72px);
+    }
+
+    /* Wallpaper thumbs stay within the wallpaper area instead of running under the panel. */
+    .neon-configurator__preview.moz-split .neon-configurator__bg-thumbs {
+        max-width: calc(100% - var(--moz-content-strip, calc(35% + 48px)) - 64px);
+    }
 }
