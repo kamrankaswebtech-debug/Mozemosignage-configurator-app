@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { ClientLoaderFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
 import { login } from "../../shopify.server";
@@ -13,6 +13,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   return { showForm: Boolean(login) };
+};
+
+// Safety net: if we land on "/" by an in-app (client-side) navigation while inside the
+// Shopify admin iframe, go to the dashboard instead of showing the login form. Logging in
+// can't work inside the iframe (accounts.shopify.com refuses to be framed). Outside the
+// admin (normal browser tab) the server loader above runs as before.
+export const clientLoader = async ({ serverLoader }: ClientLoaderFunctionArgs) => {
+  if (window.top !== window.self) {
+    throw redirect(`/app${window.location.search}`);
+  }
+  return serverLoader();
 };
 
 export default function App() {

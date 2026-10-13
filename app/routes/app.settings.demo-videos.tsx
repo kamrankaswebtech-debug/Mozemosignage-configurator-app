@@ -79,6 +79,8 @@ async function uploadDemoVideoFile(admin: any, file: File): Promise<string> {
                         mimeType: file.type || "video/mp4",
                         httpMethod: "POST",
                         resource: "VIDEO",
+                        // Shopify requires fileSize for VIDEO staged uploads.
+                        fileSize: String(file.size),
                     },
                 ],
             },
@@ -245,7 +247,10 @@ export default function DemoVideosPage() {
                         {newSourceType !== "upload" ? (
                             <input type="text" name="videoUrl" placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..." />
                         ) : (
-                            <input type="file" name="videoFile" accept="video/*" />
+                            <label>
+                                MP4 recommended, under 100 MB. After upload Shopify takes 1–2 minutes to process the video.
+                                <input type="file" name="videoFile" accept="video/mp4,video/quicktime,video/webm" />
+                            </label>
                         )}
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={videos.length + 1} />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Video</s-button>

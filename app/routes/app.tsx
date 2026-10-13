@@ -22,6 +22,10 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-app-nav>
+        {/* rel="home" is not shown in the menu — it tells App Bridge that clicking the app
+            name goes to /app (dashboard). Without it, App Bridge falls back to "/" which is the
+            public login page, causing the "Shop domain / Log in" screen inside the admin. */}
+        <s-link href="/app" {...({ rel: "home" } as Record<string, string>)}>Home</s-link>
         <s-link href="/app/settings">Settings</s-link>
         <s-link href="/app/orders">Production Orders</s-link>
         <s-link href="/app/neon-signs">Neon Signs</s-link>
