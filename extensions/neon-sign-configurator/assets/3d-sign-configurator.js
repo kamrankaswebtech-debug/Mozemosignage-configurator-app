@@ -55,6 +55,55 @@ async function addItemToCartWithRetry(routesRoot, variantId, properties, section
     throw lastError;
 }
 
+// A brand-new price variant can show as $0.00 in the cart drawer for a few seconds while
+// Shopify finishes setting it up (a refresh / checkout always shows the right price). If the
+// line just added isn't at the configured price yet, wait until the cart has the real price,
+// then redraw the theme's cart (drawer, totals, icon) with fresh sections.
+async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionIds, addResult, sourceId) {
+    const want = Math.round((Number(expectedPrice) || 0) * 100);
+    if (!want) return;
+    const lineOk = (item) => !!item && Number(item.final_price != null ? item.final_price : item.price) >= want - 1;
+    const added = addResult && Array.isArray(addResult.items)
+        ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
+        : null;
+    if (lineOk(added)) return;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 700 : 1000));
+        let cart;
+        try {
+            cart = await (await fetch(routesRoot + 'cart.js', { cache: 'no-store' })).json();
+        } catch (err) {
+            continue;
+        }
+        const lines = (cart.items || []).filter((item) => String(item.variant_id) === String(variantId));
+        if (!lines.length || !lines.every(lineOk)) continue;
+
+        let sections;
+        if (sectionIds.length) {
+            try {
+                sections = await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')), { cache: 'no-store' })).json();
+            } catch (err) {
+                sections = undefined;
+            }
+        }
+        try {
+            const themeEvents = await import('@theme/events');
+            const UpdateEvent = themeEvents.CartUpdateEvent || themeEvents.CartAddEvent;
+            // Not "product-form-component": itemCount is the cart's real total here, not an addition.
+            document.dispatchEvent(new UpdateEvent({}, sourceId, {
+                source: sourceId,
+                itemCount: cart.item_count,
+                sections
+            }));
+        } catch (themeEventError) {
+            console.warn('Configurator: could not refresh the theme cart UI.', themeEventError);
+        }
+        document.dispatchEvent(new CustomEvent('cart:refresh'));
+        return;
+    }
+}
+
 // Shows a spinning loader inside the button next to the given text.
 function setButtonLoadingText(button, text) {
     button.innerHTML = '<span class="sign3d-configurator__spinner"></span><span>' + text + '</span>';
@@ -1222,6 +1271,7 @@ function initSign3dConfigurator(root) {
         if (d.hasText && d.symbolLabels.length) rows.push(['Symbols', escapeHtml(d.symbolLabels.join(', ')) + ' (' + d.symbolPosition + ')']);
         if (d.hasLogo) rows.push(['Logo File', escapeHtml(d.logoName || 'Uploaded')]);
 
+        if (d.hasText && fontSelect && fontSelect.selectedIndex > -1) rows.push(['Font', escapeHtml(fontSelect.options[fontSelect.selectedIndex].textContent.trim())]);
         rows.push(['Lighting', d.illuminationLabel]);
         rows.push(['Front Colour', d.colourName + ' (' + d.colourGroupLabel + ')']);
         rows.push(['Colour Intensity', colourIntensity + '%']);
@@ -1553,7 +1603,9 @@ function initSign3dConfigurator(root) {
         alignButtons.forEach((btn) => {
             btn.classList.toggle('is-selected', btn.dataset.align === state.align);
         });
-        if (textFlex) textFlex.style.justifyContent = ALIGN_MAP[state.align] || 'center';
+        // Only when the alignment buttons exist: otherwise the CSS alignment stays untouched
+        // (forcing "center" here moved the wording on Undo / Redo).
+        if (textFlex && alignButtons.length) textFlex.style.justifyContent = ALIGN_MAP[state.align] || 'center';
 
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
         const value = state.text.trim() || (currentMode === 'both' ? '' : 'Your Brand');
@@ -1655,8 +1707,8 @@ function initSign3dConfigurator(root) {
     // the real preview, so it fits every screen. Visual only — order data and pricing
     // still use the cm values.
     let sizeFontSize = baseFontSize;
-    const SIZE_MIN_FILL = 0.5;
-    const SIZE_MAX_FILL = 0.94;
+    const SIZE_MIN_FILL = 0.55;
+    const SIZE_MAX_FILL = 0.92;
 
     // Overall width range in cm: Admin Pricing Settings, else the size slider's range.
     function previewWidthRangeCm() {
@@ -1684,19 +1736,69 @@ function initSign3dConfigurator(root) {
         let share = SIZE_MIN_FILL + (SIZE_MAX_FILL - SIZE_MIN_FILL) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
         const lmin = parseFloat(letterHeightInput && letterHeightInput.dataset.minCm);
         const lmax = parseFloat(letterHeightInput && letterHeightInput.dataset.maxCm);
-        if (lmin > 0 && lmax > lmin) share *= 0.92 + 0.16 * rangePos(getHeightCm() || lmin, lmin, lmax);
+        if (lmin > 0 && lmax > lmin) share *= 1 + 0.12 * rangePos(getHeightCm() || lmin, lmin, lmax);
         return Math.min(SIZE_MAX_FILL, share);
     }
 
     // Free area for the sign (px): the inner width, and a height that keeps the sign clear
-    // of the toggles at the top and the wallpaper thumbnails at the bottom.
+    // of the toggles at the top and the wallpaper thumbnails at the bottom. The height comes
+    // from the screen (the preview is 100vh - 40px tall, min 520px), never from the preview's
+    // current height — that grows with the sign and would make it creep bigger on every update.
     function previewFreeArea() {
-        const boxH = previewBox ? previewBox.clientHeight : 520;
+        const boxH = window.innerWidth <= 768 ? 520 : Math.max(520, Math.min(window.innerHeight - 40, 900));
+        // Width from the layout itself (preview width minus paddings, and never past the left
+        // edge of the options panel) — not only from the inner box, which a too-wide sign could
+        // stretch. This keeps the sign inside the visible wallpaper on every screen.
+        let w = previewInner ? previewInner.clientWidth : 600;
+        if (previewStage && previewBox) {
+            const bs = getComputedStyle(previewBox);
+            const ss = getComputedStyle(previewStage);
+            const geo = previewBox.clientWidth
+                - (parseFloat(bs.paddingLeft) || 0) - (parseFloat(bs.paddingRight) || 0)
+                - (parseFloat(ss.paddingLeft) || 0) - (parseFloat(ss.paddingRight) || 0);
+            if (geo > 0) w = Math.min(w, geo);
+            const panel = root.querySelector('.sign3d-configurator__panel');
+            if (panel && window.innerWidth > 768) {
+                const boxLeft = Math.max(0, previewBox.getBoundingClientRect().left);
+                const visible = panel.getBoundingClientRect().left - boxLeft - (parseFloat(ss.paddingLeft) || 0) * 2;
+                if (visible > 0) w = Math.min(w, visible);
+            }
+        }
         return {
-            w: Math.max(160, previewInner ? previewInner.clientWidth : 600),
+            w: Math.max(160, w),
             h: Math.max(140, boxH - 250),
             boxH
         };
+    }
+
+    // Real width of the wording: union of the letter boxes (the text box itself is 100% wide).
+    function lettersWidth() {
+        if (!textFlex) return 0;
+        let left = Infinity;
+        let right = -Infinity;
+        Array.from(textFlex.children).forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (!r.width) return;
+            left = Math.min(left, r.left);
+            right = Math.max(right, r.right);
+        });
+        return right > left ? right - left : 0;
+    }
+
+    // Width of the reference wording ("Your Brand") at the given px size in the current font,
+    // measured with a hidden one-line probe inside the text box (inherits font, weight, spacing).
+    const SIZE_REFERENCE_TEXT = 'Your Brand';
+    function referenceTextWidth(px) {
+        if (!textFlex) return 0;
+        const probe = document.createElement('span');
+        probe.className = 'sign3d-configurator__letter';
+        probe.setAttribute('aria-hidden', 'true');
+        probe.textContent = SIZE_REFERENCE_TEXT;
+        probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;white-space:nowrap;transform:none;pointer-events:none;font-size:' + px + 'px';
+        textFlex.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w;
     }
 
     function applyFittedFontSize() {
@@ -1704,23 +1806,36 @@ function initSign3dConfigurator(root) {
         if (textFlex) textFlex.style.fontSize = (baseFontSize * groupScale) + 'px';
     }
 
-    // Screen / preview area resized: resize the sign to the new area (no price or option changes).
+    // Free sign area changed (screen size, options panel width / content strip, late styles):
+    // resize the sign to the new area (no price or option changes). Width only — the height
+    // changes with the sign itself.
     let lastFitWidth = 0;
     function refitToStage() {
-        if (!previewStage) return;
-        const w = previewStage.clientWidth;
+        if (!previewStage || !previewInner) return;
+        const w = previewInner.clientWidth;
         if (!w || w === lastFitWidth) return;
         lastFitWidth = w;
         updatePreviewScale();
     }
 
     if (previewStage && typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(refitToStage).observe(previewStage);
+        const fitObserver = new ResizeObserver(refitToStage);
+        fitObserver.observe(previewStage);
+        if (previewInner) fitObserver.observe(previewInner);
     }
+    // Web fonts can arrive after the first measurement: re-measure whenever a font finishes loading.
+    if (document.fonts && document.fonts.addEventListener) {
+        document.fonts.addEventListener('loadingdone', () => updatePreviewScale());
+    }
+    window.addEventListener('load', () => updatePreviewScale());
 
     function updatePreviewScale() {
         const widthCm = getWidthCm() || 100;
         const heightCm = getHeightCm() || 25;
+
+        // Re-measure the options-panel strip first: the stage padding that centres the sign in
+        // the visible wallpaper depends on it, and a stale value pushed the sign under the panel.
+        updateContentStrip();
 
         const area = previewFreeArea();
         let targetW = area.w * previewFillShare();
@@ -1728,24 +1843,34 @@ function initSign3dConfigurator(root) {
         if (getBackingType() === 'circle') targetW = Math.min(targetW, Math.max(140, area.boxH - 130) / 1.18);
 
         let fontSize = baseFontSize;
+        const iconsW = (hasText() && iconsContainer && (currentSymbolPosition === 'left' || currentSymbolPosition === 'right')) ? iconsContainer.offsetWidth + 12 : 0;
         if (textFlex && hasText()) {
-            // Measure the wording on one line at a reference size, then scale it to the target width.
+            // Letter size comes from the chosen SIZE only (same idea as the Neon configurator):
+            // the reference wording "Your Brand" in the chosen font is scaled to the target width,
+            // and the customer's own wording uses that same letter size — a short word is simply
+            // narrower, a long one wider. It does NOT grow when fewer letters are typed. Very long
+            // wording is still kept inside the wallpaper by the safety net below.
             const REF = 100;
-            const prevWidth = textFlex.style.width;
-            const prevWrap = textFlex.style.flexWrap;
-            textFlex.style.fontSize = REF + 'px';
-            textFlex.style.width = 'max-content';
-            textFlex.style.flexWrap = 'nowrap';
-            const naturalWidth = textFlex.getBoundingClientRect().width;
-            textFlex.style.width = prevWidth;
-            textFlex.style.flexWrap = prevWrap;
-            const iconsW = (iconsContainer && (currentSymbolPosition === 'left' || currentSymbolPosition === 'right')) ? iconsContainer.offsetWidth + 12 : 0;
-            const textTargetW = Math.max(40, targetW - iconsW);
-            if (naturalWidth > 0) fontSize = REF * textTargetW / naturalWidth;
+            const refWidth = referenceTextWidth(REF);
+            if (refWidth > 0) fontSize = REF * Math.max(40, targetW) / refWidth;
             fontSize = Math.min(fontSize, area.h * (currentMode === 'both' ? 0.42 : 0.75));
         }
         sizeFontSize = Math.max(12, fontSize);
         applyFittedFontSize();
+
+        // Safety net: the rendered wording must always fit inside the visible wallpaper area.
+        if (textFlex && hasText()) {
+            const maxW = Math.max(60, area.w * SIZE_MAX_FILL - iconsW);
+            // Measured on one line, so a wording that would wrap is caught too.
+            const prevWrap = textFlex.style.flexWrap;
+            textFlex.style.flexWrap = 'nowrap';
+            const shown = lettersWidth();
+            textFlex.style.flexWrap = prevWrap;
+            if (shown > maxW) {
+                sizeFontSize = Math.max(12, sizeFontSize * maxW / shown);
+                applyFittedFontSize();
+            }
+        }
 
         if (widthLabel) widthLabel.textContent = formatDim(widthCm);
         if (oversizedNoticeEl) oversizedNoticeEl.hidden = widthCm <= 200;
@@ -2192,16 +2317,47 @@ function initSign3dConfigurator(root) {
         const panel = root.querySelector('.sign3d-configurator__panel');
         if (!panel || window.innerWidth <= 768) {
             previewBox.style.removeProperty('--moz-content-strip');
+            centreInVisibleArea();
             return;
         }
         const previewRect = previewBox.getBoundingClientRect();
         const panelRect = panel.getBoundingClientRect();
         const strip = Math.max(0, Math.round(previewRect.right - panelRect.left + 24));
         previewBox.style.setProperty('--moz-content-strip', strip + 'px');
+        centreInVisibleArea();
+    }
+
+    // Keeps the whole sign (wording, logo, backing panel) centred in the VISIBLE wallpaper —
+    // between the preview's left edge and the options panel — whatever width / padding the
+    // theme gives the stage. The inner box is shifted sideways by the difference; the
+    // dimension lines and backing follow because they are measured from the real elements.
+    function centreInVisibleArea() {
+        if (!previewInner || !previewBox) return;
+        const prevShift = previewInner._sign3dShift || 0;
+        let shift = 0;
+        const panel = root.querySelector('.sign3d-configurator__panel');
+        if (panel && window.innerWidth > 768) {
+            const box = previewBox.getBoundingClientRect();
+            const panelLeft = panel.getBoundingClientRect().left;
+            const visL = Math.max(0, box.left);
+            const visR = Math.min(box.right, panelLeft);
+            if (panelLeft > box.left + 200 && visR - visL > 200) {
+                const r = previewInner.getBoundingClientRect();
+                const naturalCentre = r.left - prevShift + r.width / 2;
+                shift = Math.round((visL + visR) / 2 - naturalCentre);
+            }
+        }
+        if (shift === prevShift) return;
+        previewInner._sign3dShift = shift;
+        previewInner.style.transform = shift ? 'translateX(' + shift + 'px)' : '';
+        if (typeof updateDimensionLines === 'function') updateDimensionLines();
     }
 
     if (typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(updateContentStrip).observe(root);
+        const stripObserver = new ResizeObserver(updateContentStrip);
+        stripObserver.observe(root);
+        const stripPanel = root.querySelector('.sign3d-configurator__panel');
+        if (stripPanel) stripObserver.observe(stripPanel);
     } else {
         window.addEventListener('resize', updateContentStrip);
     }
@@ -2479,10 +2635,11 @@ function initSign3dConfigurator(root) {
                 'Depth / Thickness': depthOptionForCart ? depthOptionForCart.textContent.trim() : 'Standard',
                 // Blueprint PDF reads "Material" — it now carries the Front / Side / Backing finish summary.
                 'Material': materialSelect ? getSelectedOptionText(materialSelect, 'Standard') : (finishSummaryText() || 'Standard'),
-                'Front Colour': colourNameLabel ? colourNameLabel.textContent.trim() : 'Default',
+                // Colour group (Standard / Gloss / ...) goes with the colour name; the old separate
+                // "Finish" line is replaced by the Front / Side / Backing Finish properties below.
+                'Front Colour': (colourNameLabel ? colourNameLabel.textContent.trim() : 'Default') + ' (' + sign3dPrettyGroup(selectedColourGroup) + ')',
                 'Colour Intensity': colourIntensity + '%',
                 'Side Colour': (selectedSideName || 'Default') + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
-                'Finish': sign3dPrettyGroup(selectedColourGroup),
                 'Mounting': getSelectedOptionText(mountingSelect, 'Standard'),
                 'Add-ons': selectedAddons || 'None',
                 'Construction': isOutdoorForCart ? 'Outdoor' : 'Indoor',
@@ -2495,6 +2652,9 @@ function initSign3dConfigurator(root) {
             try {
                 const productId = addToCartBtn.dataset.productId;
 
+                if (hasText() && fontSelect && fontSelect.options.length) {
+                    properties['Font'] = getSelectedOptionText(fontSelect, 'Default');
+                }
                 if (hasText() && selectedSymbols.length) {
                     properties['Quick Symbols'] = selectedSymbols.map((s) => s.label).join(', ');
                     properties['Symbol Position'] = currentSymbolPosition.charAt(0).toUpperCase() + currentSymbolPosition.slice(1);
@@ -2517,7 +2677,8 @@ function initSign3dConfigurator(root) {
                 if (getWidthCm() > 200) {
                     properties['Oversized Notice'] = 'Over 2 metres - manufactured and shipped in split sections';
                 }
-                if (currentMode === 'both') {
+                // Only while manual placement is switched on (it's off, so nothing was ever moved).
+                if (SIGN3D_ALLOW_MANUAL_PLACEMENT && currentMode === 'both') {
                     properties['Text Position'] = 'X: ' + Math.round(groupOffsetX) + 'px, Y: ' + Math.round(groupOffsetY) + 'px';
                     properties['Logo Position'] = 'X: ' + Math.round(logoOffsetX) + 'px, Y: ' + Math.round(logoOffsetY) + 'px, Scale: ' + logoScale.toFixed(2);
                 }
@@ -2567,6 +2728,9 @@ function initSign3dConfigurator(root) {
                 } catch (themeEventError) {
                     console.warn('3D Sign Configurator: could not notify theme cart UI.', themeEventError);
                 }
+
+                // Brand-new price variant still showing $0.00? Redraw the cart once Shopify has the price.
+                syncCartLinePrice(routesRoot, priceMatchedVariantId, currentTotal, sectionIds, addResult, '3d-sign-configurator');
 
                 document.dispatchEvent(new CustomEvent('cart:refresh'));
             } catch (error) {
@@ -2665,10 +2829,13 @@ function initSign3dConfigurator(root) {
                 );
             }
         });
-        // Bring the default width inside the range from the start (no pop-up).
+        // Starting width = the Admin minimum overall width (Pricing Settings), so the
+        // configurator opens on the smallest available size; otherwise the default is only
+        // brought inside the range (no pop-up).
         const lim = widthLimitsCm();
         const startCm = getWidthCm();
         let fixed = startCm;
+        if (sizeLimits.wmin > 0) fixed = sizeLimits.wmin;
         if (lim.min > 0 && fixed < lim.min) fixed = lim.min;
         if (lim.max > 0 && fixed > lim.max) fixed = lim.max;
         if (fixed !== startCm) {

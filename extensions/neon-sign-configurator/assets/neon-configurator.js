@@ -54,6 +54,55 @@ async function addItemToCartWithRetry(routesRoot, variantId, properties, section
     throw lastError;
 }
 
+// A brand-new price variant can show as $0.00 in the cart drawer for a few seconds while
+// Shopify finishes setting it up (a refresh / checkout always shows the right price). If the
+// line just added isn't at the configured price yet, wait until the cart has the real price,
+// then redraw the theme's cart (drawer, totals, icon) with fresh sections.
+async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionIds, addResult, sourceId) {
+    const want = Math.round((Number(expectedPrice) || 0) * 100);
+    if (!want) return;
+    const lineOk = (item) => !!item && Number(item.final_price != null ? item.final_price : item.price) >= want - 1;
+    const added = addResult && Array.isArray(addResult.items)
+        ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
+        : null;
+    if (lineOk(added)) return;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 700 : 1000));
+        let cart;
+        try {
+            cart = await (await fetch(routesRoot + 'cart.js', { cache: 'no-store' })).json();
+        } catch (err) {
+            continue;
+        }
+        const lines = (cart.items || []).filter((item) => String(item.variant_id) === String(variantId));
+        if (!lines.length || !lines.every(lineOk)) continue;
+
+        let sections;
+        if (sectionIds.length) {
+            try {
+                sections = await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')), { cache: 'no-store' })).json();
+            } catch (err) {
+                sections = undefined;
+            }
+        }
+        try {
+            const themeEvents = await import('@theme/events');
+            const UpdateEvent = themeEvents.CartUpdateEvent || themeEvents.CartAddEvent;
+            // Not "product-form-component": itemCount is the cart's real total here, not an addition.
+            document.dispatchEvent(new UpdateEvent({}, sourceId, {
+                source: sourceId,
+                itemCount: cart.item_count,
+                sections
+            }));
+        } catch (themeEventError) {
+            console.warn('Configurator: could not refresh the theme cart UI.', themeEventError);
+        }
+        document.dispatchEvent(new CustomEvent('cart:refresh'));
+        return;
+    }
+}
+
 // Shows a spinning loader inside the button next to the given text.
 function setButtonLoadingText(button, text) {
     button.innerHTML = '<span class="neon-configurator__spinner"></span><span>' + text + '</span>';
@@ -2033,8 +2082,8 @@ function initConfigurator(root) {
                 'Add-ons': selectedAddons || 'None',
                 'Colour Effect': root.querySelector('[data-effect-mode-radio]:checked')?.nextElementSibling?.textContent.trim() || 'Single Colour',
                 'Configured Total': '$' + currentTotal.toFixed(2),
-                'Text Position': 'Group X: ' + Math.round(groupOffsetX) + 'px, Y: ' + Math.round(groupOffsetY) + 'px',
-                'Text Rotation': textRotation + '°',
+                // "Text Position" / "Text Rotation" are no longer sent: Move Sign and the rotation
+                // slider were removed from the storefront, so they were always 0.
                 '_blueprint_width_cm': currentWidthCm,
                 '_blueprint_height_cm': currentHeightCm
             };
@@ -2054,6 +2103,35 @@ function initConfigurator(root) {
             properties['Quick Symbols'] = selectedSymbols.length
                 ? selectedSymbols.map((s) => s.label).join(', ')
                 : 'None';
+            if (selectedSymbols.length) {
+                properties['Symbol Position'] = currentSymbolPosition.charAt(0).toUpperCase() + currentSymbolPosition.slice(1);
+            }
+
+            // Multicoloured Text: the single colour picker is hidden, so send each letter's /
+            // symbol's own colour instead (colour names from the swatches, else the hex code).
+            if (currentEffectMode === 'multicolour') {
+                const colourName = (hex) => {
+                    const sw = Array.from(swatches).find((s) => String(s.dataset.colourHex).toLowerCase() === String(hex).toLowerCase());
+                    return sw ? sw.dataset.colourName : String(hex || '').toUpperCase();
+                };
+                const wording = textInput.value.trim() || 'Your Text';
+                properties['Colour'] = 'Multicoloured (see Letter Colours)';
+                properties['Letter Colours'] = wording.split('')
+                    .map((ch, i) => (/\s/.test(ch) ? '' : ch + ': ' + colourName(letterColours[i])))
+                    .filter(Boolean)
+                    .join(', ');
+                if (selectedSymbols.length) {
+                    properties['Symbol Colours'] = selectedSymbols
+                        .map((s, i) => s.label + ': ' + colourName(iconColours[i] || selectedColourHex))
+                        .join(', ');
+                }
+            }
+
+            // Size shown in the customer's chosen unit (price / blueprint stay in cm).
+            if (currentUnit !== 'cm' && sizeSelect.selectedIndex > -1) {
+                const sizeOpt = sizeSelect.options[sizeSelect.selectedIndex];
+                properties['Size (' + currentUnit + ')'] = neonConvertLabelUnits(sizeOpt.dataset.label || sizeOpt.textContent.trim(), currentUnit);
+            }
 
             if (installationSelected) {
                 properties['Installation'] = 'Yes, professional installation requested';
@@ -2144,6 +2222,9 @@ function initConfigurator(root) {
                 } catch (themeEventError) {
                     console.warn('Neon Configurator: could not notify theme cart UI.', themeEventError);
                 }
+
+                // Brand-new price variant still showing $0.00? Redraw the cart once Shopify has the price.
+                syncCartLinePrice(routesRoot, priceMatchedVariantId, currentTotal, sectionIds, addResult, 'neon-configurator');
 
                 document.dispatchEvent(new CustomEvent('cart:refresh'));
             } catch (error) {
