@@ -55,6 +55,101 @@ async function addItemToCartWithRetry(routesRoot, variantId, properties, section
     throw lastError;
 }
 
+// ---- Reliable add of a configured-price line ----
+// A brand-new "Config-<price>" variant takes a few seconds before the storefront sells it at
+// its real price. Adding it straight away either failed (first click) or put the line in the
+// cart at $0.00. So: wait until the storefront lists the new variant at the configured price,
+// add it, then check the line's price in the cart — re-adding once if needed. A line at the
+// wrong price is never left in the cart.
+const CONFIG_SLEEP = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitForVariantReady(routesRoot, variantId, expectedPrice) {
+    const handle = (window.location.pathname.match(/\/products\/([^/?#]+)/) || [])[1];
+    const want = Math.round((Number(expectedPrice) || 0) * 100);
+    if (!handle || !want) return;
+    for (let attempt = 0; attempt < 12; attempt++) {
+        try {
+            const res = await fetch(routesRoot + 'products/' + handle + '.js?_=' + Date.now(), { cache: 'no-store' });
+            if (res.ok) {
+                const product = await res.json();
+                const variant = (product.variants || []).find((v) => String(v.id) === String(variantId));
+                if (variant && Math.abs(Number(variant.price) - want) <= 1) return;
+            }
+        } catch (err) {
+            /* keep waiting */
+        }
+        await CONFIG_SLEEP(800);
+    }
+}
+
+function configLinePriceOk(item, want) {
+    return !!item && Number(item.final_price != null ? item.final_price : item.price) >= want - 1;
+}
+
+async function configCartLines(routesRoot, variantId) {
+    try {
+        const cart = await (await fetch(routesRoot + 'cart.js', { cache: 'no-store' })).json();
+        return (cart.items || []).filter((item) => String(item.variant_id) === String(variantId));
+    } catch (err) {
+        return null;
+    }
+}
+
+async function configRemoveLines(routesRoot, lines) {
+    for (const line of lines) {
+        try {
+            await fetch(routesRoot + 'cart/change.js', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: line.key, quantity: 0 })
+            });
+        } catch (err) {
+            /* ignore */
+        }
+    }
+}
+
+async function configFreshSections(routesRoot, sectionIds) {
+    if (!sectionIds.length) return undefined;
+    try {
+        return await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')), { cache: 'no-store' })).json();
+    } catch (err) {
+        return undefined;
+    }
+}
+
+// Returns the add result (with up-to-date sections) once the line is in the cart at the
+// configured price; throws when that can't be achieved.
+async function addConfiguredLine(routesRoot, variantId, properties, sectionIds, isNewVariant, expectedPrice) {
+    const want = Math.round((Number(expectedPrice) || 0) * 100);
+    if (isNewVariant) await waitForVariantReady(routesRoot, variantId, expectedPrice);
+
+    for (let round = 0; round < 2; round++) {
+        const addResult = await addItemToCartWithRetry(routesRoot, variantId, properties, sectionIds, isNewVariant ? 3 : 1);
+        if (!want) return addResult;
+        const added = Array.isArray(addResult && addResult.items)
+            ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
+            : null;
+        if (configLinePriceOk(added, want)) return addResult;
+
+        // Line went in at the wrong price: give Shopify a moment to apply the real price.
+        for (let check = 0; check < 6; check++) {
+            await CONFIG_SLEEP(1000);
+            const lines = await configCartLines(routesRoot, variantId);
+            if (lines && lines.length && lines.every((line) => configLinePriceOk(line, want))) {
+                addResult.sections = await configFreshSections(routesRoot, sectionIds);
+                return addResult;
+            }
+        }
+
+        // Still wrong: take the wrong-priced line(s) out and try once more.
+        const lines = await configCartLines(routesRoot, variantId);
+        if (lines && lines.length) await configRemoveLines(routesRoot, lines.filter((line) => !configLinePriceOk(line, want)));
+        await waitForVariantReady(routesRoot, variantId, expectedPrice);
+    }
+    throw new Error('Configured price was not applied in the cart');
+}
+
 // A brand-new price variant can show as $0.00 in the cart drawer for a few seconds while
 // Shopify finishes setting it up (a refresh / checkout always shows the right price). If the
 // line just added isn't at the configured price yet, wait until the cart has the real price,
@@ -2694,6 +2789,10 @@ function initSign3dConfigurator(root) {
                 const proxyData = await proxyResponse.json();
                 if (proxyData.error || !proxyData.variantId) throw new Error(proxyData.error || 'No variant returned');
 
+                // Safety: never add a line whose variant price isn't the configured total (e.g. $0.00).
+                if (proxyData.price !== undefined && Math.abs(Number(proxyData.price) - Number(currentTotal.toFixed(2))) > 0.005) {
+                    throw new Error('Variant price ' + proxyData.price + ' does not match configured total ' + currentTotal.toFixed(2));
+                }
                 const priceMatchedVariantId = proxyData.variantId;
                 const isNewVariant = proxyData.reused === false;
 
@@ -2706,13 +2805,8 @@ function initSign3dConfigurator(root) {
                     if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
                 });
 
-                const addResult = await addItemToCartWithRetry(
-                    routesRoot,
-                    priceMatchedVariantId,
-                    properties,
-                    sectionIds,
-                    isNewVariant ? 3 : 0
-                );
+                if (isNewVariant) setButtonLoadingText(addToCartBtn, 'Preparing your price...');
+                const addResult = await addConfiguredLine(routesRoot, priceMatchedVariantId, properties, sectionIds, isNewVariant, currentTotal);
 
                 addToCartBtn.textContent = 'Added ✓';
                 showTemporaryStatus(addToCartStatus, 'Added to cart at the correct configured price!', 4000);

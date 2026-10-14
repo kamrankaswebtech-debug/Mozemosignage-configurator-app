@@ -125,15 +125,23 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Step 3: Option already exists — check if a variant at this exact price already exists.
+    // The list above only holds the first 100 variants; findConfigVariant pages further when
+    // a product has more (it returns null on any API problem, never throws).
     const match = existingVariants.find((edge: any) =>
         edge.node.selectedOptions.some(
             (opt: any) => opt.name === "Configuration" && opt.value === optionValue
         )
-    );
+    )?.node || (await findConfigVariant(admin, gid, optionValue));
 
     if (match) {
-        const numericVariantId = match.node.id.split("/").pop();
-        return Response.json({ variantId: numericVariantId, price: match.node.price, reused: true });
+        // Never hand back a variant whose price isn't the configured price (it would go into
+        // the cart / checkout at that wrong price, e.g. $0.00).
+        const verified = await ensureVariantPrice(admin, gid, match, priceString);
+        if (!verified) {
+            return Response.json({ error: "Could not set the configured price" }, { status: 422 });
+        }
+        const numericVariantId = verified.id.split("/").pop();
+        return Response.json({ variantId: numericVariantId, price: verified.price, reused: true });
     }
 
     // Step 4: No matching variant found — create a new one for this exact price.
@@ -168,6 +176,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const result = data.data?.productVariantsBulkCreate;
 
     if (result?.userErrors?.length > 0) {
+        // Usually "already exists": another request created this price at the same moment.
+        // Use that variant (price checked) instead of failing the customer's Add to Cart.
+        const existing = await findConfigVariant(admin, gid, optionValue);
+        const verified = existing ? await ensureVariantPrice(admin, gid, existing, priceString) : null;
+        if (verified) {
+            return Response.json({ variantId: verified.id.split("/").pop(), price: verified.price, reused: true });
+        }
         console.error("Neon Pricing Proxy: userErrors", result.userErrors);
         return Response.json({ error: result.userErrors[0].message }, { status: 422 });
     }
@@ -176,9 +191,90 @@ export async function action({ request }: ActionFunctionArgs) {
     if (!newVariant) {
         return Response.json({ error: "Variant creation failed, no variant returned" }, { status: 500 });
     }
+    const verifiedNew = await ensureVariantPrice(admin, gid, newVariant, priceString);
+    if (!verifiedNew) {
+        return Response.json({ error: "Could not set the configured price" }, { status: 422 });
+    }
 
-    const numericVariantId = newVariant.id.split("/").pop();
-    return Response.json({ variantId: numericVariantId, price: newVariant.price, reused: false });
+    const numericVariantId = verifiedNew.id.split("/").pop();
+    return Response.json({ variantId: numericVariantId, price: verifiedNew.price, reused: false });
+}
+
+const pricesMatch = (a: unknown, b: string) => Math.abs(Number(a) - Number(b)) < 0.005;
+
+// Finds the "Configuration = Config-<price>" variant beyond the first 100 by paging through
+// the product's variants (standard, cursor-based). Any API problem here only means "not
+// found" — it must never break the pricing request itself.
+async function findConfigVariant(admin: any, productGid: string, optionValue: string) {
+    try {
+        let after: string | null = null;
+        for (let page = 0; page < 25; page++) {
+            const response: any = await admin.graphql(
+                `#graphql
+        query FindConfigVariant($productId: ID!, $after: String) {
+          product(id: $productId) {
+            variants(first: 100, after: $after) {
+              pageInfo { hasNextPage endCursor }
+              nodes { id price selectedOptions { name value } }
+            }
+          }
+        }`,
+                { variables: { productId: productGid, after } }
+            );
+            const data: any = await response.json();
+            const conn = data.data?.product?.variants;
+            if (!conn) return null;
+            const hit = (conn.nodes || []).find((v: any) =>
+                (v.selectedOptions || []).some((o: any) => o.name === "Configuration" && o.value === optionValue)
+            );
+            if (hit) return hit;
+            if (!conn.pageInfo?.hasNextPage) return null;
+            after = conn.pageInfo.endCursor;
+        }
+    } catch (err) {
+        console.error("Neon Pricing Proxy: variant lookup failed", err);
+    }
+    return null;
+}
+
+// Makes sure the variant really costs the configured price (and can always be bought);
+// fixes it if not. Returns the variant ({ id, price }) or null when it couldn't be fixed.
+async function ensureVariantPrice(admin: any, productGid: string, variant: any, priceString: string) {
+    if (pricesMatch(variant.price, priceString) && (!variant.inventoryPolicy || variant.inventoryPolicy === "CONTINUE")) {
+        return variant;
+    }
+    try {
+        return await updateVariantPrice(admin, productGid, variant, priceString);
+    } catch (err) {
+        console.error("Neon Pricing Proxy: price update failed", err);
+        return null;
+    }
+}
+
+async function updateVariantPrice(admin: any, productGid: string, variant: any, priceString: string) {
+    const response = await admin.graphql(
+        `#graphql
+    mutation EnsureVariantPrice($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+        productVariants { id price }
+        userErrors { field message }
+      }
+    }`,
+        {
+            variables: {
+                productId: productGid,
+                variants: [{ id: variant.id, price: priceString, inventoryPolicy: "CONTINUE" }],
+            },
+        }
+    );
+    const data = await response.json();
+    const errors = data.data?.productVariantsBulkUpdate?.userErrors;
+    const updated = data.data?.productVariantsBulkUpdate?.productVariants?.[0];
+    if (errors?.length || !updated || !pricesMatch(updated.price, priceString)) {
+        console.error("Neon Pricing Proxy: could not set variant price", variant.id, priceString, errors);
+        return null;
+    }
+    return updated;
 }
 
 // Handles a customer-uploaded design file (Bonnet / Lightbox configurators) via Shopify's
