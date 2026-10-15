@@ -96,7 +96,7 @@ export default function UvFinishesPage() {
     return (
         <s-page heading="Finish">
             <s-section heading="Add New Finish Type">
-                <s-link href="/app/uv-graphic-led">← Back to UV Graphic LED Signs</s-link>
+                <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">

@@ -16,12 +16,13 @@ const SECTIONS = [
 
 export default function UvGraphicNoLedHub() {
     return (
-        <s-page heading="UV Graphic Signs (No LED) Configurator">
+        <s-page heading="UV Graphic Signs (Without Neon Lighting)">
             <s-section heading="Configurator Options">
                 <s-paragraph>
-                    This configurator shares its Size, Material, Finish, and Add-on options with UV Graphic LED Signs
-                    (since both product types use the same base options). No LED Colour selection applies here.
+                    UV Graphic Signs With and Without Neon Lighting now use one combined configurator. Manage all options under
+                    UV Graphic Signs; the Without Neon Lighting price is set per size there.
                 </s-paragraph>
+                <s-link href="/app/uv-graphic-led">Open UV Graphic Signs</s-link>
                 <HubCardGrid items={SECTIONS.map((section) => ({ title: section.title, description: section.description, path: section.path }))} />
             </s-section>
         </s-page>

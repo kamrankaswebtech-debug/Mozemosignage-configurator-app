@@ -61,7 +61,8 @@ async function addItemToCartWithRetry(routesRoot, variantId, properties, section
 // cart at $0.00. So: wait until the storefront lists the new variant at the configured price,
 // add it, then check the line's price in the cart — re-adding once if needed. A line at the
 // wrong price is never left in the cart.
-const CONFIG_SLEEP = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A function declaration (not const) so loading Neon + 3D on the same page can't clash.
+function CONFIG_SLEEP(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 async function waitForVariantReady(routesRoot, variantId, expectedPrice) {
     const handle = (window.location.pathname.match(/\/products\/([^/?#]+)/) || [])[1];
@@ -1935,7 +1936,13 @@ function initSign3dConfigurator(root) {
         const area = previewFreeArea();
         let targetW = area.w * previewFillShare();
         // A round backing panel is as tall as the sign is wide: keep the whole circle in view.
-        if (getBackingType() === 'circle') targetW = Math.min(targetW, Math.max(140, area.boxH - 130) / 1.18);
+        // A round backing panel is as tall as the sign is wide: keep the whole circle inside the
+        // visible wallpaper (about half the preview height, clear of the toggles and thumbnails).
+        if (getBackingType() === 'circle') {
+            const visibleH = Math.min(window.innerHeight, (previewBox && previewBox.clientHeight) || window.innerHeight);
+            const circleMax = Math.max(200, visibleH * 0.52);
+            targetW = Math.min(targetW, Math.max(120, (circleMax - 24) / 1.14));
+        }
 
         let fontSize = baseFontSize;
         const iconsW = (hasText() && iconsContainer && (currentSymbolPosition === 'left' || currentSymbolPosition === 'right')) ? iconsContainer.offsetWidth + 12 : 0;
@@ -2412,6 +2419,7 @@ function initSign3dConfigurator(root) {
         const panel = root.querySelector('.sign3d-configurator__panel');
         if (!panel || window.innerWidth <= 768) {
             previewBox.style.removeProperty('--moz-content-strip');
+            previewBox.style.removeProperty('--s3d-panel-edge');
             centreInVisibleArea();
             return;
         }
@@ -2419,6 +2427,9 @@ function initSign3dConfigurator(root) {
         const panelRect = panel.getBoundingClientRect();
         const strip = Math.max(0, Math.round(previewRect.right - panelRect.left + 24));
         previewBox.style.setProperty('--moz-content-strip', strip + 'px');
+        // Real width the options panel covers (theme CSS can't override this one): used to centre
+        // the Undo / Redo bar in the visible wallpaper.
+        previewBox.style.setProperty('--s3d-panel-edge', Math.max(0, Math.round(previewRect.right - panelRect.left)) + 'px');
         centreInVisibleArea();
     }
 
@@ -3028,6 +3039,8 @@ function initSign3dConfigurator(root) {
         backingEl.style.setProperty('--sign3d-backing', selectedBackHex);
         // Polished rim thickness follows the panel size (Shine / Gloss edge).
         backingEl.style.setProperty('--s3d-rim', Math.max(2, Math.min(14, Math.min(w, h) * 0.022)).toFixed(1) + 'px');
+        // Panel thickness (edge seen below the face) follows the panel size too.
+        backingEl.style.setProperty('--s3d-depth', Math.max(3, Math.min(9, Math.min(w, h) * 0.014)).toFixed(1) + 'px');
         backingEl.hidden = false;
     }
 

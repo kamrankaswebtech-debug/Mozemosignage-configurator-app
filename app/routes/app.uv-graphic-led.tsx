@@ -9,11 +9,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
-    { title: "Sizes", path: "/app/uv-graphic-led/sizes", description: "Manage UV Graphic sign size options and their pricing." },
+    { title: "Sizes", path: "/app/uv-graphic-led/sizes", description: "Size options with prices With and Without Neon Lighting." },
     { title: "Materials", path: "/app/uv-graphic-led/materials", description: "Acrylic, Aluminium, etc." },
     { title: "Finish", path: "/app/uv-graphic-led/finishes", description: "Gloss, Matte finish options." },
-    { title: "LED Colours", path: "/app/uv-graphic-led/led-colours", description: "LED backlighting colour options (LED variant only)." },
-    { title: "Add-ons", path: "/app/uv-graphic-led/addons", description: "Optional add-ons for UV Graphic signs." },
+    { title: "LED Colours", path: "/app/uv-graphic-led/led-colours", description: "Neon / LED colour options (shown only With Neon Lighting)." },
+    { title: "Add-ons", path: "/app/uv-graphic-led/addons", description: "Optional add-ons — choose if each one shows With Neon, Without Neon, or both." },
     { title: "Power Adapters", path: "/app/neon-signs/power-adapters", description: "Shared with Neon Signs — region-specific power adapters." },
 ];
 
@@ -26,11 +26,12 @@ export default function UvGraphicLedHub() {
     }
 
     return (
-        <s-page heading="UV Graphic LED Signs Configurator">
+        <s-page heading="UV Graphic Signs Configurator">
             <s-section heading="Configurator Options">
                 <s-paragraph>
-                    Manage all the dynamic options shown in the UV Graphic LED Sign live configurator on your storefront.
-                    Sizes, Materials, Finish, and Add-ons here are shared with the UV Graphic (No LED) configurator.
+                    One configurator for UV Graphic Signs With Neon Lighting and Without Neon Lighting. The customer picks the lighting
+                    option on the storefront; LED colours and power adapters only show With Neon Lighting, and each size can have its own
+                    price Without Neon Lighting.
                 </s-paragraph>
                 <HubCardGrid items={SECTIONS.map((section) => ({ title: section.title, description: section.description, path: section.path }))} />
             </s-section>

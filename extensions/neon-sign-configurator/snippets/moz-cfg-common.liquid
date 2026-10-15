@@ -1,0 +1,36 @@
+{%- comment -%}
+  Shared data + assets for the moz-configurator blocks (UV Graphic, Bonnet, Lightbox, Infinity, Marquee).
+  Params: walls ('neon' = Neon wallpaper library, '3d' = 3D wallpaper library), power (bool), install (bool).
+{%- endcomment -%}
+<script type="application/json" data-moz-walls>[
+{%- assign moz_first = true -%}
+{%- if walls == '3d' -%}
+  {%- for o in metaobjects["app--418838118401--sign3d_option"].values -%}
+    {%- assign moz_c = o.category.value | strip | downcase -%}
+    {%- if moz_c == "wallpaper" and o.image.value -%}
+      {%- unless moz_first -%},{%- endunless -%}{%- assign moz_first = false -%}
+      {"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}
+    {%- endif -%}
+  {%- endfor -%}
+{%- else -%}
+  {%- for o in metaobjects["app--418838118401--neon_background_image"].values -%}
+    {%- if o.visibility.value != "3d_only" and o.image.value -%}
+      {%- unless moz_first -%},{%- endunless -%}{%- assign moz_first = false -%}
+      {"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+]</script>
+{%- if power -%}
+<script type="application/json" data-moz-power>[{%- for pa in metaobjects["app--418838118401--power_adapter"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ pa.label.value | json }},"s":{{ pa.sort_order.value | default: 999999 }}}{%- endfor -%}]</script>
+{%- endif -%}
+{%- if install -%}
+  {%- for i in metaobjects["app--418838118401--installation_settings"].values -%}
+<script type="application/json" data-moz-install>{"p":{{ i.price_decimal.value | default: 0 }},"lead":{{ i.min_lead_days.value | default: 14 }},"e":{{ i.earliest_time.value | default: '10:00' | json }},"l":{{ i.latest_time.value | default: '17:00' | json }},"i":{{ i.slot_interval_minutes.value | default: 60 }},"r":{{ i.service_radius_km.value | default: 100 }}}</script>
+    {%- break -%}
+  {%- endfor -%}
+{{ 'installation-booking.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'installation-booking.js' | asset_url }}" defer></script>
+{%- endif -%}
+{{ 'moz-configurator.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'moz-configurator.js' | asset_url }}" defer></script>

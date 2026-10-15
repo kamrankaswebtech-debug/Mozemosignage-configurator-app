@@ -4,7 +4,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-type Entry = { id: string; label: string; widthCm: string; price: string; sortOrder: string };
+type Entry = { id: string; label: string; widthCm: string; price: string; priceNoLed: string; sortOrder: string };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
@@ -16,7 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const items: Entry[] = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
         edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
-        return { id: edge.node.id, label: f.label || "", widthCm: f.width_cm || "0", price: f.price_decimal || "0", sortOrder: f.sort_order || "0" };
+        return { id: edge.node.id, label: f.label || "", widthCm: f.width_cm || "0", price: f.price_decimal || "0", priceNoLed: f.price_no_led_decimal || "", sortOrder: f.sort_order || "0" };
     });
     items.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
     return { items };
@@ -32,6 +32,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "price_decimal", value: String(formData.get("price") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
     ];
+    // Price Without Neon Lighting: optional — only sent when filled in (empty = same price as With Neon).
+    const priceNoLed = String(formData.get("priceNoLed") || "").trim();
+    if (priceNoLed !== "") fields.push({ key: "price_no_led_decimal", value: priceNoLed });
 
     if (intent === "create") {
         const response = await admin.graphql(
@@ -97,13 +100,13 @@ export default function UvSizesPage() {
     return (
         <s-page heading="UV Graphic Sign Sizes">
             <s-section heading="Add New Size">
-                <s-link href="/app/uv-graphic-led">← Back to UV Graphic LED Signs</s-link>
+                <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
                         <input type="text" name="label" placeholder="Label (e.g. Medium - 60cm)" required />
                         <input type="number" step="0.1" name="widthCm" placeholder="Width (cm)" required />
-                        <input type="number" step="0.01" name="price" placeholder="Price" required />
+                        <input type="number" step="0.01" name="price" placeholder="Price (With Neon)" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
@@ -116,7 +119,7 @@ export default function UvSizesPage() {
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Width (cm)</th>
-                            <th style={{ padding: "8px" }}>Price</th>
+                            <th style={{ padding: "8px" }}>Price (With Neon)</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
@@ -125,7 +128,7 @@ export default function UvSizesPage() {
                         {items.map((item) => (
                             <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === item.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={item.id} />

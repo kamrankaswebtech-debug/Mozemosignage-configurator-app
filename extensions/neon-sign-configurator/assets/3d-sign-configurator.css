@@ -2430,3 +2430,67 @@
 .sign3d-configurator__preview-inner {
     min-width: 0;
 }
+/* =====================================================================
+   Backing panel realism: every panel (Raceway / Rectangle / Circle, any
+   finish) shows its thickness under the face (--s3d-depth, set by JS), a
+   soft shadow on the wall and light falling from the top-left.
+   ===================================================================== */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-chrome,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-glossy,
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-matte {
+    box-shadow:
+        0 var(--s3d-depth, 5px) 0 color-mix(in srgb, var(--sign3d-backing, #111111) 52%, #000000),
+        0 calc(var(--s3d-depth, 5px) + 1px) 0 rgba(0, 0, 0, 0.28),
+        8px 22px 30px rgba(0, 0, 0, 0.34),
+        0 6px 12px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Gloss: natural top-left light and a soft, wide reflection (no hard streak). */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing.surf-glossy {
+    background:
+        linear-gradient(128deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) 16%, rgba(255, 255, 255, 0.11) 24%, rgba(255, 255, 255, 0.03) 34%, rgba(255, 255, 255, 0) 42%) padding-box,
+        radial-gradient(120% 95% at 26% 14%, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 55%) padding-box,
+        radial-gradient(110% 90% at 78% 94%, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0) 62%) padding-box,
+        linear-gradient(var(--sign3d-backing, #111111), var(--sign3d-backing, #111111)) padding-box,
+        conic-gradient(from 200deg,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 75%, #000000),
+            color-mix(in srgb, var(--sign3d-backing, #111111) 55%, #ffffff) 10%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 82%, #000000) 24%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 88%, #000000) 55%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 50%, #ffffff) 68%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 78%, #000000) 82%,
+            color-mix(in srgb, var(--sign3d-backing, #111111) 75%, #000000)) border-box;
+}
+
+/* Plain panels (no finish card chosen): same natural light, no streak. */
+.sign3d-configurator .sign3d-configurator__preview-stage .sign3d-configurator__backing:not(.surf-chrome):not(.surf-glossy):not(.surf-matte) {
+    background-image:
+        radial-gradient(120% 95% at 26% 14%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 55%),
+        radial-gradient(110% 90% at 78% 94%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 62%);
+}
+
+/* =====================================================================
+   Wallpaper thumbnails lower, like the Neon configurator: they sit just
+   above the bottom info bar; the Undo / Redo / Reset buttons sit inside that
+   bar, centred in the visible wallpaper, so the space around the sign stays clear.
+   (Higher specificity + !important so they also apply over theme overrides.)
+   ===================================================================== */
+@media (min-width: 769px) {
+    .sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__bg-thumbs {
+        bottom: 56px !important;
+    }
+
+    .sign3d-configurator .sign3d-configurator__preview .sign3d-configurator__toolbar {
+        top: auto !important;
+        bottom: 9px !important;
+        left: calc((100% - var(--s3d-panel-edge, calc(35% + 48px))) / 2) !important;
+        right: auto !important;
+        transform: translateX(-50%);
+        flex-wrap: nowrap;
+        justify-content: center !important;
+        gap: 6px;
+        z-index: 4;
+    }
+}

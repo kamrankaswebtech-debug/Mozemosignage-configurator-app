@@ -97,7 +97,7 @@ export default function UvLedColoursPage() {
     return (
         <s-page heading="UV LED Colours">
             <s-section heading="Add New UV LED Colours">
-                <s-link href="/app/uv-graphic-led">← Back to UV Graphic LED Signs</s-link>
+                <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">

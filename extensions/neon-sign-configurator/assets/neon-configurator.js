@@ -60,7 +60,8 @@ async function addItemToCartWithRetry(routesRoot, variantId, properties, section
 // cart at $0.00. So: wait until the storefront lists the new variant at the configured price,
 // add it, then check the line's price in the cart — re-adding once if needed. A line at the
 // wrong price is never left in the cart.
-const CONFIG_SLEEP = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// A function declaration (not const) so loading Neon + 3D on the same page can't clash.
+function CONFIG_SLEEP(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 async function waitForVariantReady(routesRoot, variantId, expectedPrice) {
     const handle = (window.location.pathname.match(/\/products\/([^/?#]+)/) || [])[1];

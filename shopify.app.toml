@@ -624,6 +624,11 @@ required = true
 name = "Price"
 type = "number_decimal"
 
+[metaobjects.app.uv_size.fields.price_no_led_decimal]
+name = "Price Without Neon Lighting"
+description = "Optional. Used when the customer chooses Without Neon Lighting. Empty = same as Price."
+type = "number_decimal"
+
 [metaobjects.app.uv_size.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
@@ -716,6 +721,11 @@ type = "number_decimal"
 [metaobjects.app.uv_addon.fields.is_free]
 name = "Is Free"
 type = "boolean"
+
+[metaobjects.app.uv_addon.fields.show_for]
+name = "Show For"
+description = "both, led (With Neon Lighting only) or no_led (Without Neon Lighting only). Empty = both."
+type = "single_line_text_field"
 
 [metaobjects.app.uv_addon.fields.sort_order]
 name = "Sort Order"

@@ -96,7 +96,7 @@ export default function UvMaterialsPage() {
     return (
         <s-page heading="Materials">
             <s-section heading="Add New Materials Type">
-                <s-link href="/app/uv-graphic-led">← Back to UV Graphic LED Signs</s-link>
+                <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">

@@ -1,0 +1,13 @@
+{%- comment -%}
+  UV Graphic Signs — one configurator for With and Without Neon Lighting.
+  Params: block_id, product_id, start ('led' or 'no_led' = which lighting option is selected first).
+{%- endcomment -%}
+<div data-moz-cfg="uv" data-block-id="{{ block_id }}" data-product-id="{{ product_id }}">
+<script type="application/json" data-moz-data>{"start":{{ start | default: 'led' | json }},
+"sizes":[{%- for o in metaobjects["app--418838118401--uv_size"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"w":{{ o.width_cm.value | default: 0 }},"p":{{ o.price_decimal.value | default: 0 }},"pn":{% if o.price_no_led_decimal.value != blank %}{{ o.price_no_led_decimal.value }}{% else %}null{% endif %},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
+"materials":[{%- for o in metaobjects["app--418838118401--uv_material"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
+"finishes":[{%- for o in metaobjects["app--418838118401--uv_finish"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
+"colours":[{%- for o in metaobjects["app--418838118401--uv_led_colour"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"n":{{ o.name.value | json }},"h":{{ o.hex_code.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
+"addons":[{%- for o in metaobjects["app--418838118401--uv_addon"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"sf":{{ o.show_for.value | default: 'both' | json }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
+{%- render 'moz-cfg-common', walls: 'neon', power: true, install: true -%}
+</div>

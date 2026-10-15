@@ -4,7 +4,7 @@ import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-type Entry = { id: string; label: string; extraPrice: string; isFree: boolean; sortOrder: string };
+type Entry = { id: string; label: string; extraPrice: string; isFree: boolean; showFor: string; sortOrder: string };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
@@ -16,7 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const items: Entry[] = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
         edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
-        return { id: edge.node.id, label: f.label || "", extraPrice: f.extra_price_decimal || "0", isFree: f.is_free === "true", sortOrder: f.sort_order || "0" };
+        return { id: edge.node.id, label: f.label || "", extraPrice: f.extra_price_decimal || "0", isFree: f.is_free === "true", showFor: f.show_for || "both", sortOrder: f.sort_order || "0" };
     });
     items.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
     return { items };
@@ -30,6 +30,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "label", value: String(formData.get("label") || "") },
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "is_free", value: formData.get("isFree") === "on" ? "true" : "false" },
+        { key: "show_for", value: ["both", "led", "no_led"].includes(String(formData.get("showFor"))) ? String(formData.get("showFor")) : "both" },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
     ];
 
@@ -97,7 +98,7 @@ export default function AddonsPage() {
     return (
         <s-page heading="UV Graphic Sign Add-ons">
             <s-section heading="Add New Add-on">
-                <s-link href="/app/uv-graphic-led">← Back to UV Graphic LED Signs</s-link>
+                <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -106,6 +107,7 @@ export default function AddonsPage() {
                         <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <input type="checkbox" name="isFree" /> Is Free
                         </label>
+                        
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
@@ -127,7 +129,7 @@ export default function AddonsPage() {
                         {items.map((item) => (
                             <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === item.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={item.id} />
@@ -137,6 +139,7 @@ export default function AddonsPage() {
                                                 <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                                     <input type="checkbox" name="isFree" defaultChecked={item.isFree} /> Is Free
                                                 </label>
+                                                
                                                 <input type="number" name="sortOrder" defaultValue={item.sortOrder} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
