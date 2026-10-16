@@ -9,8 +9,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
-    { title: "Shapes", path: "/app/lightbox/shapes", description: "Manage Circle/Round, Square, and Rectangle shape options." },
-    { title: "Sizes", path: "/app/lightbox/sizes", description: "Manage available sizes and pricing for single-sided and double-sided lightboxes." },
+    { title: "Lightbox Types", path: "/app/lightbox/types", description: "Slim, Fully Illuminated and Metal-Sided lightboxes and which lighting (single / double / all-around) each offers." },
+    { title: "Sizes", path: "/app/lightbox/sizes", description: "Sizes and prices per Lightbox Type and lighting (single-sided, double-sided, all-around)." },
     { title: "Frame Colours", path: "/app/lightbox/frame-colours", description: "Manage outdoor aluminium frame colour options." },
 ];
 

@@ -98,7 +98,7 @@ export default function UvSizesPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="UV Graphic Sign Sizes">
+        <s-page heading="UV Graphic Size Prices">
             <s-section heading="Add New Size">
                 <s-link href="/app/uv-graphic-led">← Back to UV Graphic Signs</s-link>
                 <fetcher.Form method="post">

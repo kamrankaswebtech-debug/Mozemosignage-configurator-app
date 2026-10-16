@@ -4,7 +4,9 @@ import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-type SizeEntry = { id: string; label: string; sides: string; extraPrice: string; sortOrder: string };
+type SizeEntry = { id: string; label: string; sides: string; typeKey: string; extraPrice: string; sortOrder: string };
+const TYPE_LABELS: Record<string, string> = { "": "Any", slim: "Slim", fully: "Fully Illuminated", metal: "Metal-Sided" };
+const SIDES_LABELS: Record<string, string> = { single: "Single / Front-Lit", double: "Double-Sided", all: "All-Around" };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
@@ -14,7 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const all = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
         edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
-        return { id: edge.node.id, label: f.label || "", sides: f.sides || "single", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0", category: f.category || "" };
+        return { id: edge.node.id, label: f.label || "", sides: f.sides || "single", typeKey: f.type_key || "", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0", category: f.category || "" };
     });
     const sizes: SizeEntry[] = all.filter((a: any) => a.category === "size");
     sizes.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
@@ -28,6 +30,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const fields = [
         { key: "label", value: String(formData.get("label") || "") },
         { key: "sides", value: String(formData.get("sides") || "single") },
+        { key: "type_key", value: String(formData.get("typeKey") || "") },
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
         { key: "category", value: "size" },
@@ -81,15 +84,13 @@ export default function LightboxSizesPage() {
         <s-page heading="Lightbox Sizes">
             <s-section heading="Add New Size">
                 <s-link href="/app/lightbox">← Back to Lightbox Range</s-link>
-                <s-paragraph>Add a size for EACH sides option separately (e.g. "30 cm" with Sides=Single AND another "30 cm" row with Sides=Double), since single- and double-sided have different price tables per the client's pricing sheet.</s-paragraph>
+                <s-paragraph>Add one row per Lightbox Type + Sides combination with its own price, e.g. "60 cm" Slim / Single-Sided, "60 cm" Slim / Double-Sided, "60 cm" Fully Illuminated / All-Around, "60 cm" Metal-Sided / Front-Lit, "60 cm" Metal-Sided / Double-Sided. "Any Lightbox Type" rows are shown for every type. Put the width first in the label (e.g. "60 cm" or "90 x 40 cm").</s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
                         <input type="text" name="label" placeholder="Label (e.g. 30 cm)" required />
-                        <select name="sides" defaultValue="single" required>
-                            <option value="single">Single-Sided</option>
-                            <option value="double">Double-Sided</option>
-                        </select>
+                        <select name="typeKey" defaultValue=""><option value="">Any Lightbox Type</option><option value="slim">Slim Lightbox</option><option value="fully">Fully Illuminated</option><option value="metal">Metal-Sided</option></select>
+                        <select name="sides" defaultValue="single" required><option value="single">Single-Sided / Front-Lit</option><option value="double">Double-Sided</option><option value="all">All-Around (Fully Illuminated)</option></select>
                         <input type="number" step="0.01" name="extraPrice" placeholder="Price" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={sizes.length + 1} />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Size</s-button>
@@ -101,7 +102,7 @@ export default function LightboxSizesPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
-                            <th style={{ padding: "8px" }}>Label</th><th style={{ padding: "8px" }}>Sides</th>
+                            <th style={{ padding: "8px" }}>Label</th><th style={{ padding: "8px" }}>Lightbox Type</th><th style={{ padding: "8px" }}>Sides</th>
                             <th style={{ padding: "8px" }}>Price</th><th style={{ padding: "8px" }}>Sort Order</th><th style={{ padding: "8px" }}>Actions</th>
                         </tr>
                     </thead>
@@ -109,15 +110,14 @@ export default function LightboxSizesPage() {
                         {sizes.map((s) => (
                             <tr key={s.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === s.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={s.id} />
                                             <s-stack direction="inline" gap="base">
                                                 <input type="text" name="label" defaultValue={s.label} required />
-                                                <select name="sides" defaultValue={s.sides} required>
-                                                    <option value="single">Single-Sided</option><option value="double">Double-Sided</option>
-                                                </select>
+                                                <select name="typeKey" defaultValue={s.typeKey}><option value="">Any Lightbox Type</option><option value="slim">Slim Lightbox</option><option value="fully">Fully Illuminated</option><option value="metal">Metal-Sided</option></select>
+                                                <select name="sides" defaultValue={s.sides} required><option value="single">Single-Sided / Front-Lit</option><option value="double">Double-Sided</option><option value="all">All-Around (Fully Illuminated)</option></select>
                                                 <input type="number" step="0.01" name="extraPrice" defaultValue={s.extraPrice} required />
                                                 <input type="number" name="sortOrder" defaultValue={s.sortOrder} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
@@ -127,7 +127,7 @@ export default function LightboxSizesPage() {
                                     </td>
                                 ) : (
                                     <>
-                                        <td style={{ padding: "8px" }}>{s.label}</td><td style={{ padding: "8px" }}>{s.sides}</td>
+                                        <td style={{ padding: "8px" }}>{s.label}</td><td style={{ padding: "8px" }}>{TYPE_LABELS[s.typeKey] || "Any"}</td><td style={{ padding: "8px" }}>{SIDES_LABELS[s.sides] || s.sides}</td>
                                         <td style={{ padding: "8px" }}>${s.extraPrice}</td><td style={{ padding: "8px" }}>{s.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">

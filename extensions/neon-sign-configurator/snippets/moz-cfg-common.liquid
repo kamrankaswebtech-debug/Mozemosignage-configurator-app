@@ -1,10 +1,22 @@
 {%- comment -%}
   Shared data + assets for the moz-configurator blocks (UV Graphic, Bonnet, Lightbox, Infinity, Marquee).
-  Params: walls ('neon' = Neon wallpaper library, '3d' = 3D wallpaper library), power (bool), install (bool).
+  Params: walls ('neon' = Neon wallpapers, '3d' = 3D wallpapers), lib (configurator key: photos from
+  Settings → Configurator Wallpapers ticked for it; falls back to "walls" when none),
+  fonts (bool: the 3D configurator's fonts — the first one is used), power (bool), install (bool).
 {%- endcomment -%}
 <script type="application/json" data-moz-walls>[
 {%- assign moz_first = true -%}
-{%- if walls == '3d' -%}
+{%- if lib != blank -%}
+  {%- for o in metaobjects["app--418838118401--lightbox_option"].values -%}
+    {%- assign moz_cat = o.category.value | strip | downcase -%}
+    {%- assign moz_p = o.products.value | default: '' | split: ',' -%}
+    {%- if moz_cat == "wallpaper" and moz_p contains lib and o.image.value -%}
+      {%- unless moz_first -%},{%- endunless -%}{%- assign moz_first = false -%}
+      {"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{%- if moz_first and walls == '3d' -%}
   {%- for o in metaobjects["app--418838118401--sign3d_option"].values -%}
     {%- assign moz_c = o.category.value | strip | downcase -%}
     {%- if moz_c == "wallpaper" and o.image.value -%}
@@ -12,7 +24,7 @@
       {"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }}}
     {%- endif -%}
   {%- endfor -%}
-{%- else -%}
+{%- elsif moz_first -%}
   {%- for o in metaobjects["app--418838118401--neon_background_image"].values -%}
     {%- if o.visibility.value != "3d_only" and o.image.value -%}
       {%- unless moz_first -%},{%- endunless -%}{%- assign moz_first = false -%}
@@ -21,6 +33,16 @@
   {%- endfor -%}
 {%- endif -%}
 ]</script>
+{%- if fonts -%}
+<script type="application/json" data-moz-fonts>[
+{%- assign moz_ff = true -%}
+{%- for f in metaobjects["app--418838118401--neon_font"].values -%}
+  {%- if f.visibility.value == "neon_only" -%}{%- continue -%}{%- endif -%}
+  {%- unless moz_ff -%},{%- endunless -%}{%- assign moz_ff = false -%}
+  {"n":{{ f.name.value | json }},"f":{{ f.css_font_family.value | default: '' | json }},"u":{% if f.font_file.value.url %}{{ f.font_file.value.url | json }}{% else %}""{% endif %},"h":{{ f.system.handle | json }},"s":{{ f.sort_order.value | default: 999999 }}}
+{%- endfor -%}
+]</script>
+{%- endif -%}
 {%- if power -%}
 <script type="application/json" data-moz-power>[{%- for pa in metaobjects["app--418838118401--power_adapter"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ pa.label.value | json }},"s":{{ pa.sort_order.value | default: 999999 }}}{%- endfor -%}]</script>
 {%- endif -%}

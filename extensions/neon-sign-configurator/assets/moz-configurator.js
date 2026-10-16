@@ -253,6 +253,18 @@
         const walls = bySort(readJson(root, '[data-moz-walls]', []));
         const powerList = bySort(readJson(root, '[data-moz-power]', []));
         const install = readJson(root, '[data-moz-install]', null);
+        // Sign font = the 3D configurator's default (first) font, so wording looks the same site-wide.
+        const signFonts = bySort(readJson(root, '[data-moz-fonts]', []));
+        const signFont = signFonts[0] || null;
+        let signFamily = '';
+        if (signFont) {
+            signFamily = signFont.u ? '"moz-font-' + String(signFont.h || '').replace(/[^a-z0-9_-]/gi, '') + '"' : (signFont.f || '');
+            if (signFont.u) {
+                const st = el('style');
+                st.textContent = '@font-face{font-family:' + signFamily + ';src:url("' + signFont.u + '");font-display:swap;}';
+                root.appendChild(st);
+            }
+        }
         const layout = product.layout || 'neon';
 
         // ---- Skeleton ----
@@ -312,6 +324,8 @@
         // ---- State ----
         const ctx = {
             root, data, install, layout, sign, stage, preview, panel,
+            signFamily,
+            signFontName: signFont ? signFont.n : '',
             v: {},                 // selected values by key
             ledOn: true,
             showDims: true,
@@ -357,9 +371,18 @@
                 control.items = list.slice();
                 grid.innerHTML = '';
                 list.forEach((item, idx) => {
-                    const card = el('button', 'moz-cfg__card');
+                    const card = el('button', 'moz-cfg__card' + (item.disabled ? ' is-disabled' : ''));
                     card.type = 'button';
-                    if (item.visual) {
+                    if (item.disabled) card.setAttribute('aria-disabled', 'true');
+                    if (item.img) {
+                        const vis = el('span', 'moz-cfg__card-visual moz-cfg__card-visual--img');
+                        const im = el('img');
+                        im.src = item.img;
+                        im.alt = '';
+                        im.loading = 'lazy';
+                        vis.appendChild(im);
+                        card.appendChild(vis);
+                    } else if (item.visual) {
                         const vis = el('span', 'moz-cfg__card-visual');
                         item.visual(vis);
                         card.appendChild(vis);
@@ -375,7 +398,10 @@
                         else if (opts.showIncluded) card.appendChild(el('span', 'moz-cfg__card-price is-included', 'Included'));
                     }
                     if (item.badge) card.appendChild(el('span', 'moz-cfg__card-badge', item.badge));
-                    card.addEventListener('click', () => control.select(idx));
+                    card.addEventListener('click', () => {
+                        if (item.disabled) { if (opts.onDisabled) opts.onDisabled(item); return; }
+                        control.select(idx);
+                    });
                     grid.appendChild(card);
                 });
                 let next = 0;
@@ -643,6 +669,18 @@
             ctx.v.installation = false;
             ctx.installFields = { address, date, time, booking };
             return { el: wrap };
+        };
+
+        // Short message shown over the preview (e.g. why an option isn't available).
+        const noticeEl = el('div', 'moz-cfg__notice');
+        noticeEl.setAttribute('role', 'status');
+        noticeEl.hidden = true;
+        preview.appendChild(noticeEl);
+        ctx.notice = function (text) {
+            noticeEl.textContent = text;
+            noticeEl.hidden = false;
+            clearTimeout(noticeEl._t);
+            noticeEl._t = setTimeout(() => { noticeEl.hidden = true; }, 6000);
         };
 
         // ---- Preview toggles ----
@@ -974,139 +1012,243 @@
     }
 
     // -------------------------------------------------------------------------------------
-    // 1) UV Graphic Signs — With or Without Neon Lighting (Neon configurator layout)
+    // 1) UV Graphic Printed Signs — With or Without Neon Lighting.
+    // Same options, settings and conditions as the Neon configurator (Neon colours, effects,
+    // sizes, backboard styles + colours, Indoor / Outdoor, power adapter, add-ons,
+    // installation) — read straight from the Neon Admin data — minus Fonts / Quick Symbols /
+    // Symbol Position, plus the printed graphic upload and the With / Without Neon choice.
     // -------------------------------------------------------------------------------------
+    const UV_BACKBOARDS = [
+        { key: 'cut', re: /cut\s*-?\s*around/i },
+        { key: 'rect', re: /rectang/i },
+        { key: 'openbox', re: /open\s*-?\s*box/i },
+        { key: 'stand', re: /acrylic\s*stand|stand/i }
+    ];
+    function uvBoardKey(label) {
+        const hit = UV_BACKBOARDS.find((b) => b.re.test(String(label || '')));
+        return hit ? hit.key : 'rect';
+    }
+
     M.register('uv', {
         layout: 'neon',
         hero: 'Design Your UV Graphic Sign',
         build(ctx, d) {
             const sizes = bySort(d.sizes);
+            const overrides = d.uvPrices || [];
+            const findOverride = (w) => overrides.find((o) => Math.abs(num(o.w) - num(w)) < 0.51);
             const isLed = () => !!(ctx.v.lighting && ctx.v.lighting.key === 'led');
-            const sizePrice = (s) => (isLed() || s.pn === null || s.pn === undefined || s.pn === '') ? num(s.p) : num(s.pn);
-            const sizeCardsFor = () => sizes.map((s) => ({ label: s.l, price: sizePrice(s), meta: 'Width: ' + cmText(s.w), src: s }));
+            // Size price: With Neon = Neon price (or the UV Sizes price for that width);
+            // Without Neon = the UV Sizes "Price Without Neon" (else the same price).
+            const sizePrice = (s) => {
+                const o = findOverride(s.w);
+                if (isLed()) return o && o.p !== null && o.p !== undefined ? num(o.p) : num(s.p);
+                if (o && o.pn !== null && o.pn !== undefined) return num(o.pn);
+                return o && o.p !== null && o.p !== undefined ? num(o.p) : num(s.p);
+            };
+            const sizeCards = () => sizes.map((s) => ({
+                label: s.l, price: sizePrice(s), badge: s.b || '',
+                meta: num(s.h) ? cmText(s.w) + ' x ' + cmText(s.h) : 'Width: ' + cmText(s.w), src: s
+            }));
 
-            const up = ctx.step('Upload Your Graphic / Logo', { note: 'This range is made for your own logos, graphics and printed designs — upload your artwork first.' });
+            const up = ctx.step('Upload Your Graphic / Logo', { note: 'Made for your own logos, graphics and printed designs — upload your full-colour artwork first.' });
             up.appendChild(ctx.upload().el);
 
-            const lightStep = ctx.step('Lighting');
+            const ledSteps = [];
             let sizeCtl = null;
             let addonCtl = null;
-            const ledSteps = [];
-            const lightItems = [
-                { key: 'led', label: 'With Neon Lighting', desc: 'UV printed graphic with glowing LED neon lighting.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample is-on')) },
-                { key: 'no_led', label: 'Without Neon Lighting', desc: 'UV printed graphic panel only — no lighting or power needed.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample')) }
-            ];
-            const lightCtl = ctx.cards('lighting', lightItems, {
-                price: 'none',
-                cols: 2,
+            let typeCtl = null;
+            const lightCtl = ctx.cards('lighting', [
+                { key: 'led', label: 'With Neon Lighting', desc: 'Printed graphic with glowing LED neon.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample is-on')) },
+                { key: 'no_led', label: 'Without Neon Lighting', desc: 'Printed graphic only — no lighting or power needed.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample')) }
+            ], {
+                price: 'none', cols: 2,
                 onChange: () => {
                     ledSteps.forEach((s) => { s.hidden = !isLed(); });
-                    if (sizeCtl) sizeCtl.setItems(sizeCardsFor(), true);
+                    if (sizeCtl) sizeCtl.setItems(sizeCards(), true);
                     if (addonCtl) addonCtl.setItems(addonsFor());
                 }
             });
-            lightStep.appendChild(lightCtl.el);
+            ctx.step('Lighting').appendChild(lightCtl.el);
 
-            const sizeStep = ctx.step('Choose Size');
-            sizeCtl = ctx.cards('size', sizeCardsFor(), { price: 'full', cols: 2 });
-            sizeStep.appendChild(sizeCtl.el);
-
-            if ((d.materials || []).length) {
-                const s = ctx.step('Material');
-                s.appendChild(ctx.cards('material', cardItems(d.materials, (o) => ({ visual: metalVisual(o.l) })), { showIncluded: true, cols: 3, compact: true }).el);
-            }
-            if ((d.finishes || []).length) {
-                const s = ctx.step('Finish');
-                s.appendChild(ctx.cards('finish', cardItems(d.finishes), { showIncluded: true, cols: 3, compact: true }).el);
-            }
-            if ((d.colours || []).length) {
-                const s = ctx.step('Neon Colour');
-                s.appendChild(ctx.swatches('colour', swatchItems(d.colours)).el);
+            // Neon Colour / Effect (Multicoloured Text is letter-by-letter, so not offered here).
+            const effects = bySort(d.effects).filter((e) => String(e.k || '').toLowerCase() !== 'multicolour');
+            const colours = bySort(d.colours);
+            if (effects.length || colours.length) {
+                const s = ctx.step('Neon Colour / Effect');
+                if (effects.length) {
+                    const start = Math.max(0, effects.findIndex((e) => String(e.k).toLowerCase() === 'single'));
+                    const ctl = ctx.cards('effect', effects.map((e) => ({ key: String(e.k || '').toLowerCase(), label: e.l, price: e.p })), { cols: Math.min(3, effects.length), compact: true, showIncluded: true });
+                    ctl.select(start, true);
+                    s.appendChild(ctl.el);
+                }
+                if (colours.length) s.appendChild(ctx.swatches('colour', colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
                 ledSteps.push(s);
             }
+
+            const sizeStep = ctx.step('Choose Size');
+            sizeCtl = ctx.cards('size', sizeCards(), {
+                price: 'full', cols: 2,
+                onChange: () => { if (typeCtl) refreshTypes(); }
+            });
+            sizeStep.appendChild(sizeCtl.el);
+
+            // Backboard styles: only Cut Around, Rectangle, Open Box and Acrylic Stand.
+            const allStyles = bySort(d.styles);
+            let styles = allStyles.filter((st) => UV_BACKBOARDS.some((b) => b.re.test(st.l)));
+            if (!styles.length) styles = allStyles;
+            if (styles.length) {
+                ctx.step('Backboard Style', { note: 'Digital preview only — on the real sign the backboard holds every part of your design together.' })
+                    .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 2, compact: true, showIncluded: true }).el);
+            }
+            const bcolours = bySort(d.bcolours);
+            if (bcolours.length) {
+                ctx.step('Backboard Colour').appendChild(ctx.swatches('board', bcolours.map((c) => ({ name: c.l, hex: c.c ? 'linear-gradient(135deg,rgba(255,255,255,.75),rgba(200,220,235,.35))' : (c.h || '#e8e8e8'), price: c.p, clear: !!c.c, finish: c.fi || '', solid: c.h || '#e8e8e8' }))).el);
+            }
+
+            // Indoor / Outdoor — outdoor only from 60 cm wide (same rule as Neon).
+            const types = (d.types || []).filter((x) => x.k);
+            const isOutdoorAllowed = () => num(ctx.v.size && ctx.v.size.src ? ctx.v.size.src.w : 0) >= 60;
+            const typeItems = () => types.map((x) => ({
+                key: String(x.k).toLowerCase(), label: x.l, price: x.p,
+                disabled: String(x.k).toLowerCase() === 'outdoor' && !isOutdoorAllowed(),
+                desc: String(x.k).toLowerCase() === 'outdoor' && !isOutdoorAllowed() ? 'Available from 60 cm wide' : ''
+            }));
+            function refreshTypes() {
+                const wasOutdoor = ctx.v.neonType && ctx.v.neonType.key === 'outdoor';
+                typeCtl.setItems(typeItems(), true);
+                if (wasOutdoor && !isOutdoorAllowed()) {
+                    const indoor = typeCtl.items.findIndex((x) => x.key === 'indoor');
+                    typeCtl.select(indoor > -1 ? indoor : 0, true);
+                    ctx.notice('Outdoor acrylic neon is only available for signs 60cm and larger — switched to Indoor, which is available at every size.');
+                } else if (ctx.v.neonType && ctx.v.neonType.disabled) {
+                    const ok = typeCtl.items.findIndex((x) => !x.disabled);
+                    typeCtl.select(ok > -1 ? ok : 0, true);
+                }
+            }
+            if (types.length) {
+                const s = ctx.step('Indoor or Outdoor');
+                typeCtl = ctx.cards('neonType', typeItems(), {
+                    cols: 2, showIncluded: true,
+                    onDisabled: () => ctx.notice('Outdoor acrylic neon is only available for signs 60cm and larger — the acrylic components are too large to fit properly on smaller sizes.')
+                });
+                const first = typeCtl.items.findIndex((x) => !x.disabled);
+                typeCtl.select(first > -1 ? first : 0, true);
+                s.appendChild(typeCtl.el);
+                ledSteps.push(s);
+            }
+
             const ps = powerStep(ctx);
             if (ps) ledSteps.push(ps);
 
-            const allAddons = addonItems(d.addons);
+            // Add-ons: Neon add-ons With Neon Lighting (paid = optional, free = included), plus
+            // the UV Graphic add-ons for the chosen lighting ("Show For").
+            const neonAddons = (d.naddons || []).map((a) => ({ label: a.l, price: a.p, free: !!a.f, neon: true }));
+            const uvAddons = bySort(d.uaddons).map((a) => ({ label: a.l, price: a.p, free: !!a.f, sf: String(a.sf || 'both') }));
             function addonsFor() {
                 const mode = isLed() ? 'led' : 'no_led';
-                return allAddons.filter((a) => { const sf = String(a.src.sf || 'both'); return sf === 'both' || sf === '' || sf === mode; });
+                const uv = uvAddons.filter((a) => a.sf === 'both' || a.sf === '' || a.sf === mode);
+                return (isLed() ? neonAddons : []).concat(uv);
             }
-            const addStep = ctx.step('Add-ons');
+            const addStep = ctx.step('Add-ons & Included With Your Order');
             addonCtl = ctx.addons('addons', addonsFor());
             addStep.appendChild(addonCtl.el);
-            addStep.hidden = !allAddons.length;
+            addStep.hidden = !neonAddons.length && !uvAddons.length;
 
             const inst = ctx.installation();
             if (inst) ctx.step('Need Installation?', { unnumbered: true }).appendChild(inst.el);
 
             lightCtl.select(d.start === 'no_led' ? 1 : 0, true);
+            refreshTypes && typeCtl && refreshTypes();
             ctx.sizes = sizes;
             ctx.isLed = isLed;
             ctx.sizePrice = sizePrice;
         },
         price(ctx) {
             const lines = [];
+            const led = ctx.isLed();
             const size = ctx.v.size;
-            if (size) lines.push({ label: 'Size: ' + size.label + (ctx.isLed() ? ' (With Neon)' : ' (Without Neon)'), value: ctx.sizePrice(size.src), full: true });
-            if (ctx.v.material) lines.push({ label: 'Material: ' + ctx.v.material.label, value: ctx.v.material.price });
-            if (ctx.v.finish) lines.push({ label: 'Finish: ' + ctx.v.finish.label, value: ctx.v.finish.price });
-            if (ctx.isLed() && ctx.v.colour) lines.push({ label: 'Neon colour: ' + ctx.v.colour.name, value: ctx.v.colour.price });
+            if (size) lines.push({ label: 'Size: ' + size.label + (led ? ' (With Neon)' : ' (Without Neon)'), value: ctx.sizePrice(size.src), full: true });
+            if (led && ctx.v.effect) lines.push({ label: 'Effect: ' + ctx.v.effect.label, value: ctx.v.effect.price });
+            if (led && ctx.v.colour) lines.push({ label: 'Neon colour: ' + ctx.v.colour.name, value: ctx.v.colour.price });
+            if (ctx.v.style) lines.push({ label: 'Backboard: ' + ctx.v.style.label, value: ctx.v.style.price });
+            if (ctx.v.board) lines.push({ label: 'Backboard colour: ' + ctx.v.board.name, value: ctx.v.board.price });
+            if (led && ctx.v.neonType) lines.push({ label: ctx.v.neonType.label, value: ctx.v.neonType.price });
             return lines.concat(addonLines(ctx, 'addons'), installLine(ctx));
         },
         render(ctx) {
             const sign = ctx.sign;
             if (!ctx._uv) {
                 sign.innerHTML = '';
-                const panel = el('div', 'moz-uv');
-                panel.setAttribute('data-moz-measure', '');
-                const art = el('div', 'moz-uv__art');
-                const ph = el('div', 'moz-uv__placeholder', 'Your Logo / Graphic');
+                const wrap = el('div', 'moz-uvb');
+                const board = el('div', 'moz-uvb__board');
+                board.setAttribute('data-moz-measure', '');
+                const art = el('div', 'moz-uvb__art');
+                const ph = el('div', 'moz-uvb__placeholder', 'Your Logo / Graphic');
                 art.appendChild(ph);
-                panel.appendChild(art);
-                panel.appendChild(el('span', 'moz-uv__sheen'));
-                sign.appendChild(panel);
-                ctx._uv = { panel, art, ph };
+                board.appendChild(art);
+                ['tl', 'tr', 'bl', 'br'].forEach((c) => board.appendChild(el('span', 'moz-uvb__standoff is-' + c)));
+                const stand = el('div', 'moz-uvb__stand');
+                wrap.appendChild(board);
+                wrap.appendChild(stand);
+                sign.appendChild(wrap);
+                ctx._uv = { wrap, board, art, ph };
             }
-            const { panel, art, ph } = ctx._uv;
-            const img = designImg(ctx, art, 'moz-uv__img');
+            const { wrap, board, art, ph } = ctx._uv;
+            const img = designImg(ctx, art, 'moz-uvb__img');
             ph.hidden = !!img;
             const aspect = ctx.logo.aspect || 1.5;
             const size = ctx.v.size ? ctx.v.size.src : null;
-            const box = ctx.fit(ctx.sizeShare(size ? size.w : 0, ctx.sizes.map((s) => s.w)), aspect);
-            panel.style.width = box.w + 'px';
-            panel.style.height = box.h + 'px';
-            const mat = metalFromLabel(ctx.v.material && ctx.v.material.label);
-            const matLabel = String(ctx.v.material ? ctx.v.material.label : '').toLowerCase();
-            panel.className = 'moz-uv'
-                + (/clear|acrylic|perspex|glass/.test(matLabel) ? ' is-clear' : (mat === 'silver' ? ' is-metal' : ' is-solid'))
-                + (/matt/.test(String(ctx.v.finish ? ctx.v.finish.label : '').toLowerCase()) ? ' is-matte' : ' is-gloss');
-            const lit = ctx.isLed() && ctx.ledOn;
-            panel.classList.toggle('is-lit', lit);
-            panel.classList.toggle('is-neon', ctx.isLed());
-            const c = glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ffffff');
-            panel.style.setProperty('--moz-glow', c);
-            panel.style.setProperty('--moz-glow-a', rgba(c, 0.55));
-            if (img) img.style.filter = lit ? 'drop-shadow(0 0 2px ' + c + ') drop-shadow(0 0 6px ' + c + ') drop-shadow(0 0 16px ' + rgba(c, 0.8) + ') drop-shadow(0 0 32px ' + rgba(c, 0.45) + ')' : 'drop-shadow(0 2px 3px rgba(0,0,0,0.35))';
+            const kind = ctx.v.style ? ctx.v.style.board : 'rect';
+            const pad = kind === 'cut' ? 1 : 1.16;
+            const box = ctx.fit(ctx.sizeShare(size ? size.w : 0, ctx.sizes.map((s) => s.w)) / pad, aspect);
+            art.style.width = box.w + 'px';
+            art.style.height = box.h + 'px';
+            const bc = ctx.v.board || { solid: '#ffffff', clear: false, finish: '' };
+            board.style.setProperty('--moz-board', bc.clear ? 'rgba(255,255,255,0.14)' : bc.solid);
+            wrap.className = 'moz-uvb is-' + kind + (bc.clear ? ' is-clear' : '') + (/frost|matt/i.test(bc.finish || '') ? ' is-frosted' : '');
+            const led = ctx.isLed();
+            const lit = led && ctx.ledOn;
+            const c = glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ff2ec4');
+            const rgb = led && ctx.v.effect && ctx.v.effect.key === 'rgb';
+            wrap.classList.toggle('is-neon', led);
+            wrap.classList.toggle('is-lit', lit);
+            wrap.classList.toggle('is-rgb', lit && rgb);
+            wrap.style.setProperty('--moz-glow', c);
+            wrap.style.setProperty('--moz-glow-a', rgba(c, 0.6));
+            if (img) {
+                // Neon tube traced around the graphic (crisp ring) + glow; cut-around board drawn
+                // as a contour in the backboard colour right behind it.
+                const tube = lit ? c : (led ? '#e9e9ee' : null);
+                const contour = kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.55)' : bc.solid) : null;
+                const f = [];
+                if (tube) ['2px 0', '-2px 0', '0 2px', '0 -2px'].forEach((o) => f.push('drop-shadow(' + o + ' 0 ' + tube + ')'));
+                if (contour) ['7px 0', '-7px 0', '0 7px', '0 -7px'].forEach((o) => f.push('drop-shadow(' + o + ' 0 ' + contour + ')'));
+                if (lit) f.push('drop-shadow(0 0 6px ' + c + ')', 'drop-shadow(0 0 18px ' + rgba(c, 0.7) + ')');
+                f.push('drop-shadow(3px 8px 8px rgba(0,0,0,0.35))');
+                img.style.filter = f.join(' ');
+            }
             const w = size ? num(size.w) : 0;
-            ctx.setDims(w ? cmText(w) : '', w ? cmText(w / aspect) : '');
-            ctx.dims = { w, h: w ? Math.round((w / aspect) * 10) / 10 : 0 };
+            const h = size && num(size.h) ? num(size.h) : (w ? Math.round((w / aspect) * 10) / 10 : 0);
+            ctx.setDims(w ? cmText(w) : '', h ? cmText(h) : '');
+            ctx.dims = { w, h };
         },
         properties(ctx) {
+            const led = ctx.isLed();
             const p = {
                 'Design Source': 'Uploaded Graphic / Logo',
                 'Uploaded Design': designUrl(ctx),
-                'Lighting': ctx.isLed() ? 'With Neon Lighting' : 'Without Neon Lighting',
+                'Lighting': led ? 'With Neon Lighting' : 'Without Neon Lighting',
                 'Size': ctx.v.size ? ctx.v.size.label : '',
-                'Overall Width': ctx.dims.w ? cmText(ctx.dims.w) : '',
-                'Material': ctx.v.material ? ctx.v.material.label : 'Standard',
-                'Finish': ctx.v.finish ? ctx.v.finish.label : 'Standard',
+                'Backboard Style': ctx.v.style ? ctx.v.style.label : 'Standard',
+                'Backboard Colour': ctx.v.board ? ctx.v.board.name : 'Standard',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
-            if (ctx.isLed()) {
+            if (led) {
+                if (ctx.v.effect) p['Colour Effect'] = ctx.v.effect.label;
                 if (ctx.v.colour) p['Neon Colour'] = ctx.v.colour.name;
+                if (ctx.v.neonType) p['Neon Type'] = ctx.v.neonType.label;
                 if (ctx.v.power) p['Power Adapter'] = ctx.v.power.label;
             }
             return p;
@@ -1222,45 +1364,104 @@
     });
 
     // -------------------------------------------------------------------------------------
-    // 3) Lightbox Signs — straightforward: shape, sides, size, design, frame colour
+    // 3) Lightbox Signs — kept simple: Shape, Lightbox Type, Lighting, Size, Design, Frame.
+    // Types follow the 3D Illumination idea: Slim (single / double sided), Fully Illuminated
+    // (all around), Metal-Sided (front-lit / double sided). Sizes are priced per type + lighting.
     // -------------------------------------------------------------------------------------
+    const LB_DEFAULT_TYPES = [
+        { k: 'slim', l: 'Slim Lightbox', d: 'Sleek 1cm thin sign — single or double sided.', sd: 'single,double', p: 0, s: 1 },
+        { k: 'fully', l: 'Fully Illuminated', d: 'Lit on all sides — glows all the way around.', sd: 'all', p: 0, s: 2 },
+        { k: 'metal', l: 'Metal-Sided', d: 'Illuminated face with metal sides — front-lit or double sided.', sd: 'single,double', p: 0, s: 3 }
+    ];
+    const LB_SHAPES = {
+        circle: 'ellipse(50% 50% at 50% 50%)',
+        oval: 'ellipse(50% 50% at 50% 50%)',
+        square: 'inset(0 round 6%)',
+        rectangle: 'inset(0 round 4%)',
+        star: 'polygon(50% 0%, 61.8% 35.1%, 98.1% 34.5%, 69.1% 56.5%, 79.4% 91.3%, 50% 70.5%, 20.6% 91.3%, 30.9% 56.5%, 1.9% 34.5%, 38.2% 35.1%)',
+        hexagon: 'polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0% 50%)',
+        octagon: 'polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)',
+        other: 'inset(0 round 24%)'
+    };
+    function lbShapeKey(o) {
+        const k = String(o.k || '').trim().toLowerCase();
+        if (LB_SHAPES[k]) return k;
+        const l = String(o.l || '').toLowerCase();
+        const hit = Object.keys(LB_SHAPES).find((x) => l.indexOf(x) > -1) || (/round/.test(l) ? 'circle' : '');
+        return hit || 'other';
+    }
+    function lbSidesLabel(typeKey, sides) {
+        if (sides === 'all') return 'Illuminated All Around';
+        if (sides === 'double') return 'Double-Sided';
+        return typeKey === 'metal' ? 'Front-Lit (Single-Sided)' : 'Single-Sided';
+    }
+
     M.register('lightbox', {
         layout: 'neon',
         hero: 'Design Your Lightbox',
         build(ctx, d) {
             const opts = d.opts || [];
-            const cat = (c) => opts.filter((o) => String(o.c || '').trim().toLowerCase() === c);
+            const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
             const shapes = cat('shape');
             if (shapes.length) {
-                ctx.step('Choose Shape').appendChild(ctx.cards('shape', cardItems(shapes, (o) => ({
-                    key: String(o.k || 'circle').toLowerCase(),
-                    visual: (v) => v.appendChild(el('span', 'moz-cfg__shape-icon is-' + String(o.k || 'circle').toLowerCase()))
-                })), { showIncluded: true, cols: 3, compact: true }).el);
-            }
-            const allSizes = bySort(cat('size'));
-            const hasDouble = allSizes.some((s) => String(s.sd || 'single').toLowerCase() === 'double');
-            let sizeCtl = null;
-            const sizesFor = () => {
-                const sides = ctx.v.sides ? ctx.v.sides.key : 'single';
-                const list = allSizes.filter((s) => String(s.sd || 'single').toLowerCase() === sides);
-                return (list.length ? list : allSizes).map((s) => ({ label: s.l, price: s.p, src: s }));
-            };
-            if (hasDouble) {
-                ctx.step('Sides').appendChild(ctx.cards('sides', [
-                    { key: 'single', label: 'Single-Sided', desc: 'Lit graphic on the front face.', price: 0 },
-                    { key: 'double', label: 'Double-Sided', desc: 'Lit graphic on both faces — ideal for projecting signs.', price: 0 }
-                ], { price: 'none', cols: 2, onChange: () => { if (sizeCtl) sizeCtl.setItems(sizesFor(), true); } }).el);
+                ctx.step('Choose Shape').appendChild(ctx.cards('shape', shapes.map((o) => {
+                    const key = lbShapeKey(o);
+                    return { label: o.l, price: o.p, key, visual: (v) => { const s = el('span', 'moz-cfg__shape-icon is-' + key); s.style.clipPath = LB_SHAPES[key]; v.appendChild(s); } };
+                }), { showIncluded: true, cols: 4, compact: true }).el);
             } else {
-                ctx.v.sides = { key: 'single', label: 'Single-Sided' };
+                ctx.v.shape = { key: 'rectangle', label: 'Rectangle', price: 0 };
             }
+
+            let types = cat('type');
+            if (!types.length) types = LB_DEFAULT_TYPES;
+            const allSizes = cat('size');
+            let sidesCtl = null;
+            let sizeCtl = null;
+            const sidesFor = (t) => String(t.sd || 'single').split(',').map((x) => x.trim().toLowerCase()).filter((x) => ['single', 'double', 'all'].indexOf(x) > -1);
+            const sidesItems = () => {
+                const t = ctx.v.ltype ? ctx.v.ltype.src : types[0];
+                const list = sidesFor(t);
+                return (list.length ? list : ['single']).map((x) => ({ key: x, label: lbSidesLabel(t.k, x), price: 0 }));
+            };
+            const sizesFor = () => {
+                const tk = ctx.v.ltype ? String(ctx.v.ltype.src.k || '').toLowerCase() : '';
+                const sd = ctx.v.sides ? ctx.v.sides.key : 'single';
+                const sideOf = (s) => String(s.sd || 'single').toLowerCase();
+                const typeOf = (s) => String(s.t || '').toLowerCase();
+                let list = allSizes.filter((s) => typeOf(s) === tk && sideOf(s) === sd);
+                if (!list.length) list = allSizes.filter((s) => !typeOf(s) && sideOf(s) === sd);
+                if (!list.length && sd === 'all') list = allSizes.filter((s) => (!typeOf(s) || typeOf(s) === tk) && sideOf(s) === 'single');
+                if (!list.length) list = allSizes.filter((s) => !typeOf(s) || typeOf(s) === tk);
+                if (!list.length) list = allSizes;
+                return list.map((s) => ({ label: s.l, price: s.p, src: s }));
+            };
+
+            ctx.step('Lightbox Type').appendChild(ctx.cards('ltype', types.map((t) => ({
+                label: t.l, desc: t.d || '', price: t.p, key: String(t.k || '').toLowerCase(), src: t,
+                visual: (v) => v.appendChild(el('span', 'moz-cfg__lb-icon is-' + String(t.k || '').toLowerCase()))
+            })), {
+                cols: 3, showIncluded: true,
+                onChange: () => { if (sidesCtl) sidesCtl.setItems(sidesItems(), true); }
+            }).el);
+
+            const sidesStep = ctx.step('Lighting');
+            sidesCtl = ctx.cards('sides', sidesItems(), {
+                price: 'none', cols: 2, compact: true,
+                onChange: () => { if (sizeCtl) sizeCtl.setItems(sizesFor(), true); }
+            });
+            sidesStep.appendChild(sidesCtl.el);
+
             ctx.step('Choose Size').appendChild((sizeCtl = ctx.cards('size', sizesFor(), { price: 'full', cols: 2 })).el);
-            ctx.step('Upload Your Design', { note: 'Your logo or artwork for the lit face.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'Your logo, artwork, photo or full-colour design for the lit face.' }).appendChild(ctx.upload().el);
             const frames = cat('frame_colour');
-            if (frames.length) ctx.step('Frame Colour').appendChild(ctx.swatches('frame', swatchItems(frames.map((o) => ({ n: o.l, hc: o.hc || '#1a1a1a', p: o.p, s: o.s })))).el);
+            if (frames.length) ctx.step('Frame Colour').appendChild(ctx.swatches('frame', frames.map((o) => ({ name: o.l, hex: o.hc || '#1a1a1a', price: o.p }))).el);
+            ctx.allSizes = allSizes;
         },
         price(ctx) {
             const lines = [];
-            if (ctx.v.size) lines.push({ label: 'Size: ' + ctx.v.size.label + ' (' + (ctx.v.sides ? ctx.v.sides.label : 'Single-Sided') + ')', value: ctx.v.size.price, full: true });
+            const t = ctx.v.ltype;
+            if (ctx.v.size) lines.push({ label: 'Size: ' + ctx.v.size.label + ' (' + (t ? t.label + ', ' : '') + (ctx.v.sides ? ctx.v.sides.label : '') + ')', value: ctx.v.size.price, full: true });
+            if (t && num(t.price) > 0) lines.push({ label: 'Lightbox type: ' + t.label, value: t.price });
             if (ctx.v.shape) lines.push({ label: 'Shape: ' + ctx.v.shape.label, value: ctx.v.shape.price });
             if (ctx.v.frame) lines.push({ label: 'Frame colour: ' + ctx.v.frame.name, value: ctx.v.frame.price });
             return lines;
@@ -1269,39 +1470,51 @@
             const sign = ctx.sign;
             if (!ctx._lb) {
                 sign.innerHTML = '';
-                const box = el('div', 'moz-lightbox');
+                const box = el('div', 'moz-lb');
                 box.setAttribute('data-moz-measure', '');
-                const face = el('div', 'moz-lightbox__face');
-                const ph = el('div', 'moz-lightbox__placeholder', 'Your Design');
+                const side = el('div', 'moz-lb__side');
+                const frame = el('div', 'moz-lb__frame');
+                const face = el('div', 'moz-lb__face');
+                const ph = el('div', 'moz-lb__placeholder', 'Your Design');
                 face.appendChild(ph);
-                box.appendChild(face);
-                box.appendChild(el('span', 'moz-lightbox__tag', 'Double-Sided'));
+                frame.appendChild(face);
+                box.appendChild(side);
+                box.appendChild(frame);
+                box.appendChild(el('span', 'moz-lb__tag'));
                 sign.appendChild(box);
-                ctx._lb = { box, face, ph };
+                ctx._lb = { box, face, ph, tag: box.lastChild };
             }
-            const { box, face, ph } = ctx._lb;
-            const img = designImg(ctx, face, 'moz-lightbox__img');
+            const { box, face, ph, tag } = ctx._lb;
+            const img = designImg(ctx, face, 'moz-lb__img');
             ph.hidden = !!img;
-            const shape = ctx.v.shape ? ctx.v.shape.key : 'circle';
+            const shape = ctx.v.shape ? ctx.v.shape.key : 'rectangle';
             const label = ctx.v.size ? ctx.v.size.label : '';
             const nums = (String(label).match(/\d+(?:\.\d+)?/g) || []).map(Number);
-            let wCm = cmFromLabel(label);
+            const wCm = cmFromLabel(label);
             let hCm = wCm;
-            if (shape === 'rectangle') hCm = nums.length > 1 ? nums[1] : Math.round(wCm * 0.6);
-            const aspect = wCm && hCm ? wCm / hCm : (shape === 'rectangle' ? 1.6 : 1);
-            const all = (ctx.data.opts || []).filter((o) => String(o.c || '').toLowerCase() === 'size').map((o) => cmFromLabel(o.l));
-            const b = ctx.fit(ctx.sizeShare(wCm, all) * (shape === 'rectangle' ? 1 : 0.8), aspect);
+            if (shape === 'rectangle') hCm = nums.length > 1 ? nums[1] : Math.round(wCm * 0.5);
+            if (shape === 'oval') hCm = nums.length > 1 ? nums[1] : Math.round(wCm * 0.66);
+            const aspect = wCm && hCm ? wCm / hCm : (shape === 'rectangle' ? 2 : (shape === 'oval' ? 1.5 : 1));
+            const all = (ctx.allSizes || []).map((o) => cmFromLabel(o.l));
+            const b = ctx.fit(ctx.sizeShare(wCm, all) * (aspect > 1.2 ? 0.95 : 0.72), aspect);
             box.style.width = b.w + 'px';
             box.style.height = b.h + 'px';
-            box.className = 'moz-lightbox is-' + shape + (ctx.ledOn ? ' is-lit' : '') + (ctx.v.sides && ctx.v.sides.key === 'double' ? ' is-double' : '');
+            const typeKey = ctx.v.ltype ? ctx.v.ltype.key : 'slim';
+            const sides = ctx.v.sides ? ctx.v.sides.key : 'single';
+            box.className = 'moz-lb is-' + typeKey + ' is-' + sides + (ctx.ledOn ? ' is-lit' : '');
+            box.style.setProperty('--moz-clip', LB_SHAPES[shape] || LB_SHAPES.rectangle);
             box.style.setProperty('--moz-frame', ctx.v.frame ? ctx.v.frame.hex : '#1a1a1a');
+            box.style.setProperty('--moz-depth', Math.max(3, Math.min(14, b.w * (typeKey === 'slim' ? 0.008 : 0.03))) + 'px');
+            tag.textContent = sides === 'double' ? 'Double-Sided' : (sides === 'all' ? 'Lit All Around' : '');
+            tag.hidden = !tag.textContent;
             ctx.setDims(wCm ? cmText(wCm) : '', hCm ? cmText(hCm) : '');
             ctx.dims = { w: wCm, h: hCm };
         },
         properties(ctx) {
             return {
                 'Shape': ctx.v.shape ? ctx.v.shape.label : '',
-                'Sides': ctx.v.sides ? ctx.v.sides.label : 'Single-Sided',
+                'Lightbox Type': ctx.v.ltype ? ctx.v.ltype.label : '',
+                'Lighting': ctx.v.sides ? ctx.v.sides.label : '',
                 'Size': ctx.v.size ? ctx.v.size.label : '',
                 'Uploaded Design': designUrl(ctx),
                 'Frame Colour': ctx.v.frame ? ctx.v.frame.name : 'Standard',
@@ -1364,15 +1577,13 @@
     }
 
     // -------------------------------------------------------------------------------------
-    // 4) Infinity Mirror Signs (3D configurator layout)
+    // 4) Infinity Mirror Signs (3D layout, 3D configurator's bold font, crisp — no blur)
     // -------------------------------------------------------------------------------------
     M.register('infinity', {
         layout: '3d',
         hero: 'Design Your Infinity Mirror Sign',
         build(ctx, d) {
             ctx.step('Enter Your Text').appendChild(ctx.textInput({ max: 30, placeholder: 'Type your text' }).el);
-            const fonts = bySort(d.fonts);
-            if (fonts.length) ctx.step('Choose Font').appendChild(ctx.fonts('font', fonts).el);
             const sizes = bySort(d.sizes);
             ctx.sizes = sizes;
             ctx.step('Choose Size').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: 'Width: ' + cmText(s.w), src: s })), { price: 'full', cols: 2 }).el);
@@ -1396,7 +1607,7 @@
         },
         render(ctx) {
             const sign = ctx.sign;
-            const LAYERS = 6;
+            const LAYERS = 4;
             if (!ctx._inf) {
                 sign.innerHTML = '';
                 const word = el('div', 'moz-inf');
@@ -1406,14 +1617,13 @@
             }
             const word = ctx._inf.word;
             const text = (ctx.text || '').trim() || 'Your Text';
-            // One element per letter: metal frame + dark mirror (base) and LED rings that shrink
-            // into the depth of that same letter — the real infinity-mirror look.
+            // Per letter: metal rim + dark mirror, and crisp LED rings stepping into the depth.
             if (ctx._inf.text !== text) {
                 ctx._inf.text = text;
                 word.innerHTML = '';
                 Array.from(text).forEach((ch) => {
                     const cell = el('span', 'moz-inf__ch');
-                    const glyph = ch === ' ' ? '\u00A0' : ch;
+                    const glyph = ch === ' ' ? ' ' : ch;
                     cell.appendChild(el('span', 'moz-inf__base', glyph));
                     if (ch !== ' ') {
                         for (let i = 0; i < LAYERS; i++) cell.appendChild(el('span', 'moz-inf__led' + (i === 0 ? ' is-front' : ''), glyph));
@@ -1421,19 +1631,19 @@
                     word.appendChild(cell);
                 });
             }
-            word.style.fontFamily = ctx.v.font ? ctx.v.font.family : '';
+            word.style.fontFamily = ctx.signFamily || '';
             const size = ctx.v.size ? ctx.v.size.src : null;
             fitWording(ctx, word, ctx.sizeShare(size ? size.w : 0, ctx.sizes.map((s) => s.w)), 'Your Text');
             const c = ctx.v.colour ? ctx.v.colour.hex : '#ff3db8';
             const lit = ctx.ledOn;
             word.style.setProperty('--moz-led', c);
-            word.style.setProperty('--moz-led-a', rgba(c, 0.7));
+            word.style.setProperty('--moz-led-dim', rgba(c, 0.55));
             word.style.setProperty('--moz-frame', FRAME_SOLID[metalFromLabel(ctx.v.frame && ctx.v.frame.label)] || FRAME_SOLID.black);
             word.classList.toggle('is-lit', lit);
             word.querySelectorAll('.moz-inf__ch').forEach((cell) => {
                 Array.from(cell.querySelectorAll('.moz-inf__led')).forEach((t, i) => {
-                    t.style.transform = 'scale(' + (1 - i * 0.075) + ')';
-                    t.style.opacity = lit ? String(Math.max(0.1, 1 - i * 0.16)) : '0';
+                    t.style.transform = 'scale(' + (0.97 - i * 0.1) + ')';
+                    t.style.opacity = lit ? String(1 - i * 0.22) : '0';
                 });
             });
             const w = size ? num(size.w) : 0;
@@ -1441,10 +1651,11 @@
             const h = w && r.width ? Math.round(w * (r.height / r.width) * 10) / 10 : 0;
             ctx.setDims(w ? cmText(w) : '', h ? cmText(h) : '');
             ctx.dims = { w, h };
-        },        properties(ctx) {
+        },
+        properties(ctx) {
             const p = {
                 'Custom Text': (ctx.text || '').trim() || 'Your Text',
-                'Font': ctx.v.font ? ctx.v.font.label : 'Default',
+                'Font': ctx.signFontName || 'Default',
                 'Size': ctx.v.size ? ctx.v.size.label : '',
                 'Overall Width': ctx.dims.w ? cmText(ctx.dims.w) : '',
                 'LED Colour': ctx.v.colour ? ctx.v.colour.name : 'Standard',
@@ -1459,8 +1670,72 @@
         }
     });
 
+    // ---- One bulb per marquee letter, placed on the letter's thickest stroke near its centre ----
+    // The glyph is drawn on a small canvas in the real font; a distance transform finds the point
+    // deepest inside the stroke closest to the middle (stem of a "Y", side of an "O", ...).
+    const BULB_CACHE = {};
+    function bulbPoint(ch, fontCss) {
+        const key = fontCss + '|' + ch;
+        if (BULB_CACHE[key]) return BULB_CACHE[key];
+        const S = 100;
+        const W = 160;
+        const H = 160;
+        const canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        const g = canvas.getContext('2d', { willReadFrequently: true });
+        g.font = fontCss.replace(/\b\d+(\.\d+)?px\b/, S + 'px');
+        g.textBaseline = 'alphabetic';
+        g.fillStyle = '#000';
+        const ox = 20;
+        const base = 120;
+        g.fillText(ch, ox, base);
+        const data = g.getImageData(0, 0, W, H).data;
+        const INF = 1e6;
+        const dist = new Float32Array(W * H);
+        let minX = W, minY = H, maxX = 0, maxY = 0, any = false;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                const inside = data[(y * W + x) * 4 + 3] > 127;
+                dist[y * W + x] = inside ? INF : 0;
+                if (inside) { any = true; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+            }
+        }
+        if (!any) return null;
+        // Two-pass chamfer distance (1 / 1.4).
+        for (let y = 1; y < H - 1; y++) {
+            for (let x = 1; x < W - 1; x++) {
+                const i = y * W + x;
+                if (!dist[i]) continue;
+                dist[i] = Math.min(dist[i], dist[i - 1] + 1, dist[i - W] + 1, dist[i - W - 1] + 1.4, dist[i - W + 1] + 1.4);
+            }
+        }
+        for (let y = H - 2; y > 0; y--) {
+            for (let x = W - 2; x > 0; x--) {
+                const i = y * W + x;
+                if (!dist[i]) continue;
+                dist[i] = Math.min(dist[i], dist[i + 1] + 1, dist[i + W] + 1, dist[i + W + 1] + 1.4, dist[i + W - 1] + 1.4);
+            }
+        }
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        let best = -INF, bx = cx, by = cy, br = 0;
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                const dv = dist[y * W + x];
+                if (!dv) continue;
+                const score = dv - 0.16 * Math.hypot(x - cx, y - cy);
+                if (score > best) { best = score; bx = x; by = y; br = dv; }
+            }
+        }
+        // Relative to the text origin (left edge, baseline), in em.
+        const res = { x: (bx - ox) / S, y: (by - base) / S, r: br / S };
+        if (!document.fonts || document.fonts.check(g.font)) BULB_CACHE[key] = res;
+        return res;
+    }
+
     // -------------------------------------------------------------------------------------
-    // 5) Event Marquee Letter Signs (3D configurator layout)
+    // 5) Event Marquee Letter Signs (3D layout, 3D bold font, one bulb per letter)
     // -------------------------------------------------------------------------------------
     M.register('marquee', {
         layout: '3d',
@@ -1496,20 +1771,30 @@
             const sign = ctx.sign;
             if (!ctx._mq) {
                 sign.innerHTML = '';
-                const word = el('div', 'moz-marquee');
+                const word = el('div', 'moz-mq');
                 word.setAttribute('data-moz-measure', '');
-                const depth = el('span', 'moz-marquee__depth');
-                const face = el('span', 'moz-marquee__face');
-                const bulbs = el('span', 'moz-marquee__bulbs');
-                word.appendChild(depth);
-                word.appendChild(face);
-                word.appendChild(bulbs);
                 sign.appendChild(word);
-                ctx._mq = { word, depth, face, bulbs };
+                ctx._mq = { word, text: null };
             }
-            const { word, depth, face, bulbs } = ctx._mq;
+            const word = ctx._mq.word;
             const text = (ctx.text || '').trim() || 'Your Text';
-            [depth, face, bulbs].forEach((n) => { n.textContent = text; });
+            if (ctx._mq.text !== text) {
+                ctx._mq.text = text;
+                word.innerHTML = '';
+                Array.from(text).forEach((ch) => {
+                    const cell = el('span', 'moz-mq__ch');
+                    const glyph = ch === ' ' ? ' ' : ch;
+                    cell.appendChild(el('span', 'moz-mq__depth', glyph));
+                    cell.appendChild(el('span', 'moz-mq__face', glyph));
+                    if (ch !== ' ') {
+                        cell.appendChild(el('i', 'moz-mq__base-probe'));
+                        cell.appendChild(el('span', 'moz-mq__bulb'));
+                    }
+                    cell.dataset.ch = ch;
+                    word.appendChild(cell);
+                });
+            }
+            word.style.fontFamily = ctx.signFamily || '';
             const size = ctx.v.size ? ctx.v.size.src : null;
             const heights = ctx.sizes.map((s) => num(s.h) || cmFromLabel(s.l));
             const hCm = size ? (num(size.h) || cmFromLabel(size.l)) : 0;
@@ -1518,9 +1803,25 @@
             word.style.setProperty('--moz-face-fill', METAL_FILL[metal] || METAL_FILL.white);
             const c = ctx.v.colour ? ctx.v.colour.hex : '#ffd27a';
             word.style.setProperty('--moz-bulb', c);
-            word.style.setProperty('--moz-bulb-a', rgba(c, 0.65));
-            word.style.setProperty('--moz-bulb-gap', Math.max(8, fs * 0.2) + 'px');
+            word.style.setProperty('--moz-bulb-a', rgba(c, 0.6));
             word.classList.toggle('is-lit', ctx.ledOn);
+            // Place one bulb per letter.
+            const cs = getComputedStyle(word);
+            const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
+            word.querySelectorAll('.moz-mq__ch').forEach((cell) => {
+                const bulb = cell.querySelector('.moz-mq__bulb');
+                const probe = cell.querySelector('.moz-mq__base-probe');
+                if (!bulb || !probe) return;
+                const pt = bulbPoint(cell.dataset.ch, fontCss);
+                if (!pt) { bulb.hidden = true; return; }
+                bulb.hidden = false;
+                const baseY = probe.offsetTop;
+                const dia = Math.max(6, Math.min(fs * 0.17, pt.r * fs * 1.5));
+                bulb.style.width = dia + 'px';
+                bulb.style.height = dia + 'px';
+                bulb.style.left = (pt.x * fs - dia / 2) + 'px';
+                bulb.style.top = (baseY + pt.y * fs - dia / 2) + 'px';
+            });
             const r = word.getBoundingClientRect();
             const capH = fs * 0.72;
             const wCm = hCm && capH ? Math.round(hCm * (r.width / capH) * 10) / 10 : 0;
@@ -1531,6 +1832,7 @@
             const p = {
                 'Custom Text': (ctx.text || '').trim() || 'Your Text',
                 'Letters/Characters': String(ctx.letterCount || 0),
+                'Font': ctx.signFontName || 'Default',
                 'Letter Style': ctx.v.style ? ctx.v.style.label : 'Standard',
                 'Size': ctx.v.size ? ctx.v.size.label : '',
                 'Letter Height': ctx.dims.h ? cmText(ctx.dims.h) : '',

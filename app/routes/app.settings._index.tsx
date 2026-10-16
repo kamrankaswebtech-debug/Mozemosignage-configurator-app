@@ -21,6 +21,12 @@ export default function SettingsHub() {
             path: "/app/settings/demo-videos",
             icon: "play",
         },
+        {
+            title: "Configurator Wallpapers",
+            description: "Background photos for the Infinity Mirror, Event Marquee, Lightbox and Acrylic Bonnet configurators. Tick which configurators each photo is shown on.",
+            path: "/app/settings/wallpapers",
+            icon: "image",
+        },
     ];
 
     return (

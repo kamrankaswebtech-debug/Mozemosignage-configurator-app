@@ -86,9 +86,7 @@ export default function LightboxShapesPage() {
                     <s-stack direction="inline" gap="base">
                         <input type="text" name="label" placeholder="Label (e.g. Circle / Round)" required />
                         <select name="shapeKey" defaultValue="circle" required>
-                            <option value="circle">Circle</option>
-                            <option value="square">Square</option>
-                            <option value="rectangle">Rectangle</option>
+                            <option value="circle">Circle / Round</option><option value="square">Square</option><option value="rectangle">Rectangle</option><option value="star">Star</option><option value="oval">Oval</option><option value="hexagon">Hexagon</option><option value="octagon">Octagon</option><option value="other">Other (custom)</option>
                         </select>
                         <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={shapes.length + 1} />
@@ -116,7 +114,7 @@ export default function LightboxShapesPage() {
                                             <s-stack direction="inline" gap="base">
                                                 <input type="text" name="label" defaultValue={s.label} required />
                                                 <select name="shapeKey" defaultValue={s.shapeKey} required>
-                                                    <option value="circle">Circle</option><option value="square">Square</option><option value="rectangle">Rectangle</option>
+                                                    <option value="circle">Circle / Round</option><option value="square">Square</option><option value="rectangle">Rectangle</option><option value="star">Star</option><option value="oval">Oval</option><option value="hexagon">Hexagon</option><option value="octagon">Octagon</option><option value="other">Other (custom)</option>
                                                 </select>
                                                 <input type="number" step="0.01" name="extraPrice" defaultValue={s.extraPrice} />
                                                 <input type="number" name="sortOrder" defaultValue={s.sortOrder} />

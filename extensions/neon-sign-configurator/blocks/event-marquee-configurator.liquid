@@ -1,7 +1,7 @@
 {% comment %} Mozemo Signage - Event Marquee Letter Signs (3D layout). UI built by moz-configurator.js {% endcomment %}
 <div data-moz-cfg="marquee" data-block-id="{{ block.id }}" data-product-id="{{ product.id }}">
 <script type="application/json" data-moz-data>{"opts":[{%- for o in metaobjects["app--418838118401--event_marquee_option"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"c":{{ o.category.value | json }},"l":{{ o.label.value | json }},"hc":{{ o.hex_code.value | default: '' | json }},"h":{{ o.height_cm.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
-{%- render 'moz-cfg-common', walls: '3d', power: true, install: false -%}
+{%- render 'moz-cfg-common', walls: '3d', lib: 'marquee', fonts: true, power: true, install: false -%}
 </div>
 
 {% schema %}

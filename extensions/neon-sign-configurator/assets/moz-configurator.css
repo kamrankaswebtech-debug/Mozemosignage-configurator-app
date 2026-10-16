@@ -1057,81 +1057,235 @@
     display: none;
 }
 
-/* ---- Lightbox ---- */
-.moz-lightbox {
+/* ---- UV Graphic printed sign on its backboard (Cut Around / Rectangle / Open Box / Acrylic Stand) ---- */
+.moz-uvb {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.moz-uvb__board {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 5%;
-    background: var(--moz-frame, #1a1a1a);
-    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 40%, rgba(0, 0, 0, 0.3));
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    padding: 0;
 }
 
-.moz-lightbox.is-circle,
-.moz-lightbox.is-circle .moz-lightbox__face {
-    border-radius: 50%;
+.moz-uvb__art {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.moz-lightbox.is-square,
-.moz-lightbox.is-rectangle {
-    border-radius: 8px;
+.moz-uvb__img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: filter 0.3s ease;
 }
 
-.moz-lightbox.is-square .moz-lightbox__face,
-.moz-lightbox.is-rectangle .moz-lightbox__face {
-    border-radius: 4px;
-}
-
-.moz-lightbox__face {
+.moz-uvb__placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
+    border: 2px dashed rgba(120, 120, 140, 0.6);
+    border-radius: 8px;
+    font-size: clamp(14px, 2.2vw, 24px);
+    font-weight: 800;
+    color: rgba(80, 80, 100, 0.9);
+    text-align: center;
+}
+
+.moz-uvb.is-lit .moz-uvb__placeholder {
+    color: var(--moz-glow);
+    border-color: var(--moz-glow);
+    box-shadow: 0 0 10px var(--moz-glow-a), inset 0 0 10px var(--moz-glow-a);
+}
+
+/* Rectangle, Open Box and Acrylic Stand: a printed board with a margin around the graphic */
+.moz-uvb:not(.is-cut) .moz-uvb__board {
     padding: 8%;
+    border-radius: 6px;
+    background: var(--moz-board, #ffffff);
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 38%, rgba(0, 0, 0, 0.08) 100%);
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--moz-board, #ffffff) 60%, #000000), 8px 20px 28px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.moz-uvb.is-clear:not(.is-cut) .moz-uvb__board {
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 4px 0 rgba(220, 235, 245, 0.45), 8px 18px 26px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(1px);
+}
+
+.moz-uvb.is-frosted:not(.is-cut) .moz-uvb__board {
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
+}
+
+/* Open Box: deep metal-sided tray around the board */
+.moz-uvb.is-openbox .moz-uvb__board {
+    border-radius: 4px;
+    box-shadow:
+        inset 0 0 0 6px color-mix(in srgb, var(--moz-board, #ffffff) 80%, #000000),
+        inset 0 0 18px rgba(0, 0, 0, 0.35),
+        0 9px 0 color-mix(in srgb, var(--moz-board, #ffffff) 50%, #000000),
+        10px 24px 32px rgba(0, 0, 0, 0.38);
+}
+
+/* Stand-offs on Rectangle / Open Box (wall-mounted boards) */
+.moz-uvb__standoff {
+    position: absolute;
+    display: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffffff, #c4c8cd 45%, #7d838a 100%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.moz-uvb.is-rect .moz-uvb__standoff,
+.moz-uvb.is-openbox .moz-uvb__standoff { display: block; }
+.moz-uvb__standoff.is-tl { top: 3%; left: 2%; }
+.moz-uvb__standoff.is-tr { top: 3%; right: 2%; }
+.moz-uvb__standoff.is-bl { bottom: 3%; left: 2%; }
+.moz-uvb__standoff.is-br { bottom: 3%; right: 2%; }
+
+/* Acrylic Stand: clear base under the board */
+.moz-uvb__stand {
+    display: none;
+    width: 70%;
+    height: 18px;
+    margin-top: -1px;
+    border-radius: 0 0 8px 8px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(225, 235, 242, 0.35));
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 12px 16px rgba(0, 0, 0, 0.35);
+}
+
+.moz-uvb.is-stand .moz-uvb__stand { display: block; }
+
+.moz-uvb.is-lit.is-rgb .moz-uvb__img,
+.moz-uvb.is-lit.is-rgb .moz-uvb__placeholder {
+    animation: moz-hue 5s linear infinite;
+}
+
+/* ---- Lightbox (shape clip-path, type: slim / fully illuminated / metal-sided) ---- */
+.moz-lb {
+    position: relative;
+    filter: drop-shadow(8px 18px 18px rgba(0, 0, 0, 0.38));
+}
+
+.moz-lb__side,
+.moz-lb__frame,
+.moz-lb__face {
+    position: absolute;
+    clip-path: var(--moz-clip);
+}
+
+/* Box depth seen behind the face */
+.moz-lb__side {
+    inset: 0;
+    transform: translate(var(--moz-depth, 6px), var(--moz-depth, 6px));
+    background: color-mix(in srgb, var(--moz-frame, #1a1a1a) 70%, #000000);
+}
+
+.moz-lb__frame {
+    inset: 0;
+    background: var(--moz-frame, #1a1a1a);
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 40%, rgba(0, 0, 0, 0.25));
+}
+
+.moz-lb__face {
+    inset: 4%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9%;
     overflow: hidden;
-    background: radial-gradient(ellipse at 50% 45%, #f4f4f2 0%, #d8d8d4 100%);
+    background: radial-gradient(ellipse at 50% 45%, #f2f2ef 0%, #d6d6d1 100%);
     transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
-.moz-lightbox.is-lit .moz-lightbox__face {
-    background: radial-gradient(ellipse at 50% 45%, #ffffff 0%, #fbfbf6 60%, #efefe6 100%);
-    box-shadow: inset 0 0 30px rgba(255, 255, 240, 0.9);
+.moz-lb.is-lit .moz-lb__face {
+    background: radial-gradient(ellipse at 50% 45%, #ffffff 0%, #fdfdf8 60%, #f1f1e8 100%);
 }
 
-.moz-lightbox.is-lit {
-    box-shadow: 0 0 30px rgba(255, 255, 235, 0.55), 0 0 70px rgba(255, 255, 235, 0.25), 0 18px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+.moz-lb:not(.is-lit) .moz-lb__img {
+    filter: brightness(0.8) saturate(0.9);
 }
 
-.moz-lightbox:not(.is-lit) .moz-lightbox__img {
-    filter: brightness(0.82) saturate(0.9);
+.moz-lb__img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
 
-.moz-lightbox__tag {
+.moz-lb__placeholder {
+    font-size: clamp(14px, 2.2vw, 24px);
+    font-weight: 800;
+    color: rgba(80, 80, 95, 0.75);
+    text-align: center;
+}
+
+/* Slim: thin edge, very little depth */
+.moz-lb.is-slim .moz-lb__face { inset: 2%; }
+
+/* Metal-sided: brushed metal return and frame */
+.moz-lb.is-metal .moz-lb__side {
+    background:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 1px, rgba(0, 0, 0, 0.06) 1px 3px),
+        linear-gradient(135deg, #e4e7ea, #9aa1a8 50%, #d3d7db);
+}
+
+.moz-lb.is-metal .moz-lb__frame {
+    background: linear-gradient(135deg, #f1f3f5, #a6adb4 55%, #dfe2e5);
+}
+
+/* Fully illuminated: the whole box glows — face and sides */
+.moz-lb.is-fully .moz-lb__frame {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.moz-lb.is-fully .moz-lb__face { inset: 1.5%; }
+
+.moz-lb.is-fully.is-lit {
+    filter: drop-shadow(0 0 14px rgba(255, 255, 240, 0.85)) drop-shadow(0 0 34px rgba(255, 255, 235, 0.45)) drop-shadow(8px 18px 18px rgba(0, 0, 0, 0.25));
+}
+
+.moz-lb.is-fully.is-lit .moz-lb__side {
+    background: linear-gradient(135deg, #ffffff, #ecefe6);
+}
+
+.moz-lb.is-lit:not(.is-fully) {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 240, 0.45)) drop-shadow(8px 18px 18px rgba(0, 0, 0, 0.35));
+}
+
+/* Double-sided: a little thicker box */
+.moz-lb.is-double .moz-lb__side {
+    transform: translate(calc(var(--moz-depth, 6px) * 1.5), calc(var(--moz-depth, 6px) * 1.5));
+}
+
+.moz-lb__tag {
     position: absolute;
     top: -12px;
     right: -12px;
-    display: none;
+    z-index: 2;
     padding: 3px 9px;
     border-radius: 999px;
     background: linear-gradient(90deg, var(--moz-pink), var(--moz-purple));
     font-size: 11px;
     font-weight: 800;
     color: #ffffff;
+    white-space: nowrap;
 }
 
-.moz-lightbox.is-double .moz-lightbox__tag {
-    display: block;
-}
-
-.moz-lightbox.is-double {
-    outline: 6px solid color-mix(in srgb, var(--moz-frame, #1a1a1a) 70%, #000000);
-    outline-offset: -1px;
-}
-
-/* ---- Infinity Mirror letters (each letter: metal frame, dark mirror, LED rings into the depth) ---- */
+/* ---- Infinity Mirror letters: crisp metal rim, dark mirror, sharp LED rings into the depth ---- */
 .moz-inf {
     position: relative;
     display: inline-flex;
@@ -1139,6 +1293,7 @@
     line-height: 1.1;
     white-space: nowrap;
     font-weight: 800;
+    -webkit-font-smoothing: antialiased;
 }
 
 .moz-inf__ch {
@@ -1148,10 +1303,10 @@
 
 .moz-inf__base {
     display: block;
-    color: #060609;
-    -webkit-text-stroke: 0.045em var(--moz-frame, #2a2a2e);
+    color: #07070a;
+    -webkit-text-stroke: 0.05em var(--moz-frame, #2a2a2e);
     paint-order: stroke fill;
-    filter: drop-shadow(0.03em 0.05em 0.04em rgba(0, 0, 0, 0.65));
+    filter: drop-shadow(0.025em 0.04em 0.02em rgba(0, 0, 0, 0.55));
 }
 
 .moz-inf__led {
@@ -1159,59 +1314,54 @@
     left: 0;
     top: 0;
     color: transparent;
-    -webkit-text-stroke: 0.016em var(--moz-led);
+    -webkit-text-stroke: 0.014em var(--moz-led);
     transform-origin: 50% 52%;
     pointer-events: none;
-    transition: opacity 0.3s ease;
 }
 
-/* Glow follows the LED line only (a text-shadow would fill the whole letter). */
-.moz-inf.is-lit .moz-inf__led {
-    filter: drop-shadow(0 0 0.03em var(--moz-led));
+.moz-inf__led:not(.is-front) {
+    -webkit-text-stroke-color: var(--moz-led-dim);
 }
 
 .moz-inf.is-lit .moz-inf__led.is-front {
-    -webkit-text-stroke-width: 0.024em;
-    filter: drop-shadow(0 0 0.04em var(--moz-led)) drop-shadow(0 0 0.12em var(--moz-led-a));
+    -webkit-text-stroke-width: 0.022em;
+    filter: drop-shadow(0 0 1px var(--moz-led));
 }
 
-/* Glass reflection across the mirror face */
-.moz-inf__ch::after {
-    content: '';
-    position: absolute;
-    inset: 8% 6%;
-    pointer-events: none;
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.07) 45%, rgba(255, 255, 255, 0) 60%);
-    -webkit-mask: none;
-}
-/* ---- Event Marquee letters ---- */
-.moz-marquee {
+/* ---- Event Marquee letters: crisp bold letters with one bulb each ---- */
+.moz-mq {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: baseline;
     line-height: 1.05;
     white-space: nowrap;
-    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
-    font-weight: 900;
-    letter-spacing: 0.03em;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    -webkit-font-smoothing: antialiased;
 }
 
-.moz-marquee__depth,
-.moz-marquee__face,
-.moz-marquee__bulbs {
+.moz-mq__ch {
+    position: relative;
+    display: inline-block;
+}
+
+.moz-mq__depth,
+.moz-mq__face {
     display: block;
     white-space: nowrap;
 }
 
-/* Letter returns (sides) */
-.moz-marquee__depth {
+/* Letter return (side) — solid offset, no blur */
+.moz-mq__depth {
     position: absolute;
-    inset: 0;
-    color: #2b2b30;
+    left: 0;
+    top: 0;
+    color: #34343a;
     transform: translate(0.035em, 0.05em);
-    filter: drop-shadow(0.03em 0.06em 0.05em rgba(0, 0, 0, 0.55));
+    filter: drop-shadow(0.03em 0.05em 0.025em rgba(0, 0, 0, 0.45));
 }
 
-.moz-marquee__face {
+.moz-mq__face {
     position: relative;
     color: transparent;
     background: var(--moz-face-fill);
@@ -1219,29 +1369,128 @@
     background-clip: text;
 }
 
-/* Bulbs clipped into the letters */
-.moz-marquee__bulbs {
+.moz-mq__base-probe {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    vertical-align: baseline;
+}
+
+/* One bulb in the middle of each letter */
+.moz-mq__bulb {
     position: absolute;
-    inset: 0;
-    color: transparent;
-    /* Bulb = the chosen colour with a small bright hot-spot, dark socket ring, then the letter face. */
-    background-image: radial-gradient(circle, color-mix(in srgb, var(--moz-bulb) 45%, #ffffff) 0 7%, var(--moz-bulb) 13% 24%, color-mix(in srgb, var(--moz-bulb) 55%, #000000) 28%, rgba(0, 0, 0, 0.45) 31%, transparent 35%);
-    background-size: var(--moz-bulb-gap, 14px) var(--moz-bulb-gap, 14px);
-    background-position: center;
-    -webkit-background-clip: text;
-    background-clip: text;
-    opacity: 0.6;
-    transition: opacity 0.3s ease, filter 0.3s ease;
+    z-index: 2;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 34%, #ffffff 0 14%, color-mix(in srgb, var(--moz-bulb) 55%, #ffffff) 26%, var(--moz-bulb) 52%, color-mix(in srgb, var(--moz-bulb) 70%, #000000) 100%);
+    box-shadow: 0 0 0 2px rgba(60, 55, 50, 0.55), inset 0 -2px 3px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.3s ease, background 0.3s ease;
 }
 
-.moz-marquee.is-lit .moz-marquee__bulbs {
-    opacity: 1;
-    filter: drop-shadow(0 0 0.04em var(--moz-bulb)) drop-shadow(0 0 0.12em var(--moz-bulb)) drop-shadow(0 0 0.3em var(--moz-bulb-a));
+.moz-mq.is-lit .moz-mq__bulb {
+    box-shadow: 0 0 0 2px rgba(60, 55, 50, 0.45), 0 0 6px 1px var(--moz-bulb), 0 0 16px 4px var(--moz-bulb-a);
 }
 
-.moz-marquee:not(.is-lit) .moz-marquee__bulbs {
-    /* LED off: unlit glass bulbs, faintly tinted with the chosen colour. */
-    background-image: radial-gradient(circle, color-mix(in srgb, var(--moz-bulb) 25%, #e8e6df) 0 18%, color-mix(in srgb, var(--moz-bulb) 15%, #8f8c84) 26%, rgba(0, 0, 0, 0.4) 31%, transparent 35%);
+.moz-mq:not(.is-lit) .moz-mq__bulb {
+    background: radial-gradient(circle at 38% 34%, #ffffff 0 12%, color-mix(in srgb, var(--moz-bulb) 22%, #e6e3dc) 32%, color-mix(in srgb, var(--moz-bulb) 18%, #9a968e) 100%);
+}
+
+/* ---- Small additions: notice, disabled / image cards, card icons ---- */
+.moz-cfg__notice {
+    position: absolute;
+    left: 50%;
+    top: 16px;
+    z-index: 6;
+    transform: translateX(-50%);
+    max-width: min(520px, calc(100% - 32px));
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 184, 77, 0.5);
+    background: rgba(20, 16, 8, 0.92);
+    color: #ffd59a;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.moz-cfg__card.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.moz-cfg__card-visual--img {
+    height: 74px;
+    overflow: hidden;
+    background: #0d0d13;
+}
+
+.moz-cfg__card-visual--img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.moz-cfg__board-icon {
+    position: relative;
+    display: block;
+    width: 54px;
+    height: 34px;
+    border-radius: 4px;
+    background: #f1f1f4;
+    box-shadow: 0 3px 0 #9a9aa2, 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.moz-cfg__board-icon::after {
+    content: '';
+    position: absolute;
+    inset: 9px 14px;
+    border-radius: 3px;
+    background: linear-gradient(135deg, #ff2ec4, #7a00ff);
+}
+
+.moz-cfg__board-icon.is-cut {
+    background: none;
+    box-shadow: none;
+}
+
+.moz-cfg__board-icon.is-cut::after {
+    inset: 6px 10px;
+    border-radius: 40% 60% 45% 55%;
+    box-shadow: 0 0 0 4px #f1f1f4, 0 4px 6px rgba(0, 0, 0, 0.5);
+}
+
+.moz-cfg__board-icon.is-openbox {
+    box-shadow: inset 0 0 0 4px #8d8d96, 0 4px 0 #6f6f78, 0 5px 8px rgba(0, 0, 0, 0.5);
+}
+
+.moz-cfg__board-icon.is-stand {
+    height: 28px;
+    margin-bottom: 6px;
+    box-shadow: 0 8px 0 -2px rgba(230, 236, 242, 0.7), 0 10px 8px rgba(0, 0, 0, 0.4);
+}
+
+.moz-cfg__lb-icon {
+    display: block;
+    width: 52px;
+    height: 34px;
+    border-radius: 3px;
+    background: #ffffff;
+    border: 3px solid #26262b;
+    box-shadow: 3px 3px 0 #111114;
+}
+
+.moz-cfg__lb-icon.is-slim {
+    border-width: 2px;
+    box-shadow: 1px 1px 0 #111114, 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+.moz-cfg__lb-icon.is-fully {
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 255, 240, 0.9), 0 0 22px rgba(160, 210, 255, 0.6);
+}
+
+.moz-cfg__lb-icon.is-metal {
+    border-color: #b9bfc6;
+    box-shadow: 4px 4px 0 #8b929a, 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* ---------- Responsive ---------- */

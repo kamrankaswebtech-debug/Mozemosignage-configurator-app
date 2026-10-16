@@ -1226,6 +1226,7 @@ name = "Sort Order"
 type = "number_integer"
 
 
+
 [metaobjects.app.lightbox_option]
 name = "Lightbox Range Option"
 description = "All configurator options for the Lightbox Range (Shape, Size, Sides, Frame Colour), distinguished by the 'category' field."
@@ -1236,7 +1237,7 @@ description = "All configurator options for the Lightbox Range (Shape, Size, Sid
 
 [metaobjects.app.lightbox_option.fields.category]
 name = "Category"
-description = "Must be exactly one of: shape, size, frame_colour"
+description = "Must be exactly one of: type, shape, size, frame_colour, wallpaper"
 type = "single_line_text_field"
 required = true
 
@@ -1253,7 +1254,7 @@ type = "single_line_text_field"
 
 [metaobjects.app.lightbox_option.fields.shape_key]
 name = "Shape Key"
-description = "Used only when category = shape. Must be exactly one of: circle, square, rectangle"
+description = "Used only when category = shape. One of: circle, square, rectangle, star, oval, hexagon, octagon, other"
 type = "single_line_text_field"
 
 [metaobjects.app.lightbox_option.fields.sides]
@@ -1266,9 +1267,28 @@ name = "Extra Price / Price"
 description = "Used for shape (extra price), size (full price), and frame_colour (extra price) pricing"
 type = "number_decimal"
 
+[metaobjects.app.lightbox_option.fields.type_key]
+name = "Lightbox Type Key"
+description = "slim, fully or metal. Used by category = type, and by size rows (empty = any type)."
+type = "single_line_text_field"
+
+[metaobjects.app.lightbox_option.fields.description]
+name = "Description"
+description = "Used only when category = type"
+type = "single_line_text_field"
+
 [metaobjects.app.lightbox_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
 
 
 
+[metaobjects.app.lightbox_option.fields.image]
+name = "Image"
+description = "Used only when category = wallpaper. Background photo for the Infinity Mirror, Event Marquee, Lightbox and Acrylic Bonnet configurators."
+type = "file_reference"
+
+[metaobjects.app.lightbox_option.fields.products]
+name = "Shown On"
+description = "Used only when category = wallpaper. Comma list of: infinity, marquee, lightbox, bonnet"
+type = "single_line_text_field"

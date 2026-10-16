@@ -9,12 +9,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
-    { title: "Sizes", path: "/app/uv-graphic-led/sizes", description: "Size options with prices With and Without Neon Lighting." },
-    { title: "Materials", path: "/app/uv-graphic-led/materials", description: "Acrylic, Aluminium, etc." },
-    { title: "Finish", path: "/app/uv-graphic-led/finishes", description: "Gloss, Matte finish options." },
-    { title: "LED Colours", path: "/app/uv-graphic-led/led-colours", description: "Neon / LED colour options (shown only With Neon Lighting)." },
-    { title: "Add-ons", path: "/app/uv-graphic-led/addons", description: "Optional add-ons — choose if each one shows With Neon, Without Neon, or both." },
-    { title: "Power Adapters", path: "/app/neon-signs/power-adapters", description: "Shared with Neon Signs — region-specific power adapters." },
+    { title: "Size Prices (UV)", path: "/app/uv-graphic-led/sizes", description: "Optional UV prices per Neon size width — With and Without Neon Lighting. Sizes not listed use the Neon price." },
+    { title: "UV Add-ons", path: "/app/uv-graphic-led/addons", description: "Extra UV-only add-ons, shown With Neon, Without Neon, or both (Neon add-ons are included automatically)." },
+    { title: "Neon Colours", path: "/app/neon-signs/colours", description: "Shared with Neon Signs — neon colours (With Neon Lighting)." },
+    { title: "Sizes", path: "/app/neon-signs/sizes", description: "Shared with Neon Signs — the size list shown on UV Graphic." },
+    { title: "Backboard Styles", path: "/app/neon-signs/backboard-styles", description: "Shared with Neon Signs — UV shows only Cut Around, Rectangle, Open Box and Acrylic Stand." },
+    { title: "Backboard Colours", path: "/app/neon-signs/backboard-colours", description: "Shared with Neon Signs — backboard colour options." },
+    { title: "Colour / Effect Modes", path: "/app/neon-signs/effect-modes", description: "Shared with Neon Signs — single colour, RGB etc. (Multicoloured Text is letter-based, so not offered on UV)." },
+    { title: "Indoor / Outdoor", path: "/app/neon-signs/neon-types", description: "Shared with Neon Signs — outdoor is only offered from 60 cm wide (With Neon Lighting)." },
+    { title: "Neon Add-ons", path: "/app/neon-signs/addons", description: "Shared with Neon Signs — paid add-ons and items included with the order (With Neon Lighting)." },
+    { title: "Power Adapters", path: "/app/neon-signs/power-adapters", description: "Shared with Neon Signs — shown With Neon Lighting." },
 ];
 
 export default function UvGraphicLedHub() {
@@ -26,12 +30,13 @@ export default function UvGraphicLedHub() {
     }
 
     return (
-        <s-page heading="UV Graphic Signs Configurator">
+        <s-page heading="UV Graphic Printed Signs Configurator">
             <s-section heading="Configurator Options">
                 <s-paragraph>
-                    One configurator for UV Graphic Signs With Neon Lighting and Without Neon Lighting. The customer picks the lighting
-                    option on the storefront; LED colours and power adapters only show With Neon Lighting, and each size can have its own
-                    price Without Neon Lighting.
+                    One configurator with both options: With Neon Lighting and Without Neon Lighting. It uses the same options and rules as the
+                    Neon Sign configurator (colours, sizes, backboards, effects, Indoor/Outdoor, add-ons, installation) — minus fonts and
+                    quick symbols — plus the printed graphic upload. Most options are edited under Neon Signs; the two UV pages below
+                    only set UV-specific prices and extras.
                 </s-paragraph>
                 <HubCardGrid items={SECTIONS.map((section) => ({ title: section.title, description: section.description, path: section.path }))} />
             </s-section>
