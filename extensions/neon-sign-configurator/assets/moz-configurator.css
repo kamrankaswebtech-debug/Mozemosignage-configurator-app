@@ -1169,7 +1169,7 @@
 
 .moz-uvb.is-stand .moz-uvb__stand { display: block; }
 
-.moz-uvb.is-lit.is-rgb .moz-uvb__img,
+.moz-uvb.is-lit.is-rgb .moz-uvb__canvas,
 .moz-uvb.is-lit.is-rgb .moz-uvb__placeholder {
     animation: moz-hue 5s linear infinite;
 }
@@ -1569,3 +1569,16 @@
         animation: none;
     }
 }
+
+/* Baked UV preview canvas (sits over the box, a little larger for the glow) */
+.moz-uvb__canvas {
+    position: absolute;
+    pointer-events: none;
+}
+
+/* Keep the artwork inside the visible part of each lightbox shape */
+.moz-lb.is-shape-circle .moz-lb__face,
+.moz-lb.is-shape-oval .moz-lb__face { padding: 16%; }
+.moz-lb.is-shape-hexagon .moz-lb__face,
+.moz-lb.is-shape-octagon .moz-lb__face { padding: 15%; }
+.moz-lb.is-shape-star .moz-lb__face { padding: 31% 30% 27%; }

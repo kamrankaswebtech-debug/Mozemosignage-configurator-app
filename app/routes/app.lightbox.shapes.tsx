@@ -9,7 +9,7 @@ type ShapeEntry = { id: string; label: string; shapeKey: string; extraPrice: str
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
     const response = await admin.graphql(`#graphql
-    query ListShapes { metaobjects(type: "$app:lightbox_option", first: 100) { edges { node { id fields { key value } } } } }`);
+    query ListShapes { metaobjects(type: "$app:lightbox_option", first: 250) { edges { node { id fields { key value } } } } }`);
     const data = await response.json();
     const all = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};

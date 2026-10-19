@@ -9,7 +9,7 @@ type ColourEntry = { id: string; label: string; hexCode: string; extraPrice: str
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
     const response = await admin.graphql(`#graphql
-    query ListFrameColours { metaobjects(type: "$app:lightbox_option", first: 100) { edges { node { id fields { key value } } } } }`);
+    query ListFrameColours { metaobjects(type: "$app:lightbox_option", first: 250) { edges { node { id fields { key value } } } } }`);
     const data = await response.json();
     const all = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};

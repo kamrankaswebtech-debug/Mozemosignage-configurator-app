@@ -1029,8 +1029,81 @@
         return hit ? hit.key : 'rect';
     }
 
-    M.register('uv', {
-        layout: 'neon',
+    // Builds the UV graphic preview on a canvas: contour ring, neon tube ring (+ glow), the artwork
+    // and a soft wall shadow. Cached by its inputs, so it only redraws when something changes.
+    function uvCompose(ctx, img, w, h, o) {
+        const art = ctx._uv.art;
+        if (!img.complete || !img.naturalWidth) {
+            if (!img._mozWait) { img._mozWait = true; img.addEventListener('load', () => { img._mozWait = false; ctx.update(); }, { once: true }); }
+            return;
+        }
+        let cv = ctx._uv.canvas;
+        if (!cv) { cv = ctx._uv.canvas = el('canvas', 'moz-uvb__canvas'); art.appendChild(cv); }
+        img.style.visibility = 'hidden';
+        cv.hidden = false;
+        const key = [img.src, w, h, o.contour, o.tube, o.glow].join('|');
+        if (cv._key === key) return;
+        cv._key = key;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const pad = 34;
+        const W = w + pad * 2;
+        const H = h + pad * 2;
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+        cv.style.width = W + 'px';
+        cv.style.height = H + 'px';
+        cv.style.left = -pad + 'px';
+        cv.style.top = -pad + 'px';
+        // Artwork rectangle (object-fit: contain) inside the w x h box.
+        const ar = img.naturalWidth / img.naturalHeight;
+        let dw = w;
+        let dh = w / ar;
+        if (dh > h) { dh = h; dw = h * ar; }
+        const dx = (pad + (w - dw) / 2) * dpr;
+        const dy = (pad + (h - dh) / 2) * dpr;
+        const make = () => { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; return c; };
+        const tinted = (colour) => {
+            const c = make();
+            const g = c.getContext('2d');
+            g.drawImage(img, dx, dy, dw * dpr, dh * dpr);
+            g.globalCompositeOperation = 'source-in';
+            g.fillStyle = colour;
+            g.fillRect(0, 0, c.width, c.height);
+            return c;
+        };
+        const ring = (g, src, r) => {
+            for (let a = 0; a < 360; a += 22.5) {
+                const rad = a * Math.PI / 180;
+                g.drawImage(src, Math.cos(rad) * r * dpr, Math.sin(rad) * r * dpr);
+            }
+        };
+        const stack = make();
+        const sg = stack.getContext('2d');
+        if (o.contour) ring(sg, tinted(o.contour), 7);
+        if (o.tube) ring(sg, tinted(o.tube), 2.5);
+        sg.drawImage(img, dx, dy, dw * dpr, dh * dpr);
+        const g = cv.getContext('2d');
+        g.clearRect(0, 0, cv.width, cv.height);
+        g.save();
+        g.shadowColor = 'rgba(0,0,0,0.35)';
+        g.shadowBlur = 12 * dpr;
+        g.shadowOffsetX = 3 * dpr;
+        g.shadowOffsetY = 8 * dpr;
+        g.drawImage(stack, 0, 0);
+        g.restore();
+        if (o.glow) {
+            g.save();
+            g.shadowColor = o.glow;
+            g.shadowBlur = 22 * dpr;
+            g.drawImage(stack, 0, 0);
+            g.shadowBlur = 7 * dpr;
+            g.drawImage(stack, 0, 0);
+            g.restore();
+        }
+        g.drawImage(stack, 0, 0);
+    }
+
+    M.register('uv', {        layout: 'neon',
         hero: 'Design Your UV Graphic Sign',
         build(ctx, d) {
             const sizes = bySort(d.sizes);
@@ -1216,18 +1289,17 @@
             wrap.style.setProperty('--moz-glow', c);
             wrap.style.setProperty('--moz-glow-a', rgba(c, 0.6));
             if (img) {
-                // Neon tube traced around the graphic (crisp ring) + glow; cut-around board drawn
-                // as a contour in the backboard colour right behind it.
-                const tube = lit ? c : (led ? '#e9e9ee' : null);
-                const contour = kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.55)' : bc.solid) : null;
-                const f = [];
-                if (tube) ['2px 0', '-2px 0', '0 2px', '0 -2px'].forEach((o) => f.push('drop-shadow(' + o + ' 0 ' + tube + ')'));
-                if (contour) ['7px 0', '-7px 0', '0 7px', '0 -7px'].forEach((o) => f.push('drop-shadow(' + o + ' 0 ' + contour + ')'));
-                if (lit) f.push('drop-shadow(0 0 6px ' + c + ')', 'drop-shadow(0 0 18px ' + rgba(c, 0.7) + ')');
-                f.push('drop-shadow(3px 8px 8px rgba(0,0,0,0.35))');
-                img.style.filter = f.join(' ');
-            }
-            const w = size ? num(size.w) : 0;
+                // Neon tube traced around the graphic, cut-around contour in the backboard colour,
+                // glow and wall shadow are baked ONCE into a canvas (redrawn only when something
+                // changes) — stacked CSS drop-shadows made every frame very slow.
+                uvCompose(ctx, img, box.w, box.h, {
+                    contour: kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.55)' : bc.solid) : '',
+                    tube: lit ? c : (led ? '#e9e9ee' : ''),
+                    glow: lit ? c : ''
+                });
+            } else if (ctx._uv.canvas) {
+                ctx._uv.canvas.hidden = true;
+            }            const w = size ? num(size.w) : 0;
             const h = size && num(size.h) ? num(size.h) : (w ? Math.round((w / aspect) * 10) / 10 : 0);
             ctx.setDims(w ? cmText(w) : '', h ? cmText(h) : '');
             ctx.dims = { w, h };
@@ -1501,7 +1573,7 @@
             box.style.height = b.h + 'px';
             const typeKey = ctx.v.ltype ? ctx.v.ltype.key : 'slim';
             const sides = ctx.v.sides ? ctx.v.sides.key : 'single';
-            box.className = 'moz-lb is-' + typeKey + ' is-' + sides + (ctx.ledOn ? ' is-lit' : '');
+            box.className = 'moz-lb is-' + typeKey + ' is-' + sides + ' is-shape-' + shape + (ctx.ledOn ? ' is-lit' : '');
             box.style.setProperty('--moz-clip', LB_SHAPES[shape] || LB_SHAPES.rectangle);
             box.style.setProperty('--moz-frame', ctx.v.frame ? ctx.v.frame.hex : '#1a1a1a');
             box.style.setProperty('--moz-depth', Math.max(3, Math.min(14, b.w * (typeKey === 'slim' ? 0.008 : 0.03))) + 'px');
@@ -1785,9 +1857,11 @@
                     const cell = el('span', 'moz-mq__ch');
                     const glyph = ch === ' ' ? ' ' : ch;
                     cell.appendChild(el('span', 'moz-mq__depth', glyph));
-                    cell.appendChild(el('span', 'moz-mq__face', glyph));
+                    const face = el('span', 'moz-mq__face', glyph);
+                    cell.appendChild(face);
                     if (ch !== ' ') {
-                        cell.appendChild(el('i', 'moz-mq__base-probe'));
+                        // Baseline marker sits INSIDE the letter's line (not on a new line below it).
+                        face.appendChild(el('i', 'moz-mq__base-probe'));
                         cell.appendChild(el('span', 'moz-mq__bulb'));
                     }
                     cell.dataset.ch = ch;
@@ -1815,7 +1889,8 @@
                 const pt = bulbPoint(cell.dataset.ch, fontCss);
                 if (!pt) { bulb.hidden = true; return; }
                 bulb.hidden = false;
-                const baseY = probe.offsetTop;
+                // Baseline y inside this letter cell (face sits at the top of the cell).
+                const baseY = probe.getBoundingClientRect().top - cell.getBoundingClientRect().top;
                 const dia = Math.max(6, Math.min(fs * 0.17, pt.r * fs * 1.5));
                 bulb.style.width = dia + 'px';
                 bulb.style.height = dia + 'px';
