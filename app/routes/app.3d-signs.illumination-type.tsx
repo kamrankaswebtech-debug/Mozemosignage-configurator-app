@@ -9,6 +9,7 @@ type Entry = {
     label: string;
     extraPrice: string;
     sortOrder: string;
+    effectKey: string;
     frontFinishes: string[];
     sideFinishes: string[];
     backingFinishes: string[];
@@ -23,6 +24,17 @@ const SLOTS = [
     { key: "side", field: "side_finishes", title: "Sides" },
     { key: "backing", field: "backing_finishes", title: "Backing panel" },
 ] as const;
+
+// Effect key = preview look AND which configurator shows the type: "infinity" only on Infinity Mirror,
+// "marquee" only on Event Marquee, every other key on 3D Illuminated Signs.
+const EFFECTS = [
+    { value: "front_lit", label: "Front Lit (3D Signs)" },
+    { value: "backlit", label: "Backlit (3D Signs)" },
+    { value: "front_back_lit", label: "Front & Back Lit (3D Signs)" },
+    { value: "fully_illuminated", label: "Fully Illuminated (3D Signs)" },
+    { value: "infinity", label: "Infinity Mirror (Infinity Mirror Signs only)" },
+    { value: "marquee", label: "Marquee Bulbs (Event Marquee Signs only)" },
+];
 
 const splitList = (value: string | undefined) => String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -41,6 +53,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             label: f.label || "",
             extraPrice: f.extra_price_decimal || "0",
             sortOrder: f.sort_order || "0",
+            effectKey: f.effect_key || "",
             frontFinishes: splitList(f.front_finishes),
             sideFinishes: splitList(f.side_finishes),
             backingFinishes: splitList(f.backing_finishes),
@@ -82,6 +95,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
     ];
+    const effectKey = String(formData.get("effectKey") || "");
+    if (EFFECTS.some((e) => e.value === effectKey)) fields.push({ key: "effect_key", value: effectKey });
     // Finish checkboxes are only part of the edit form, so a plain create keeps them empty (= all).
     if (formData.get("hasFinishFields") === "1") {
         SLOTS.forEach((slot) => {
@@ -171,9 +186,18 @@ export default function IlluminationTypePage() {
                         <input type="text" name="label" placeholder="Label (e.g. Backlit)" required />
                         <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
+                        <select name="effectKey" defaultValue="front_lit">{EFFECTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}</select>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
                 </fetcher.Form>
+            </s-section>
+
+            <s-section heading="Infinity Mirror & Event Marquee">
+                <s-paragraph>
+                    Infinity Mirror Signs and Event Marquee Signs use this same 3D configurator with one illumination type each. Add one type
+                    with Effect "Infinity Mirror" and one with "Marquee Bulbs" (e.g. label "Infinity Mirror LED" / "Marquee Bulbs") and set
+                    their Extra Price — they only appear on their own product and never on 3D Illuminated Signs.
+                </s-paragraph>
             </s-section>
 
             <s-section heading="Material / Finish compatibility">
@@ -211,6 +235,7 @@ export default function IlluminationTypePage() {
                                                     <input type="text" name="label" defaultValue={item.label} required />
                                                     <input type="number" step="0.01" name="extraPrice" defaultValue={item.extraPrice} />
                                                     <input type="number" name="sortOrder" defaultValue={item.sortOrder} />
+                                                    <select name="effectKey" defaultValue={item.effectKey || "front_lit"}>{EFFECTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}</select>
                                                 </s-stack>
                                                 {SLOTS.map((slot) => {
                                                     const offered = finishes.filter((f) => f.appliesTo.includes(slot.key));
@@ -236,7 +261,7 @@ export default function IlluminationTypePage() {
                                     </td>
                                 ) : (
                                     <>
-                                        <td style={{ padding: "8px" }}>{item.label}</td>
+                                        <td style={{ padding: "8px" }}>{item.label}<br /><small>{(EFFECTS.find((e) => e.value === (item.effectKey || "front_lit")) || { label: item.effectKey }).label}</small></td>
                                         <td style={{ padding: "8px" }}>${item.extraPrice}</td>
                                         <td style={{ padding: "8px" }}>{item.sortOrder}</td>
                                         {SLOTS.map((slot) => (

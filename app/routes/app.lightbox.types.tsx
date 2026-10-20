@@ -9,7 +9,7 @@ import { authenticate } from "../shopify.server";
 // single (single-sided / front-lit), double (double-sided), all (illuminated all around).
 type TypeEntry = { id: string; label: string; typeKey: string; description: string; sides: string; extraPrice: string; sortOrder: string };
 
-const TYPE_LABELS: Record<string, string> = { slim: "Slim Lightbox", fully: "Fully Illuminated", metal: "Metal-Sided" };
+const TYPE_LABELS: Record<string, string> = { slim: "Slim Lightbox", fully: "Fully Illuminated", metal: "Metal-Sided", double: "Double-Sided surcharge (3D LED Lightbox)" };
 const SIDES = [
     { value: "single", label: "Single-Sided / Front-Lit" },
     { value: "double", label: "Double-Sided" },
@@ -89,7 +89,7 @@ function TypeFields({ entry, count }: { entry?: TypeEntry; count: number }) {
             <select name="typeKey" defaultValue={entry?.typeKey || "slim"} required>
                 <option value="slim">Slim Lightbox</option>
                 <option value="fully">Fully Illuminated</option>
-                <option value="metal">Metal-Sided</option>
+                <option value="metal">Metal-Sided</option><option value="double">Double-Sided surcharge (3D LED Lightbox)</option>
             </select>
             <input type="text" name="description" placeholder="Short description" defaultValue={entry?.description} style={{ minWidth: 260 }} />
             {SIDES.map((s) => (

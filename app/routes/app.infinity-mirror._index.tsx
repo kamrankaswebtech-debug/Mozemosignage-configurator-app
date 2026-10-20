@@ -7,22 +7,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return null;
 };
 
+// This configurator is the 3D Sign configurator in its own mode, so its options are managed on the
+// 3D Illuminated Signs pages (shared) — plus the items below that belong to this product only.
 export default function InfinityMirrorHub() {
     const cards = [
-        { title: "Fonts", desc: "Manage available font styles shown in the configurator.", href: "/app/infinity-mirror/fonts" },
-        { title: "Sizes", desc: "Manage sign size options and their pricing.", href: "/app/infinity-mirror/sizes" },
-        { title: "LED Colours", desc: "Manage LED colour options and their extra pricing.", href: "/app/infinity-mirror/colours" },
-        { title: "Frame Finishes", desc: "Manage mirror frame finish options (Black, Gold, Silver, etc.).", href: "/app/infinity-mirror/frame-finishes" },
-        { title: "Mounting", desc: "Manage mounting options (Wall Mount, Freestanding Base, etc.).", href: "/app/infinity-mirror/mounting" },
-        { title: "Add-ons", desc: "Manage optional add-ons.", href: "/app/infinity-mirror/addons" },
+        { title: "Illumination (price)", desc: "Add ONE illumination type with Effect \"Infinity Mirror\" and set its price.", href: "/app/3d-signs/illumination-type" },
+        { title: "Fonts", desc: "Shared with 3D Signs — the same font list.", href: "/app/neon-signs/fonts" },
+        { title: "Sizes & Pricing Settings", desc: "Shared with 3D Signs — overall width, letter height, tiers and outdoor surcharge.", href: "/app/3d-signs/pricing-settings" },
+        { title: "Colours", desc: "Shared with 3D Signs — the same colour range (black is left out where this product can't use it).", href: "/app/3d-signs/front-colours" },
+        { title: "Material / Finish", desc: "Shared with 3D Signs — only Glossy, Matte and Chrome Shine finishes are shown here.", href: "/app/3d-signs/finishes" },
+        { title: "Mounting", desc: "Shared with 3D Signs — the same mounting options and conditions.", href: "/app/3d-signs/mounting" },
+        { title: "Add-ons", desc: "Shared with 3D Signs — the same add-ons.", href: "/app/3d-signs/addons" },
+        { title: "Wallpapers", desc: "Settings → Configurator Wallpapers — tick this product on the photos to show.", href: "/app/settings/wallpapers" },
     ];
 
     return (
-        <s-page heading="Infinity Mirror Letter Signs Configurator">
+        <s-page heading="Infinity Mirror Signs Configurator">
             <s-section heading="Configurator Options">
-                <p className="moz-hub-intro">
-                    Manage all the dynamic options shown in the Infinity Mirror Letter Signs live configurator on your storefront. Changes here appear immediately on your store — no code changes needed.
-                </p>
+                <p className="moz-hub-intro">Infinity Mirror Signs use the 3D Sign configurator (same menus, layout and functions) with only the options this sign needs: design type (incl. Graphic Print and Letters Only), fonts, one illumination type, sizing, Indoor/Outdoor, lighting and side colours (no black), side finish, colour intensity, mounting and add-ons.</p>
                 <HubCardGrid items={cards.map((card) => ({ title: card.title, description: card.desc, path: card.href }))} />
             </s-section>
         </s-page>

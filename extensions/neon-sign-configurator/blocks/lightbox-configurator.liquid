@@ -1,8 +1,5 @@
-{% comment %} Mozemo Signage - Lightbox Signs (shape, lightbox type, lighting, size, design, frame colour). UI built by moz-configurator.js {% endcomment %}
-<div data-moz-cfg="lightbox" data-block-id="{{ block.id }}" data-product-id="{{ product.id }}">
-<script type="application/json" data-moz-data>{"opts":[{%- for o in metaobjects["app--418838118401--lightbox_option"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"c":{{ o.category.value | json }},"l":{{ o.label.value | json }},"hc":{{ o.hex_code.value | default: '' | json }},"k":{{ o.shape_key.value | default: '' | json }},"sd":{{ o.sides.value | default: 'single' | json }},"t":{{ o.type_key.value | default: '' | json }},"d":{{ o.description.value | default: '' | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
-{%- render 'moz-cfg-common', walls: 'neon', lib: 'lightbox', power: false, install: false -%}
-</div>
+{% comment %} 3D LED Lightbox — the 3D configurator (same sizing, pricing, menus and functions) in 'lightbox' mode. {% endcomment %}
+{% render 'sign3d-core', block: block, product: product, mode: 'lightbox' %}
 
 {% schema %}
 { "name": "Lightbox Configurator", "target": "section", "settings": [] }

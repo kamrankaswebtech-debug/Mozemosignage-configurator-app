@@ -9,9 +9,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
-    { title: "Lightbox Types", path: "/app/lightbox/types", description: "Slim, Fully Illuminated and Metal-Sided lightboxes and which lighting (single / double / all-around) each offers." },
-    { title: "Sizes", path: "/app/lightbox/sizes", description: "Sizes and prices per Lightbox Type and lighting (single-sided, double-sided, all-around)." },
-    { title: "Frame Colours", path: "/app/lightbox/frame-colours", description: "Manage outdoor aluminium frame colour options." },
+    { title: "Shapes", path: "/app/lightbox/shapes", description: "Circle/Round, Square, Rectangle, Star, Oval, Hexagon, Octagon and Other — with optional extra price." },
+    { title: "Double-Sided Price", path: "/app/lightbox/types", description: "Add a type with Type \"Double-Sided surcharge\" to change the +$49.99 (Wall Hanging only)." },
+    { title: "Sizing & Pricing", path: "/app/3d-signs/pricing-settings", description: "Shared with 3D Illuminated Signs — width / height tiers. Wall Mount 40–500 cm, Wall Hanging 40–100 cm." },
+    { title: "Side & Pole / Bracket Colours", path: "/app/3d-signs/front-colours", description: "Shared with 3D Signs colours; finishes Glossy, Shiny (Chrome) and Matte from Material / Finish." },
+    { title: "Wallpaper", path: "/app/settings/wallpapers", description: "One consistent background — upload it and tick Lightbox." },
 ];
 
 export default function LightboxHub() {
@@ -23,7 +25,7 @@ export default function LightboxHub() {
     }
 
     return (
-        <s-page heading="Lightbox Range">
+        <s-page heading="3D LED Lightbox">
             <s-section heading="Configurator Options">
                 <s-paragraph>
                     Manage all the dynamic options shown in the Lightbox Range live configurator on your

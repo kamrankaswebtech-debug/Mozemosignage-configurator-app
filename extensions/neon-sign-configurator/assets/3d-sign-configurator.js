@@ -485,18 +485,22 @@ function sign3dBuildColourSwatches(root) {
     if (!colours.length) return;
 
     const ORDER = ['standard', 'gloss', 'metallic', 'brushed_metal'];
-    const groups = {};
+    const allGroups = {};
     colours.forEach((c) => {
         const g = sign3dNormalizeGroup(c.group);
-        (groups[g] = groups[g] || []).push(c);
+        (allGroups[g] = allGroups[g] || []).push(c);
     });
-    const keys = Object.keys(groups).sort((a, b) => {
+    const allKeys = Object.keys(allGroups).sort((a, b) => {
         const ia = ORDER.indexOf(a);
         const ib = ORDER.indexOf(b);
         return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
 
+    // Lists marked data-no-black (Infinity lighting / side colours, Marquee bulbs) leave out black.
+    const isBlack = (c) => /\bblack\b/i.test(String(c.name || '')) || /^#?(0{3}|0{6})$/i.test(String(c.hex || '').trim());
     [
+        // Marquee bulbs default to a colour named "Warm White" when there is one.
+        { container: '[data-bulb-colour-swatches]', label: '[data-bulb-colour-name-label]', prefer: /^\s*warm\s*white\s*$/i },
         { container: '[data-colour-swatches]', label: '[data-colour-name-label]', prefer: null },
         { container: '[data-side-colour-swatches]', label: '[data-side-colour-name-label]', prefer: null },
         // Backing defaults to a colour literally named "Black" (if it exists), otherwise the first swatch.
@@ -505,6 +509,17 @@ function sign3dBuildColourSwatches(root) {
         const container = root.querySelector(cfg.container);
         if (!container) return;
         container.innerHTML = '';
+        let groups = allGroups;
+        let keys = allKeys;
+        if (container.hasAttribute('data-no-black')) {
+            groups = {};
+            Object.keys(allGroups).forEach((g) => {
+                const list = allGroups[g].filter((c) => !isBlack(c));
+                if (list.length) groups[g] = list;
+            });
+            keys = allKeys.filter((g) => groups[g]);
+            if (!keys.length) return;
+        }
         const preferred = cfg.prefer ? colours.find((c) => cfg.prefer.test(c.name)) : null;
         const defaultColour = preferred || groups[keys[0]][0];
         keys.forEach((g) => {
@@ -570,6 +585,87 @@ function sign3dMoney(root, value, plus) {
     if (root._sign3dCur === undefined) root._sign3dCur = sign3dReadLimits(root).cur;
     const n = Number(value) || 0;
     return (plus ? '+$' : '$') + n.toFixed(2) + (root._sign3dCur ? ' ' + root._sign3dCur : '');
+}
+
+// Marquee bulbs for one character: the glyph is drawn on a canvas in the real font, a distance
+// transform finds the centre line of every stroke, and bulbs are spread evenly along it.
+// Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
+const SIGN3D_BULB_CACHE = {};
+function sign3dBulbPoints(ch, fontCss) {
+    const key = fontCss + '|' + ch;
+    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
+    const S = 100, W = 170, H = 170, ox = 25, base = 130;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    g.font = fontCss;
+    g.textBaseline = 'alphabetic';
+    g.fillText(ch, ox, base);
+    const px = g.getImageData(0, 0, W, H).data;
+    const dist = new Float32Array(W * H);
+    let any = false;
+    for (let i = 0; i < W * H; i++) { const inside = px[i * 4 + 3] > 127; dist[i] = inside ? 1e6 : 0; if (inside) any = true; }
+    if (!any) return [];
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        if (dist[i]) dist[i] = Math.min(dist[i], dist[i - 1] + 1, dist[i - W] + 1, dist[i - W - 1] + 1.4, dist[i - W + 1] + 1.4);
+    }
+    for (let y = H - 2; y > 0; y--) for (let x = W - 2; x > 0; x--) {
+        const i = y * W + x;
+        if (dist[i]) dist[i] = Math.min(dist[i], dist[i + 1] + 1, dist[i + W] + 1, dist[i + W + 1] + 1.4, dist[i + W - 1] + 1.4);
+    }
+    let maxD = 0;
+    for (let i = 0; i < W * H; i++) if (dist[i] > maxD) maxD = dist[i];
+    // Centre-line (ridge) pixels of the main strokes; thin serifs are skipped.
+    const cand = [];
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        const d = dist[i];
+        if (d < maxD * 0.55) continue;
+        const ridge = (d >= dist[i - 1] && d >= dist[i + 1]) || (d >= dist[i - W] && d >= dist[i + W])
+            || (d >= dist[i - W - 1] && d >= dist[i + W + 1]) || (d >= dist[i - W + 1] && d >= dist[i + W - 1]);
+        if (ridge) cand.push({ x, y, d });
+    }
+    // Even spacing: pick points at least "gap" apart, strongest centre-line points first.
+    const gap = Math.max(maxD * 2.3, S * 0.13);
+    cand.sort((a, b) => b.d - a.d);
+    const pts = [];
+    for (const c of cand) {
+        if (pts.every((p) => (p.x - c.x) * (p.x - c.x) + (p.y - c.y) * (p.y - c.y) >= gap * gap)) pts.push(c);
+    }
+    const dia = Math.min(maxD * 1.15, S * 0.085) / S;
+    const res = pts.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: dia }));
+    if (!document.fonts || document.fonts.check(fontCss)) SIGN3D_BULB_CACHE[key] = res;
+    return res;
+}
+
+// Placeholder artwork for the 3D LED Lightbox face until the customer uploads a design.
+// (Add to Cart still asks for a real upload — uploadedLogoUrl stays empty.)
+function sign3dLightboxPlaceholder() {
+    const c = document.createElement('canvas');
+    c.width = 480;
+    c.height = 340;
+    const g = c.getContext('2d');
+    g.strokeStyle = 'rgba(120,120,135,0.75)';
+    g.setLineDash([14, 10]);
+    g.lineWidth = 5;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(8, 8, 464, 324, 24); else g.rect(8, 8, 464, 324);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = 'rgba(110,110,125,0.85)';
+    g.fillRect(200, 70, 80, 60);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(208, 122); g.lineTo(232, 92); g.lineTo(248, 110); g.lineTo(258, 100); g.lineTo(272, 122); g.closePath(); g.fill();
+    g.beginPath(); g.arc(260, 84, 6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(80,80,95,0.95)';
+    g.font = '800 34px Arial, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('Your Logo / Design', 240, 205);
+    g.font = '400 22px Arial, sans-serif';
+    g.fillText('printed on the glossy acrylic face', 240, 245);
+    return c.toDataURL('image/png');
 }
 
 function sign3dSplitList(value) {
@@ -721,6 +817,8 @@ function sign3dHydrateOptions(root) {
         opt.dataset.image = o.i || '';
         opt.dataset.backingType = o.b || '';
         opt.dataset.description = o.d || '';
+        if (o.wmin) opt.dataset.wmin = o.wmin;
+        if (o.wmax) opt.dataset.wmax = o.wmax;
     }, '[data-sign3d-mountings]');
 
     const lhInput = root.querySelector('[data-letter-height-input]');
@@ -946,7 +1044,7 @@ function initSign3dConfigurator(root) {
     // Finishes come from Admin "Material / Finish" (sign3d_option, category = finish). Each
     // illumination type may limit which finish handles are allowed per part (data-ff/sf/bf).
     const FINISH_SLOTS = ['front', 'side', 'backing'];
-    const FINISH_SLOT_TITLES = { front: 'Front', side: 'Side', backing: 'Backing Mount' };
+    const FINISH_SLOT_TITLES = { front: 'Front', side: 'Side', backing: root.dataset.sign3dMode === 'lightbox' ? 'Pole / Bracket' : 'Backing Mount' };
     const finishList = sign3dReadJson(root, '[data-sign3d-finishes]')
         .map((f, i) => ({ f, i }))
         .sort((a, b) => ((Number(a.f.s) || 999999) - (Number(b.f.s) || 999999)) || (a.i - b.i))
@@ -987,7 +1085,10 @@ function initSign3dConfigurator(root) {
     // 'text' = wording only, 'upload' = logo only, 'both' = wording + logo
     function hasText() { return currentMode !== 'upload'; }
     function hasLogo() { return currentMode !== 'text'; }
+    // Name of the clicked design-type button when it differs from the base mode (e.g. "Graphic Print").
+    let currentModeName = '';
     function designSourceLabel() {
+        if (currentModeName) return currentModeName;
         if (currentMode === 'upload') return 'Uploaded Logo/Design';
         if (currentMode === 'both') return 'Wording + Logo';
         return 'Typed Wording';
@@ -1096,7 +1197,7 @@ function initSign3dConfigurator(root) {
         if (!logoImg) return;
         const aspect = (logoImg.naturalWidth || 1) / (logoImg.naturalHeight || 1);
         const area = previewFreeArea();
-        let maxH = area.h * 0.95;
+        let maxH = area.h * 0.95 / lightboxScale();
         if (currentMode === 'both') maxH *= 0.55; // leave room for the text below the logo
         let w = Math.max(100, targetW || area.w * 0.7);
         let h = w / aspect;
@@ -1245,7 +1346,7 @@ function initSign3dConfigurator(root) {
         const showText = mode !== 'upload';
         const showLogo = mode !== 'text';
 
-        modeButtons.forEach((btn) => btn.classList.toggle('is-selected', btn.dataset.modeBtn === mode));
+        modeButtons.forEach((btn) => btn.classList.toggle('is-selected', btn.dataset.modeBtn === mode && (btn.dataset.modeName || '') === currentModeName));
         modePanels.forEach((panel) => {
             const key = panel.dataset.modePanel;
             panel.hidden = !((key === 'text' && showText) || (key === 'upload' && showLogo));
@@ -1369,9 +1470,11 @@ function initSign3dConfigurator(root) {
 
         if (d.hasText && fontSelect && fontSelect.selectedIndex > -1) rows.push(['Font', escapeHtml(fontSelect.options[fontSelect.selectedIndex].textContent.trim())]);
         rows.push(['Lighting', d.illuminationLabel]);
-        rows.push(['Front Colour', d.colourName + ' (' + d.colourGroupLabel + ')']);
+        if (bulbSwatches.length) rows.push(['Bulb Colour', escapeHtml(selectedBulbName || '')]);
+        if (root.dataset.sign3dMode === 'lightbox') { rows.push(['Shape', escapeHtml(lbShape ? lbShape.l : '')]); rows.push(['Lighting', lbSides === 'double' ? 'Double-Sided' : 'Front-Facing']); }
+        if (!root.dataset.frontOff) rows.push([root.dataset.frontLabel || 'Front Colour', d.colourName + ' (' + d.colourGroupLabel + ')']);
         rows.push(['Colour Intensity', colourIntensity + '%']);
-        rows.push(['Side Colour', d.sideColourName]);
+        rows.push([root.dataset.sideLabel || 'Side Colour', d.sideColourName]);
         rows.push(['Material', d.materialLabel]);
 
         rows.push(['Mounting', d.mountingLabel]);
@@ -1418,6 +1521,10 @@ function initSign3dConfigurator(root) {
     let selectedSideGroup = sideSwatches.length ? (sideSwatches[0].dataset.colourGroup || 'standard') : 'standard';
     const backSwatches = root.querySelectorAll('[data-back-colour-swatches] .sign3d-configurator__swatch');
     const backColourNameLabel = root.querySelector('[data-back-colour-name-label]');
+    const bulbSwatches = root.querySelectorAll('[data-bulb-colour-swatches] .sign3d-configurator__swatch');
+    const bulbNameLabel = root.querySelector('[data-bulb-colour-name-label]');
+    let selectedBulbHex = '';
+    let selectedBulbName = '';
     const defaultBackSwatch = root.querySelector('[data-back-colour-swatches] .sign3d-configurator__swatch.is-selected') || backSwatches[0] || null;
     let selectedBackHex = defaultBackSwatch ? defaultBackSwatch.dataset.colourHex : '#111111';
     let selectedBackName = defaultBackSwatch ? defaultBackSwatch.dataset.colourName : '';
@@ -1741,6 +1848,7 @@ function initSign3dConfigurator(root) {
         selectedColourGroup = defaultSwatch.dataset.colourGroup || 'standard';
         resetSideColour();
         resetBackColour();
+        if (bulbSwatches.length) setBulb(bulbSwatches[0]);
         setColourIntensity(100);
         clearCustomColourInputs();
         updatePreviewColour();
@@ -1778,6 +1886,7 @@ function initSign3dConfigurator(root) {
     }
 
     function updatePreviewColour() {
+        if (root.dataset.sign3dMode === 'lightbox' && typeof updateDimensionLines === 'function') updateDimensionLines();
         previewText.style.color = selectedColourHex;
         updateFinishClasses();
         updateDepthVisual();
@@ -1979,7 +2088,7 @@ function initSign3dConfigurator(root) {
         if (heightLabel) heightLabel.textContent = formatDim(heightCm);
         syncLetterHeightSlider();
 
-        updateLogoPreviewSize(widthCm, heightCm, targetW);
+        updateLogoPreviewSize(widthCm, heightCm, targetW / lightboxScale());
         updateMountingInfo();
         updateDimensionLines();
     }
@@ -2012,6 +2121,7 @@ function initSign3dConfigurator(root) {
 
     function updateDimensionLines() {
         if (!previewStage) return;
+        placeMarqueeBulbs();
         const stageRect = previewStage.getBoundingClientRect();
         const contentRect = getSignContentRect();
         updateBackingPanel(contentRect, stageRect);
@@ -2198,7 +2308,7 @@ function initSign3dConfigurator(root) {
         // selected Mounting option is literally "No Backing Panel".
         let panelSurcharge = 0;
         const panelRate = Number(settings.panelRate) || 0;
-        if (mountingLabel && mountingLabel.toLowerCase() !== 'no backing panel' && widthCm > 0 && letterHeightCm > 0) {
+        if (root.dataset.sign3dMode !== 'lightbox' && mountingLabel && mountingLabel.toLowerCase() !== 'no backing panel' && widthCm > 0 && letterHeightCm > 0) {
             const areaSqm = (widthCm / 100) * (letterHeightCm / 100);
             panelSurcharge = Math.round(areaSqm * panelRate * 100) / 100;
         }
@@ -2232,7 +2342,8 @@ function initSign3dConfigurator(root) {
             outdoorSurcharge = potentialOutdoor;
         }
 
-        const total = subtotalBeforeOutdoor + outdoorSurcharge;
+        const lbExtras = lightboxExtras();
+        const total = subtotalBeforeOutdoor + outdoorSurcharge + lbExtras.reduce((a, l) => a + l.value, 0);
 
         // Colour is intentionally excluded from pricing entirely — customer's free choice,
         // per the client's explicit "colour never changes price" instruction.
@@ -2255,9 +2366,10 @@ function initSign3dConfigurator(root) {
         lines.push({ label: 'Mounting: ' + mountingLabel, value: mountingPrice, included: mountingPrice === 0 });
         if (panelSurcharge > 0) lines.push({ label: 'Backing panel (by area)', value: panelSurcharge, included: false });
         addonLabels.forEach((lbl) => lines.push({ label: lbl, value: addonPriceMap[lbl] || 0, included: !(addonPriceMap[lbl] > 0) }));
-        lines.push({ label: 'Front colour: ' + (colourNameLabel ? colourNameLabel.textContent.trim() : '') + ' (' + sign3dPrettyGroup(selectedColourGroup) + ')', value: 0, included: true });
+        lbExtras.forEach((l) => lines.push(l));
+        if (!root.dataset.frontOff) lines.push({ label: 'Front colour: ' + (colourNameLabel ? colourNameLabel.textContent.trim() : '') + ' (' + sign3dPrettyGroup(selectedColourGroup) + ')', value: 0, included: true });
         lines.push({ label: 'Side colour: ' + selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')', value: 0, included: true });
-        if (getBackingType() !== 'none') lines.push({ label: 'Backing colour: ' + selectedBackName + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')', value: 0, included: true });
+        if (getBackingType() !== 'none') lines.push({ label: (root.dataset.backLabel ? root.dataset.backLabel.toLowerCase().replace(/^./, (x) => x.toUpperCase()) : 'Backing colour') + ': ' + selectedBackName + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')', value: 0, included: true });
         lines.push({ label: isOutdoor ? 'Outdoor construction' : 'Indoor', value: outdoorSurcharge, included: !isOutdoor });
         lines.push({ label: 'Standard delivery (Australia-wide)', value: 0, included: true });
 
@@ -2490,7 +2602,7 @@ function initSign3dConfigurator(root) {
         });
     });
 
-    const ILLUM_EFFECT_CLASSES = ['effect-front_lit', 'effect-backlit', 'effect-front_back_lit', 'effect-fully_illuminated'];
+    const ILLUM_EFFECT_CLASSES = ['effect-front_lit', 'effect-backlit', 'effect-front_back_lit', 'effect-fully_illuminated', 'effect-infinity', 'effect-marquee'];
 
     function updateIlluminationEffect() {
         if (!previewInnerForLed || !illuminationSelect) return;
@@ -2527,7 +2639,7 @@ function initSign3dConfigurator(root) {
 
     // ---- NEW: measurement / mode / upload / review event bindings ----
     modeButtons.forEach((btn) => {
-        btn.addEventListener('click', () => setMode(btn.dataset.modeBtn));
+        btn.addEventListener('click', () => { currentModeName = btn.dataset.modeName || ''; setMode(btn.dataset.modeBtn); });
     });
 
     if (widthInput) {
@@ -2711,7 +2823,7 @@ function initSign3dConfigurator(root) {
             if (hasLogo() && !uploadedLogoUrl) {
                 addToCartBtn.disabled = false;
                 addToCartBtn.textContent = 'Add to Cart';
-                showTemporaryStatus(addToCartStatus, 'Please upload your logo / design (or switch to Type Wording) before adding to cart.', 6000);
+                showTemporaryStatus(addToCartStatus, root.dataset.sign3dMode === 'lightbox' ? 'Please import your logo or design before adding to cart.' : 'Please upload your logo / design (or switch to Type Wording) before adding to cart.', 6000);
                 return;
             }
             addToCartBtn.disabled = true;
@@ -2776,6 +2888,28 @@ function initSign3dConfigurator(root) {
                     const f = activeFinish(slot);
                     if (f) properties[FINISH_SLOT_TITLES[slot] + ' Finish'] = f.l;
                 });
+                // Infinity / Marquee: the same values under the product's own names.
+                const renameProp = (from, to) => {
+                    if (!to || to === from || !(from in properties)) return;
+                    properties[to] = properties[from];
+                    delete properties[from];
+                };
+                renameProp('Front Colour', root.dataset.frontLabel);
+                renameProp('Side Colour', root.dataset.sideLabel);
+                if (root.dataset.frontLabel) renameProp('Front Finish', root.dataset.frontLabel.replace(/Colour$/, 'Finish'));
+                if (root.dataset.sideLabel) renameProp('Side Finish', root.dataset.sideLabel.replace(/Colour$/, 'Finish'));
+                if (bulbSwatches.length) properties['Bulb Colour'] = selectedBulbName || 'Default';
+                if (root.dataset.sign3dMode === 'lightbox') {
+                    delete properties['Front Colour'];
+                    delete properties['Front Finish'];
+                    properties['Shape'] = lbShape ? lbShape.l : 'Standard';
+                    properties['Lighting'] = lbSides === 'double' ? 'Double-Sided' : 'Front-Facing';
+                    properties['LED'] = 'White LEDs';
+                    renameProp('Colour Intensity', getBackingType() === 'bracket' ? 'Pole / Bracket Colour Intensity' : '');
+                    if (getBackingType() !== 'bracket') delete properties['Colour Intensity'];
+                    renameProp('Backing Colour', 'Pole / Bracket Colour');
+                    renameProp('Backing Mount Finish', 'Pole / Bracket Finish');
+                }
 
                 if (currentUnit !== 'cm') {
                     properties['Entered Size'] = 'Width ' + formatDim(getWidthCm()) + ' x Height ' + formatDim(getHeightCm());
@@ -2991,7 +3125,7 @@ function initSign3dConfigurator(root) {
         const opt = mountingSelect ? mountingSelect.options[mountingSelect.selectedIndex] : null;
         if (!opt) return 'none';
         const key = String(opt.dataset.backingType || '').trim().toLowerCase();
-        if (['none', 'raceway', 'rectangle', 'circle'].indexOf(key) > -1) return key;
+        if (['none', 'raceway', 'rectangle', 'circle', 'bracket'].indexOf(key) > -1) return key;
         const t = opt.textContent.toLowerCase();
         if (/no\s*backing|without|none/.test(t)) return 'none';
         if (/raceway/.test(t)) return 'raceway';
@@ -3002,6 +3136,7 @@ function initSign3dConfigurator(root) {
 
     // Draws the metal backing behind the sign, hugging the real sign content (updates on every zoom / text change).
     function updateBackingPanel(contentRect, stageRect) {
+        if (root.dataset.sign3dMode === 'lightbox') { drawLightbox(contentRect, stageRect); return; }
         if (!backingEl) return;
         const type = getBackingType();
         if (type === 'none' || !contentRect || !contentRect.width || !contentRect.height) {
@@ -3050,6 +3185,7 @@ function initSign3dConfigurator(root) {
     }
 
     function getInstallRequirementText() {
+        if (root.dataset.plugIn === 'true') return 'Plug-in power — plugs into a standard power outlet';
         return (getBackingType() === 'none' || getWidthCm() > 200) ? 'Qualified electrician required' : 'Plug-in connection available';
     }
 
@@ -3071,7 +3207,8 @@ function initSign3dConfigurator(root) {
     function updateMountingInfo() {
         const type = getBackingType();
         const over2m = getWidthCm() > 200;
-        const needsElectrician = type === 'none' || over2m;
+        const plugIn = root.dataset.plugIn === 'true';
+        const needsElectrician = !plugIn && (type === 'none' || over2m);
         const hasMounting = !!(mountingSelect && mountingSelect.options.length);
 
         // The Backing Mount colour + finish lists always stay visible directly under Mounting.
@@ -3087,7 +3224,7 @@ function initSign3dConfigurator(root) {
         }
 
         if (powerFieldEl) {
-            const showPower = powerAdapters.length > 0 && type !== 'none' && !over2m;
+            const showPower = powerAdapters.length > 0 && (plugIn || (type !== 'none' && !over2m));
             if (powerFieldEl.hidden === showPower) {
                 powerFieldEl.hidden = !showPower;
                 renumberSteps();
@@ -3106,7 +3243,9 @@ function initSign3dConfigurator(root) {
                     installBadgeEl.hidden = true;
                 }
             }
-            if (installTextEl) {
+            if (installTextEl && plugIn) {
+                installTextEl.textContent = 'Freestanding plug-in sign: stands on the floor and plugs straight into a standard power outlet.';
+            } else if (installTextEl) {
                 installTextEl.textContent = needsElectrician
                     ? 'Electrician installation required.'
                     : 'Easy install: smaller signs with a backing panel can use a plug-in connection.';
@@ -3115,7 +3254,9 @@ function initSign3dConfigurator(root) {
 
         if (electricianNoteEl) {
             let msg = '';
-            if (type === 'none') {
+            if (plugIn) {
+                msg = '';
+            } else if (type === 'none') {
                 msg = 'Professional installation required: this mounting option must be installed by a qualified electrician, who will connect the power cables behind the individual 3D pieces. Please also note that any sign wider than 2 metres requires installation by a qualified electrician, regardless of the mounting option selected.';
             } else if (over2m) {
                 msg = 'Professional installation required: signs wider than 2 metres must be installed by a qualified electrician, regardless of the mounting option selected. A plug-in power supply option is therefore not offered for this size.';
@@ -3282,6 +3423,7 @@ function initSign3dConfigurator(root) {
 
     // Uploaded logo: same 4 illumination looks as the text, built as a CSS filter chain.
     function buildLogoIlluminationFilter(depthMm) {
+        if (root.dataset.sign3dMode === 'lightbox') return ledOn ? 'none' : 'brightness(0.82) saturate(0.9)';
         const key = getIlluminationKey();
         const light = selectedColourHex || '#ffffff';
         if (!ledOn) {
@@ -3381,7 +3523,11 @@ function initSign3dConfigurator(root) {
     // AND allowed by the selected Illumination Type (nothing ticked there = all).
     function availableFinishes(slot) {
         const allowed = allowedFinishHandles(slot);
+        const wrapEl = root.querySelector('[data-finish-wrap="' + slot + '"]');
+        if (wrapEl && wrapEl.hasAttribute('data-finish-off')) return [];
+        const surfaces = sign3dSplitList(root.dataset.finishSurfaces);
         return finishList.filter((f) => {
+            if (surfaces.length && surfaces.indexOf(sign3dFinishSurface(f)) === -1) return false;
             const applies = sign3dSplitList(f.a);
             const offered = applies.length ? applies.indexOf(slot) > -1 : slot !== 'backing';
             return offered && (!allowed.length || allowed.indexOf(f.h) > -1);
@@ -3511,6 +3657,7 @@ function initSign3dConfigurator(root) {
     function setColourIntensity(value) {
         colourIntensity = Math.min(100, Math.max(50, Math.round(Number(value) || 100)));
         if (previewInnerForLed) previewInnerForLed.style.setProperty('--sign3d-int', colourIntensity + '%');
+        if (root.dataset.sign3dMode === 'lightbox') { root.style.setProperty('--sign3d-int', colourIntensity + '%'); if (typeof updateDimensionLines === 'function') updateDimensionLines(); }
         if (intensityUi) {
             intensityUi.range.value = colourIntensity;
             intensityUi.value.textContent = colourIntensity + '%';
@@ -3519,7 +3666,7 @@ function initSign3dConfigurator(root) {
     }
 
     function initColourIntensity() {
-        const anchor = root.querySelector('[data-finish-wrap="front"]');
+        const anchor = root.querySelector('[data-intensity-anchor]') || root.querySelector('[data-finish-wrap="front"]');
         if (anchor) {
             const box = document.createElement('div');
             box.className = 'sign3d-configurator__intensity';
@@ -3580,6 +3727,196 @@ function initSign3dConfigurator(root) {
         });
     });
 
+    // ---- Marquee: Bulb Colour (no black) + small bulbs evenly spaced along every letter ----
+    function setBulb(swatch) {
+        if (!swatch) return;
+        bulbSwatches.forEach((s) => s.classList.toggle('is-selected', s === swatch));
+        selectedBulbHex = swatch.dataset.colourHex;
+        selectedBulbName = swatch.dataset.colourName;
+        if (bulbNameLabel) bulbNameLabel.textContent = selectedBulbName;
+        if (previewInnerForLed) previewInnerForLed.style.setProperty('--sign3d-bulb', selectedBulbHex);
+    }
+    bulbSwatches.forEach((swatch) => {
+        swatch.addEventListener('click', () => { setBulb(swatch); calculateTotal(); pushHistory(); });
+    });
+    if (bulbSwatches.length) setBulb(Array.from(bulbSwatches).find((s) => s.classList.contains('is-selected')) || bulbSwatches[0]);
+
+    let bulbSignature = '';
+    function placeMarqueeBulbs() {
+        if (!bulbSwatches.length || !textFlex) return;
+        const fs = parseFloat(textFlex.style.fontSize) || 0;
+        const cs = getComputedStyle(textFlex);
+        const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
+        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length;
+        if (sig === bulbSignature && textFlex.querySelector('.sign3d-configurator__bulb')) return;
+        bulbSignature = sig;
+        textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
+            span.querySelectorAll('.sign3d-configurator__bulb, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
+            const ch = span.dataset.char;
+            if (!ch || ch === '\u00A0' || !fs) return;
+            const pts = sign3dBulbPoints(ch, fontCss);
+            if (!pts.length) return;
+            const probe = document.createElement('i');
+            probe.className = 'sign3d-configurator__bulb-probe';
+            span.appendChild(probe);
+            const baseY = probe.getBoundingClientRect().top - span.getBoundingClientRect().top;
+            pts.forEach((p) => {
+                const b = document.createElement('i');
+                b.className = 'sign3d-configurator__bulb';
+                const dia = Math.max(3, p.d * fs);
+                b.style.width = dia + 'px';
+                b.style.height = dia + 'px';
+                b.style.left = (p.x * fs - dia / 2) + 'px';
+                b.style.top = (baseY + p.y * fs - dia / 2) + 'px';
+                span.appendChild(b);
+            });
+        });
+    }
+
+    // ---- 3D LED Lightbox: shapes, front-facing / double-sided, mounting width limits, preview box ----
+    const LBX_CLIP = {
+        circle: 'ellipse(50% 50% at 50% 50%)', oval: 'ellipse(50% 50% at 50% 50%)', square: 'inset(0 round 3%)', rectangle: 'inset(0 round 3%)',
+        star: 'polygon(50% 0%, 61.8% 35.1%, 98.1% 34.5%, 69.1% 56.5%, 79.4% 91.3%, 50% 70.5%, 20.6% 91.3%, 30.9% 56.5%, 1.9% 34.5%, 38.2% 35.1%)',
+        hexagon: 'polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0% 50%)',
+        octagon: 'polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)',
+        other: 'inset(0 round 22%)'
+    };
+    const lbShapes = sign3dReadJson(root, '[data-sign3d-lb-shapes]')
+        .map((o, i) => ({ o, i })).sort((a, b) => ((Number(a.o.s) || 999999) - (Number(b.o.s) || 999999)) || (a.i - b.i)).map((x) => x.o)
+        .map((o) => {
+            const k = String(o.k || '').trim().toLowerCase();
+            const l = String(o.l || '').toLowerCase();
+            o.key = LBX_CLIP[k] ? k : (Object.keys(LBX_CLIP).find((x) => l.indexOf(x) > -1) || (/round/.test(l) ? 'circle' : 'rectangle'));
+            return o;
+        });
+    let lbShape = lbShapes[0] || null;
+    let lbSides = 'front';
+    const lbDoublePrice = Number(root.dataset.lbDouble) || 0;
+    const lbShapeGrid = root.querySelector('[data-lb-shape-cards]');
+    const lbSidesGrid = root.querySelector('[data-lb-sides]');
+    function lightboxExtras() {
+        if (root.dataset.sign3dMode !== 'lightbox') return [];
+        const out = [];
+        if (lbShape) out.push({ label: 'Shape: ' + lbShape.l, value: Number(lbShape.p) || 0, included: !(Number(lbShape.p) > 0) });
+        out.push(lbSides === 'double'
+            ? { label: 'Double-sided illumination', value: lbDoublePrice, included: !(lbDoublePrice > 0) }
+            : { label: 'Front-facing illumination', value: 0, included: true });
+        return out;
+    }
+    function renderLbCards() {
+        if (lbShapeGrid) {
+            lbShapeGrid.innerHTML = '';
+            lbShapes.forEach((s) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'sign3d-configurator__pick-card sign3d-lbx-card' + (s === lbShape ? ' is-selected' : '');
+                const ic = document.createElement('span');
+                ic.className = 'sign3d-lbx-card__shape';
+                ic.style.clipPath = LBX_CLIP[s.key];
+                if (s.key === 'rectangle' || s.key === 'oval') ic.style.width = '64px';
+                b.appendChild(ic);
+                const lab = document.createElement('span');
+                lab.className = 'sign3d-configurator__pick-card-label';
+                lab.textContent = s.l;
+                b.appendChild(lab);
+                const pr = document.createElement('span');
+                pr.className = 'sign3d-configurator__pick-card-price';
+                pr.textContent = Number(s.p) > 0 ? sign3dMoney(root, Number(s.p), true) : 'Included';
+                b.appendChild(pr);
+                b.addEventListener('click', () => { lbShape = s; renderLbCards(); updatePreviewScale(); calculateTotal(); });
+                lbShapeGrid.appendChild(b);
+            });
+        }
+        if (lbSidesGrid) {
+            const hanging = getBackingType() === 'bracket';
+            if (!hanging) lbSides = 'front';
+            lbSidesGrid.innerHTML = '';
+            [['front', 'Front-Facing', 'Your design lit on the front face.', 0], ['double', 'Double-Sided', hanging ? 'Your design on both faces.' : 'Available with Wall Hanging only.', lbDoublePrice]].forEach(([key, label, desc, price]) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                const off = key === 'double' && !hanging;
+                b.className = 'sign3d-configurator__pick-card' + (lbSides === key ? ' is-selected' : '') + (off ? ' is-disabled' : '');
+                b.disabled = off;
+                b.innerHTML = '<span class="sign3d-configurator__pick-card-label"></span><span class="sign3d-configurator__pick-card-desc"></span><span class="sign3d-configurator__pick-card-price"></span>';
+                b.children[0].textContent = label;
+                b.children[1].textContent = desc;
+                b.children[2].textContent = price > 0 ? sign3dMoney(root, price, true) : 'Included';
+                b.addEventListener('click', () => { if (off) return; lbSides = key; renderLbCards(); updateDimensionLines(); calculateTotal(); });
+                lbSidesGrid.appendChild(b);
+            });
+        }
+    }
+    // Width limits follow the mounting (Wall Mount 40–500 cm, Wall Hanging 40–100 cm).
+    function applyLightboxMounting() {
+        if (root.dataset.sign3dMode !== 'lightbox' || !mountingSelect) return;
+        const opt = mountingSelect.options[mountingSelect.selectedIndex];
+        if (opt && Number(opt.dataset.wmin) > 0) sizeLimits.wmin = Number(opt.dataset.wmin);
+        if (opt && Number(opt.dataset.wmax) > 0) sizeLimits.wmax = Number(opt.dataset.wmax);
+        const tab = root.querySelector('[data-unit-tab].is-selected') || sliderTabs[0];
+        if (sizeSlider && tab) applyUnitRange(tab);
+        else if (sizeSlider) { sizeSlider.min = sizeLimits.wmin / sliderFactor(); sizeSlider.max = sizeLimits.wmax / sliderFactor(); }
+        const lim = widthLimitsCm();
+        const cm = getWidthCm();
+        let fixed = cm;
+        if (lim.min > 0 && fixed < lim.min) fixed = lim.min;
+        if (lim.max > 0 && fixed > lim.max) fixed = lim.max;
+        if (widthInput && Math.abs(fixed - cm) > 0.01) widthInput.value = roundNice(fixed / unitFactor());
+        if (sizeSlider) syncSliderFromWidth();
+        renderLbCards();
+        updatePreviewScale();
+        calculateTotal();
+    }
+    if (root.dataset.sign3dMode === 'lightbox' && mountingSelect) mountingSelect.addEventListener('change', applyLightboxMounting);
+
+    // How much bigger the whole lightbox (box around the design + bracket) is than the design itself,
+    // so the design is sized to keep the complete lightbox inside the preview.
+    function lightboxScale() {
+        if (root.dataset.sign3dMode !== 'lightbox') return 1;
+        const key = lbShape ? lbShape.key : 'rectangle';
+        const box = key === 'star' ? 2.4 : (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1 ? 1.45 : (key === 'oval' ? 1.5 : 1.3));
+        return box * (getBackingType() === 'bracket' ? 1.3 : 1);
+    }
+
+    let lbxEl = null;
+    function drawLightbox(contentRect, stageRect) {
+        if (backingEl) backingEl.hidden = true;
+        if (!previewStage) return;
+        if (!lbxEl) {
+            lbxEl = document.createElement('div');
+            lbxEl.className = 'sign3d-lbx';
+            lbxEl.innerHTML = '<span class="sign3d-lbx__plate"></span><span class="sign3d-lbx__arm is-top"></span><span class="sign3d-lbx__arm is-bottom"></span>'
+                + '<span class="sign3d-lbx__rear"></span><span class="sign3d-lbx__side"></span><span class="sign3d-lbx__face"></span><span class="sign3d-lbx__tag"></span>';
+            previewStage.insertBefore(lbxEl, previewStage.firstChild);
+        }
+        if (!contentRect || !contentRect.width || !contentRect.height) { lbxEl.hidden = true; return; }
+        lbxEl.hidden = false;
+        const key = lbShape ? lbShape.key : 'rectangle';
+        const pad = Math.max(contentRect.width, contentRect.height) * 0.13;
+        let w = contentRect.width + pad * 2;
+        let h = contentRect.height + pad * 2;
+        if (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1) { w = h = Math.max(w, h) * (key === 'circle' ? 1.12 : 1.02); }
+        if (key === 'star') { w = h = Math.max(w, h) * 1.75; }
+        if (key === 'oval') { w *= 1.18; h *= 1.18; }
+        const cx = (contentRect.left + contentRect.right) / 2 - stageRect.left;
+        const cy = (contentRect.top + contentRect.bottom) / 2 - stageRect.top;
+        lbxEl.style.left = (cx - w / 2) + 'px';
+        lbxEl.style.top = (cy - h / 2) + 'px';
+        lbxEl.style.width = w + 'px';
+        lbxEl.style.height = h + 'px';
+        const hanging = getBackingType() === 'bracket';
+        const sideF = activeFinish('side');
+        const bracketF = activeFinish('backing');
+        lbxEl.className = 'sign3d-lbx is-' + key + (hanging ? ' is-hanging' : ' is-wall') + (lbSides === 'double' ? ' is-double' : '')
+            + (ledOn ? ' is-lit' : '') + (sideF ? ' side-' + sign3dFinishSurface(sideF) : '') + (bracketF ? ' bracket-' + sign3dFinishSurface(bracketF) : '');
+        lbxEl.style.setProperty('--lbx-clip', LBX_CLIP[key]);
+        lbxEl.style.setProperty('--lbx-side', selectedSideHex || '#1a1a1a');
+        lbxEl.style.setProperty('--lbx-bracket', selectedBackHex || '#1a1a1a');
+        lbxEl.style.setProperty('--lbx-depth', Math.max(5, Math.min(18, Math.min(w, h) * 0.05)) + 'px');
+        const tag = lbxEl.querySelector('.sign3d-lbx__tag');
+        tag.textContent = lbSides === 'double' ? 'Double-Sided' : '';
+        tag.hidden = !tag.textContent;
+    }
+
     if (undoBtn) undoBtn.addEventListener('click', undo);
     if (redoBtn) redoBtn.addEventListener('click', redo);
     if (resetColourBtn) resetColourBtn.addEventListener('click', resetColourToDefault);
@@ -3587,7 +3924,7 @@ function initSign3dConfigurator(root) {
     if (resetFontBtn) resetFontBtn.addEventListener('click', resetFontToDefault);
 
     ensureLogoImgElement();
-    setMode('text');
+    setMode(root.dataset.startMode || 'text');
     updatePreviewText();
     updatePreviewFont();
     updatePreviewColour();
@@ -3614,6 +3951,10 @@ function initSign3dConfigurator(root) {
     buildPowerOptions();
     initCustomColourBoxes();
     initColourIntensity();
+    if (root.dataset.sign3dMode === 'lightbox') {
+        applyLightboxMounting();
+        if (!logoPreviewSrc) showLogoPreview(sign3dLightboxPlaceholder());
+    }
     updateMountingInfo();
     updateMetalNote();
     renumberSteps();

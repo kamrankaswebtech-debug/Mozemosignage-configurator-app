@@ -12,7 +12,7 @@ const CONFIGURATOR_SOURCES = [
   { title: "3D Illuminated Signs", path: "/app/3d-signs", types: ["sign3d_size", "sign3d_front_colour", "sign3d_option"], icon: "cube", color: "#00d4ff" },
   { title: "Acrylic Neon Bonnet", path: "/app/acrylic-bonnet", types: ["bonnet_option"], icon: "frame", color: "#ff8a3d" },
   { title: "Lightbox Range", path: "/app/lightbox", types: ["lightbox_option"], icon: "bulb", color: "#7a00ff" },
-  { title: "UV Graphic Printed Signs", path: "/app/uv-graphic-led", types: ["uv_size", "uv_addon"], icon: "palette", color: "#00e0a4" },
+  { title: "Graphic LED & Non-LED Neon Signs", path: "/app/uv-graphic-led", types: ["uv_size", "uv_addon"], icon: "palette", color: "#00e0a4" },
   { title: "Infinity Mirror Signs", path: "/app/infinity-mirror", types: ["infinity_font", "infinity_size", "infinity_colour", "infinity_frame_finish", "infinity_mounting", "infinity_addon"], icon: "mirror", color: "#ff4d8d" },
   { title: "Event Marquee Signs", path: "/app/event-marquee", types: ["event_marquee_option"], icon: "star", color: "#ffb03d" },
   { title: "Bulk & Bundle Deals", path: "/app/bundle-deals", types: ["bundle_option"], icon: "gift", color: "#4dd4ff" },

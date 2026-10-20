@@ -729,6 +729,14 @@
         });
         thumbs.hidden = walls.length < 2;
         applyWallpaper();
+        // Lets a product switch the wallpaper from its own menu (e.g. Engine Bay / Garage Wall).
+        ctx.walls = walls;
+        ctx.selectWall = function (idx) {
+            if (!walls[idx]) return;
+            wallIndex = idx;
+            Array.from(thumbs.children).forEach((c, i) => c.classList.toggle('is-selected', i === idx));
+            applyWallpaper();
+        };
 
         // ---- Preview geometry helpers for the product renderers ----
         // Share of the free stage width for a size: smallest available size = 45%, largest = 88%
@@ -1018,9 +1026,12 @@
     // installation) — read straight from the Neon Admin data — minus Fonts / Quick Symbols /
     // Symbol Position, plus the printed graphic upload and the With / Without Neon choice.
     // -------------------------------------------------------------------------------------
+    // Backboards offered on the Graphic Neon sign (in this order); "Naked" is built in when the
+    // Neon Admin has no such style.
     const UV_BACKBOARDS = [
         { key: 'cut', re: /cut\s*-?\s*around/i },
         { key: 'rect', re: /rectang/i },
+        { key: 'naked', re: /naked|no\s*back\s*board|no\s*backing/i },
         { key: 'openbox', re: /open\s*-?\s*box/i },
         { key: 'stand', re: /acrylic\s*stand|stand/i }
     ];
@@ -1029,43 +1040,144 @@
         return hit ? hit.key : 'rect';
     }
 
-    // Builds the UV graphic preview on a canvas: contour ring, neon tube ring (+ glow), the artwork
-    // and a soft wall shadow. Cached by its inputs, so it only redraws when something changes.
-    function uvCompose(ctx, img, w, h, o) {
-        const art = ctx._uv.art;
-        if (!img.complete || !img.naturalWidth) {
-            if (!img._mozWait) { img._mozWait = true; img.addEventListener('load', () => { img._mozWait = false; ctx.update(); }, { once: true }); }
-            return;
+    // Hex colour mixed toward white (t = 0..1) — the bright core of a neon tube.
+    function uvMixWhite(hex, t) {
+        let h = String(hex || '').replace('#', '');
+        if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+        if (!/^[0-9a-f]{6}$/i.test(h)) return '#ffffff';
+        const ch = (i) => Math.round(parseInt(h.slice(i, i + 2), 16) + (255 - parseInt(h.slice(i, i + 2), 16)) * t);
+        return 'rgb(' + ch(0) + ',' + ch(2) + ',' + ch(4) + ')';
+    }
+
+    // Placeholder artwork until the customer uploads their graphic.
+    let UV_PLACEHOLDER = null;
+    function uvPlaceholder() {
+        if (UV_PLACEHOLDER) return UV_PLACEHOLDER;
+        const c = document.createElement('canvas');
+        c.width = 360;
+        c.height = 240;
+        const g = c.getContext('2d');
+        g.fillStyle = 'rgba(255,255,255,0.92)';
+        g.beginPath();
+        if (g.roundRect) g.roundRect(6, 6, 348, 228, 22); else g.rect(6, 6, 348, 228);
+        g.fill();
+        g.setLineDash([12, 9]);
+        g.lineWidth = 4;
+        g.strokeStyle = 'rgba(110,110,130,0.8)';
+        g.stroke();
+        g.fillStyle = 'rgba(80,80,100,0.9)';
+        g.font = '800 34px Arial, sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText('Your Graphic', 180, 120);
+        UV_PLACEHOLDER = c;
+        return c;
+    }
+
+    // Quick-symbol images, loaded once (they are tinted on a canvas, so cross-origin is fine).
+    const UV_SYMBOL_IMG = {};
+    function uvSymbolImg(ctx, url) {
+        if (!UV_SYMBOL_IMG[url]) {
+            const im = new Image();
+            im.decoding = 'async';
+            im.onload = () => ctx.update();
+            im.src = url;
+            UV_SYMBOL_IMG[url] = im;
         }
+        const im = UV_SYMBOL_IMG[url];
+        return im.complete && im.naturalWidth ? im : null;
+    }
+
+    // Draws the whole sign — graphic, optional neon text and quick symbols, the neon lighting and
+    // the cut-around contour — on ONE canvas, so the lighting is identical on every backboard and a
+    // cut-around board follows the outline of everything. Redrawn only when an input changes.
+    function uvCompose(ctx, o) {
+        const art = ctx._uv.art;
         let cv = ctx._uv.canvas;
         if (!cv) { cv = ctx._uv.canvas = el('canvas', 'moz-uvb__canvas'); art.appendChild(cv); }
-        img.style.visibility = 'hidden';
+        const graphic = o.graphic;
+        const gw0 = graphic.naturalWidth || graphic.width;
+        const gh0 = graphic.naturalHeight || graphic.height;
+        // Layout in reference units (graphic 100 high).
+        const R = 100;
+        const items = [];
+        const gW = R * (gw0 / gh0);
+        const G = { x: 0, y: 0, w: gW, h: R };
+        let text = null;
+        let syms = [];
+        if (o.text) {
+            const fpx = (o.textPos === 'top' || o.textPos === 'bottom') ? Math.min(30, Math.max(18, gW * 0.2)) : 30;
+            const m = document.createElement('canvas').getContext('2d');
+            m.font = '400 ' + fpx + 'px ' + o.font;
+            const met = m.measureText(o.text);
+            const asc = met.actualBoundingBoxAscent || fpx * 0.75;
+            const desc = met.actualBoundingBoxDescent || fpx * 0.2;
+            text = { w: Math.max(1, met.width), h: asc + desc, asc, fpx };
+            const S = fpx * 0.95;
+            syms = o.symbols.map((im) => ({ im, w: S * ((im.naturalWidth || 1) / (im.naturalHeight || 1)), h: S }));
+        }
+        // Text group = text + symbols around it.
+        let TG = null;
+        if (text) {
+            const gap = text.fpx * 0.3;
+            const sw = syms.reduce((a, s) => a + s.w, 0) + Math.max(0, syms.length - 1) * gap * 0.6;
+            const sh = syms.length ? syms[0].h : 0;
+            const T = { x: 0, y: 0, w: text.w, h: text.h };
+            const SY = { x: 0, y: 0, w: sw, h: sh };
+            let gw = T.w, gh = T.h;
+            if (syms.length) {
+                if (o.symPos === 'left' || o.symPos === 'right') {
+                    gw = T.w + gap + SY.w; gh = Math.max(T.h, SY.h);
+                    if (o.symPos === 'left') { SY.x = 0; T.x = SY.w + gap; } else { T.x = 0; SY.x = T.w + gap; }
+                    T.y = (gh - T.h) / 2; SY.y = (gh - SY.h) / 2;
+                } else {
+                    gw = Math.max(T.w, SY.w); gh = T.h + gap + SY.h;
+                    if (o.symPos === 'top') { SY.y = 0; T.y = SY.h + gap; } else { T.y = 0; SY.y = T.h + gap; }
+                    T.x = (gw - T.w) / 2; SY.x = (gw - SY.w) / 2;
+                }
+            }
+            TG = { w: gw, h: gh, T, SY };
+            const gap2 = R * 0.14;
+            if (o.textPos === 'left') { TG.x = 0; G.x = TG.w + gap2; TG.y = (R - TG.h) / 2; }
+            else if (o.textPos === 'right') { G.x = 0; TG.x = gW + gap2; TG.y = (R - TG.h) / 2; }
+            else if (o.textPos === 'top') { TG.y = 0; G.y = TG.h + gap2; TG.x = (gW - TG.w) / 2; }
+            else { G.y = 0; TG.y = R + gap2; TG.x = (gW - TG.w) / 2; }
+        }
+        // Bounding box
+        const boxes = [G].concat(TG ? [{ x: TG.x, y: TG.y, w: TG.w, h: TG.h }] : []);
+        const minX = Math.min.apply(null, boxes.map((b) => b.x));
+        const minY = Math.min.apply(null, boxes.map((b) => b.y));
+        const maxX = Math.max.apply(null, boxes.map((b) => b.x + b.w));
+        const maxY = Math.max.apply(null, boxes.map((b) => b.y + b.h));
+        const bw = maxX - minX;
+        const bh = maxY - minY;
+        let s = o.targetW / bw;
+        if (bh * s > o.maxH) s = o.maxH / bh;
+        const W = Math.round(bw * s);
+        const H = Math.round(bh * s);
+
+        const pad = 40;
+        const key = [graphic.src || 'ph', o.text, o.font, o.textPos, o.symPos, o.symbols.map((x) => x.src).join(','), o.contour, o.tube, o.light, o.glow, o.unlitText, W, H].join('|');
         cv.hidden = false;
-        const key = [img.src, w, h, o.contour, o.tube, o.glow].join('|');
-        if (cv._key === key) return;
+        art.style.width = W + 'px';
+        art.style.height = H + 'px';
+        if (cv._key === key) return { W, H };
         cv._key = key;
         const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const pad = 34;
-        const W = w + pad * 2;
-        const H = h + pad * 2;
-        cv.width = Math.round(W * dpr);
-        cv.height = Math.round(H * dpr);
-        cv.style.width = W + 'px';
-        cv.style.height = H + 'px';
+        cv.width = Math.round((W + pad * 2) * dpr);
+        cv.height = Math.round((H + pad * 2) * dpr);
+        cv.style.width = (W + pad * 2) + 'px';
+        cv.style.height = (H + pad * 2) + 'px';
         cv.style.left = -pad + 'px';
         cv.style.top = -pad + 'px';
-        // Artwork rectangle (object-fit: contain) inside the w x h box.
-        const ar = img.naturalWidth / img.naturalHeight;
-        let dw = w;
-        let dh = w / ar;
-        if (dh > h) { dh = h; dw = h * ar; }
-        const dx = (pad + (w - dw) / 2) * dpr;
-        const dy = (pad + (h - dh) / 2) * dpr;
+        const X = (v) => (pad + (v - minX) * s) * dpr;
+        const Y = (v) => (pad + (v - minY) * s) * dpr;
+        const L = (v) => v * s * dpr;
         const make = () => { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; return c; };
-        const tinted = (colour) => {
+        const tint = (src, colour) => {
             const c = make();
             const g = c.getContext('2d');
-            g.drawImage(img, dx, dy, dw * dpr, dh * dpr);
+            g.drawImage(src, 0, 0);
             g.globalCompositeOperation = 'source-in';
             g.fillStyle = colour;
             g.fillRect(0, 0, c.width, c.height);
@@ -1077,62 +1189,177 @@
                 g.drawImage(src, Math.cos(rad) * r * dpr, Math.sin(rad) * r * dpr);
             }
         };
-        const stack = make();
-        const sg = stack.getContext('2d');
-        if (o.contour) ring(sg, tinted(o.contour), 7);
-        if (o.tube) ring(sg, tinted(o.tube), 2.5);
-        sg.drawImage(img, dx, dy, dw * dpr, dh * dpr);
+        // Silhouettes
+        const gSil = make();
+        gSil.getContext('2d').drawImage(graphic, X(G.x), Y(G.y), L(G.w), L(G.h));
+        const tSil = make();
+        if (TG) {
+            const g = tSil.getContext('2d');
+            g.font = '400 ' + L(text.fpx) + 'px ' + o.font;
+            g.textBaseline = 'alphabetic';
+            g.fillStyle = '#000';
+            g.fillText(o.text, X(TG.x + TG.T.x), Y(TG.y + TG.T.y + text.asc));
+            let sx = TG.x + TG.SY.x;
+            syms.forEach((sy) => {
+                g.drawImage(sy.im, X(sx), Y(TG.y + TG.SY.y), L(sy.w), L(sy.h));
+                sx += sy.w + text.fpx * 0.3 * 0.6;
+            });
+        }
         const g = cv.getContext('2d');
         g.clearRect(0, 0, cv.width, cv.height);
-        g.save();
-        g.shadowColor = 'rgba(0,0,0,0.35)';
-        g.shadowBlur = 12 * dpr;
-        g.shadowOffsetX = 3 * dpr;
-        g.shadowOffsetY = 8 * dpr;
-        g.drawImage(stack, 0, 0);
-        g.restore();
-        if (o.glow) {
+        // 1) Cut-around board contour (behind everything, follows graphic + text + symbols)
+        if (o.contour) {
+            const both = make();
+            const bg = both.getContext('2d');
+            bg.drawImage(gSil, 0, 0);
+            bg.drawImage(tSil, 0, 0);
+            const contour = make();
+            const cg = contour.getContext('2d');
+            ring(cg, tint(both, o.contour), 9);
+            ring(cg, tint(both, o.contour), 5);
             g.save();
-            g.shadowColor = o.glow;
-            g.shadowBlur = 22 * dpr;
-            g.drawImage(stack, 0, 0);
-            g.shadowBlur = 7 * dpr;
-            g.drawImage(stack, 0, 0);
+            g.shadowColor = 'rgba(0,0,0,0.3)';
+            g.shadowBlur = 12 * dpr;
+            g.shadowOffsetX = 3 * dpr;
+            g.shadowOffsetY = 8 * dpr;
+            g.drawImage(contour, 0, 0);
+            g.restore();
+        } else if (o.wallShadow) {
+            g.save();
+            g.shadowColor = 'rgba(0,0,0,0.3)';
+            g.shadowBlur = 12 * dpr;
+            g.shadowOffsetX = 3 * dpr;
+            g.shadowOffsetY = 8 * dpr;
+            g.drawImage(gSil, 0, 0);
             g.restore();
         }
-        g.drawImage(stack, 0, 0);
+        // 2) Light layer: neon tube traced around the graphic + the neon text / symbols
+        const tube = make();
+        if (o.tube) ring(tube.getContext('2d'), tint(gSil, o.tube), 2.5);
+        const textLayer = TG ? tint(tSil, o.light || o.unlitText) : null;
+        if (o.glow) {
+            const light = make();
+            const lg = light.getContext('2d');
+            lg.drawImage(tube, 0, 0);
+            if (textLayer) lg.drawImage(textLayer, 0, 0);
+            g.save();
+            g.shadowColor = o.glow;
+            g.shadowBlur = 24 * dpr;
+            g.drawImage(light, 0, 0);
+            g.shadowBlur = 8 * dpr;
+            g.drawImage(light, 0, 0);
+            g.restore();
+        }
+        // 3) Neon tube behind the artwork edge, the artwork itself, then the neon text on top
+        g.drawImage(tube, 0, 0);
+        g.drawImage(graphic, X(G.x), Y(G.y), L(G.w), L(G.h));
+        if (textLayer) g.drawImage(textLayer, 0, 0);
+        return { W, H };
     }
 
-    M.register('uv', {        layout: 'neon',
-        hero: 'Design Your UV Graphic Sign',
+    M.register('uv', {
+        layout: 'neon',
+        hero: 'Design Your Graphic Neon Sign',
         build(ctx, d) {
             const sizes = bySort(d.sizes);
-            const overrides = d.uvPrices || [];
+            const overrides = (d.uvPrices || []).filter((o) => num(o.w) > 0);
+            const surchargeRow = (d.uvPrices || []).find((o) => num(o.w) === 0);
+            // Graphic surcharge on every Neon size: UV Size Prices row with Width 0 (default $50).
+            const surcharge = surchargeRow && surchargeRow.p !== null && surchargeRow.p !== undefined ? num(surchargeRow.p) : 50;
+            ctx.surcharge = surcharge;
             const findOverride = (w) => overrides.find((o) => Math.abs(num(o.w) - num(w)) < 0.51);
             const isLed = () => !!(ctx.v.lighting && ctx.v.lighting.key === 'led');
-            // Size price: With Neon = Neon price (or the UV Sizes price for that width);
-            // Without Neon = the UV Sizes "Price Without Neon" (else the same price).
+            const hasText = () => !!(ctx.v.design && ctx.v.design.key === 'text');
             const sizePrice = (s) => {
                 const o = findOverride(s.w);
-                if (isLed()) return o && o.p !== null && o.p !== undefined ? num(o.p) : num(s.p);
-                if (o && o.pn !== null && o.pn !== undefined) return num(o.pn);
-                return o && o.p !== null && o.p !== undefined ? num(o.p) : num(s.p);
+                if (!isLed() && o && o.pn !== null && o.pn !== undefined) return num(o.pn);
+                if (o && o.p !== null && o.p !== undefined) return num(o.p);
+                return num(s.p) + surcharge;
             };
             const sizeCards = () => sizes.map((s) => ({
                 label: s.l, price: sizePrice(s), badge: s.b || '',
                 meta: num(s.h) ? cmText(s.w) + ' x ' + cmText(s.h) : 'Width: ' + cmText(s.w), src: s
             }));
 
-            const up = ctx.step('Upload Your Graphic / Logo', { note: 'Made for your own logos, graphics and printed designs — upload your full-colour artwork first.' });
-            up.appendChild(ctx.upload().el);
+            ctx.step('Upload Your Graphic / Logo', { note: 'Upload your logo, graphic or design — printed in full colour and lit with neon.' }).appendChild(ctx.upload().el);
+
+            // Design type + text options (Neon fonts, text position, quick symbols + their position)
+            const textSteps = [];
+            const designCtl = ctx.cards('design', [
+                { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) },
+                { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-text')) }
+            ], { price: 'none', cols: 2, compact: true, onChange: () => textSteps.forEach((s) => { s.hidden = !hasText(); }) });
+            ctx.step('Design Type').appendChild(designCtl.el);
+
+            const posItems = [{ key: 'left', label: 'Left' }, { key: 'top', label: 'Top' }, { key: 'right', label: 'Right' }, { key: 'bottom', label: 'Bottom' }].map((p) => Object.assign({ price: 0 }, p));
+            const tStep = ctx.step('Enter Your Text');
+            tStep.appendChild(ctx.textInput({ max: 40, placeholder: 'Type your text' }).el);
+            textSteps.push(tStep);
+            const tpStep = ctx.step('Text Position', { note: 'Where the text sits next to your graphic.' });
+            const tpCtl = ctx.cards('textPos', posItems.map((p) => Object.assign({}, p)), { price: 'none', cols: 4, compact: true });
+            tpCtl.select(3, true);
+            tpStep.appendChild(tpCtl.el);
+            textSteps.push(tpStep);
+
+            // Fonts: the Neon configurator's fonts (with preview images)
+            const fonts = bySort(d.fonts);
+            let css = '';
+            const fontItems = fonts.map((f) => {
+                let family = f.f || 'inherit';
+                if (f.u) {
+                    family = '"moz-font-' + String(f.h || f.n).replace(/[^a-z0-9_-]/gi, '') + '"';
+                    css += '@font-face{font-family:' + family + ';src:url("' + f.u + '");font-display:swap;}';
+                }
+                return { label: f.n, family, price: 0, img: f.p || '', visual: (v) => { const sp = el('span', 'moz-cfg__font-sample', 'Abc'); sp.style.fontFamily = family; v.appendChild(sp); } };
+            });
+            if (css) { const st = el('style'); st.textContent = css; ctx.root.appendChild(st); }
+            if (fontItems.length) {
+                const fStep = ctx.step('Choose Font');
+                const fCtl = ctx.cards('font', fontItems, { price: 'none', cols: 3, compact: true, onChange: (f) => { if (f && document.fonts && document.fonts.load) document.fonts.load('400 30px ' + f.family).then(() => ctx.update()).catch(() => {}); } });
+                fCtl.el.classList.add('moz-cfg__cards--scroll');
+                fStep.appendChild(fCtl.el);
+                textSteps.push(fStep);
+            }
+
+            const symbols = bySort(d.symbols).filter((x) => x.u);
+            ctx.v.symbols = [];
+            if (symbols.length) {
+                const sStep = ctx.step('Quick Symbols (optional)');
+                const grid = el('div', 'moz-cfg__symbols');
+                symbols.forEach((sym) => {
+                    const b = el('button', 'moz-cfg__symbol');
+                    b.type = 'button';
+                    b.title = sym.l;
+                    b.setAttribute('aria-label', sym.l);
+                    const im = el('img');
+                    im.src = sym.u;
+                    im.alt = '';
+                    im.loading = 'lazy';
+                    b.appendChild(im);
+                    b.addEventListener('click', () => {
+                        const i = ctx.v.symbols.indexOf(sym);
+                        if (i > -1) ctx.v.symbols.splice(i, 1); else ctx.v.symbols.push(sym);
+                        b.classList.toggle('is-selected', i === -1);
+                        ctx.update();
+                    });
+                    grid.appendChild(b);
+                });
+                sStep.appendChild(grid);
+                textSteps.push(sStep);
+                const spStep = ctx.step('Symbol Position', { note: 'Where the symbols sit next to your text.' });
+                const spCtl = ctx.cards('symPos', posItems.map((p) => Object.assign({}, p)), { price: 'none', cols: 4, compact: true });
+                spCtl.select(2, true);
+                spStep.appendChild(spCtl.el);
+                textSteps.push(spStep);
+            }
 
             const ledSteps = [];
             let sizeCtl = null;
             let addonCtl = null;
             let typeCtl = null;
             const lightCtl = ctx.cards('lighting', [
-                { key: 'led', label: 'With Neon Lighting', desc: 'Printed graphic with glowing LED neon.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample is-on')) },
-                { key: 'no_led', label: 'Without Neon Lighting', desc: 'Printed graphic only — no lighting or power needed.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample')) }
+                { key: 'led', label: 'With Neon Lighting', desc: 'Your graphic with glowing LED neon.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample is-on')) },
+                { key: 'no_led', label: 'Without Neon Lighting', desc: 'Graphic only — no lighting or power needed.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__light-sample')) }
             ], {
                 price: 'none', cols: 2,
                 onChange: () => {
@@ -1143,7 +1370,6 @@
             });
             ctx.step('Lighting').appendChild(lightCtl.el);
 
-            // Neon Colour / Effect (Multicoloured Text is letter-by-letter, so not offered here).
             const effects = bySort(d.effects).filter((e) => String(e.k || '').toLowerCase() !== 'multicolour');
             const colours = bySort(d.colours);
             if (effects.length || colours.length) {
@@ -1159,26 +1385,27 @@
             }
 
             const sizeStep = ctx.step('Choose Size');
-            sizeCtl = ctx.cards('size', sizeCards(), {
-                price: 'full', cols: 2,
-                onChange: () => { if (typeCtl) refreshTypes(); }
-            });
+            sizeCtl = ctx.cards('size', sizeCards(), { price: 'full', cols: 2, onChange: () => { if (typeCtl) refreshTypes(); } });
             sizeStep.appendChild(sizeCtl.el);
 
-            // Backboard styles: only Cut Around, Rectangle, Open Box and Acrylic Stand.
+            // Backboards: Cut Around, Rectangle, Naked (No Backboard), Open Box, Acrylic Stand.
             const allStyles = bySort(d.styles);
-            let styles = allStyles.filter((st) => UV_BACKBOARDS.some((b) => b.re.test(st.l)));
-            if (!styles.length) styles = allStyles;
-            if (styles.length) {
-                ctx.step('Backboard Style', { note: 'Digital preview only — on the real sign the backboard holds every part of your design together.' })
-                    .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 2, compact: true, showIncluded: true }).el);
-            }
+            const styles = [];
+            UV_BACKBOARDS.forEach((b) => {
+                const hit = allStyles.find((st) => b.re.test(st.l) && styles.indexOf(st) === -1);
+                if (hit) styles.push(hit);
+                else if (b.key === 'naked') styles.push({ l: 'Naked (No Backboard)', p: 0, i: '' });
+            });
+            ctx.step('Backboard Style', { note: 'The backboard only changes what sits behind your sign — the neon lighting stays the same.' })
+                .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 2, compact: true, showIncluded: true }).el);
             const bcolours = bySort(d.bcolours);
+            let boardStep = null;
             if (bcolours.length) {
-                ctx.step('Backboard Colour').appendChild(ctx.swatches('board', bcolours.map((c) => ({ name: c.l, hex: c.c ? 'linear-gradient(135deg,rgba(255,255,255,.75),rgba(200,220,235,.35))' : (c.h || '#e8e8e8'), price: c.p, clear: !!c.c, finish: c.fi || '', solid: c.h || '#e8e8e8' }))).el);
+                boardStep = ctx.step('Backboard Colour');
+                boardStep.appendChild(ctx.swatches('board', bcolours.map((c) => ({ name: c.l, hex: c.c ? 'linear-gradient(135deg,rgba(255,255,255,.75),rgba(200,220,235,.35))' : (c.h || '#e8e8e8'), price: c.p, clear: !!c.c, finish: c.fi || '', solid: c.h || '#e8e8e8' }))).el);
             }
+            ctx.boardStep = boardStep;
 
-            // Indoor / Outdoor — outdoor only from 60 cm wide (same rule as Neon).
             const types = (d.types || []).filter((x) => x.k);
             const isOutdoorAllowed = () => num(ctx.v.size && ctx.v.size.src ? ctx.v.size.src.w : 0) >= 60;
             const typeItems = () => types.map((x) => ({
@@ -1213,8 +1440,6 @@
             const ps = powerStep(ctx);
             if (ps) ledSteps.push(ps);
 
-            // Add-ons: Neon add-ons With Neon Lighting (paid = optional, free = included), plus
-            // the UV Graphic add-ons for the chosen lighting ("Show For").
             const neonAddons = (d.naddons || []).map((a) => ({ label: a.l, price: a.p, free: !!a.f, neon: true }));
             const uvAddons = bySort(d.uaddons).map((a) => ({ label: a.l, price: a.p, free: !!a.f, sf: String(a.sf || 'both') }));
             function addonsFor() {
@@ -1230,21 +1455,24 @@
             const inst = ctx.installation();
             if (inst) ctx.step('Need Installation?', { unnumbered: true }).appendChild(inst.el);
 
+            designCtl.select(0, true);
+            textSteps.forEach((s) => { s.hidden = true; });
             lightCtl.select(d.start === 'no_led' ? 1 : 0, true);
-            refreshTypes && typeCtl && refreshTypes();
+            if (typeCtl) refreshTypes();
             ctx.sizes = sizes;
             ctx.isLed = isLed;
+            ctx.hasText = hasText;
             ctx.sizePrice = sizePrice;
         },
         price(ctx) {
             const lines = [];
             const led = ctx.isLed();
             const size = ctx.v.size;
-            if (size) lines.push({ label: 'Size: ' + size.label + (led ? ' (With Neon)' : ' (Without Neon)'), value: ctx.sizePrice(size.src), full: true });
+            if (size) lines.push({ label: 'Size: ' + size.label + ' with graphic' + (led ? '' : ' (Without Neon)'), value: ctx.sizePrice(size.src), full: true });
             if (led && ctx.v.effect) lines.push({ label: 'Effect: ' + ctx.v.effect.label, value: ctx.v.effect.price });
             if (led && ctx.v.colour) lines.push({ label: 'Neon colour: ' + ctx.v.colour.name, value: ctx.v.colour.price });
             if (ctx.v.style) lines.push({ label: 'Backboard: ' + ctx.v.style.label, value: ctx.v.style.price });
-            if (ctx.v.board) lines.push({ label: 'Backboard colour: ' + ctx.v.board.name, value: ctx.v.board.price });
+            if (ctx.v.board && ctx.v.style && ctx.v.style.board !== 'naked') lines.push({ label: 'Backboard colour: ' + ctx.v.board.name, value: ctx.v.board.price });
             if (led && ctx.v.neonType) lines.push({ label: ctx.v.neonType.label, value: ctx.v.neonType.price });
             return lines.concat(addonLines(ctx, 'addons'), installLine(ctx));
         },
@@ -1256,67 +1484,93 @@
                 const board = el('div', 'moz-uvb__board');
                 board.setAttribute('data-moz-measure', '');
                 const art = el('div', 'moz-uvb__art');
-                const ph = el('div', 'moz-uvb__placeholder', 'Your Logo / Graphic');
-                art.appendChild(ph);
                 board.appendChild(art);
                 ['tl', 'tr', 'bl', 'br'].forEach((c) => board.appendChild(el('span', 'moz-uvb__standoff is-' + c)));
-                const stand = el('div', 'moz-uvb__stand');
                 wrap.appendChild(board);
-                wrap.appendChild(stand);
+                wrap.appendChild(el('div', 'moz-uvb__stand'));
                 sign.appendChild(wrap);
-                ctx._uv = { wrap, board, art, ph };
+                ctx._uv = { wrap, board, art };
             }
-            const { wrap, board, art, ph } = ctx._uv;
+            const { wrap, board, art } = ctx._uv;
+            // Uploaded graphic (hidden <img> keeps the file; the canvas shows the sign)
             const img = designImg(ctx, art, 'moz-uvb__img');
-            ph.hidden = !!img;
-            const aspect = ctx.logo.aspect || 1.5;
+            if (img) img.style.display = 'none';
+            let graphic = uvPlaceholder();
+            if (img) {
+                if (img.complete && img.naturalWidth) graphic = img;
+                else if (!img._mozWait) { img._mozWait = true; img.addEventListener('load', () => { img._mozWait = false; ctx.update(); }, { once: true }); }
+            }
             const size = ctx.v.size ? ctx.v.size.src : null;
-            const kind = ctx.v.style ? ctx.v.style.board : 'rect';
-            const pad = kind === 'cut' ? 1 : 1.16;
-            const box = ctx.fit(ctx.sizeShare(size ? size.w : 0, ctx.sizes.map((s) => s.w)) / pad, aspect);
-            art.style.width = box.w + 'px';
-            art.style.height = box.h + 'px';
+            const kind = ctx.v.style ? ctx.v.style.board : 'cut';
+            if (ctx.boardStep) ctx.boardStep.hidden = kind === 'naked';
             const bc = ctx.v.board || { solid: '#ffffff', clear: false, finish: '' };
             board.style.setProperty('--moz-board', bc.clear ? 'rgba(255,255,255,0.14)' : bc.solid);
             wrap.className = 'moz-uvb is-' + kind + (bc.clear ? ' is-clear' : '') + (/frost|matt/i.test(bc.finish || '') ? ' is-frosted' : '');
             const led = ctx.isLed();
             const lit = led && ctx.ledOn;
             const c = glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ff2ec4');
-            const rgb = led && ctx.v.effect && ctx.v.effect.key === 'rgb';
-            wrap.classList.toggle('is-neon', led);
+            const rgb = lit && ctx.v.effect && ctx.v.effect.key === 'rgb';
             wrap.classList.toggle('is-lit', lit);
-            wrap.classList.toggle('is-rgb', lit && rgb);
-            wrap.style.setProperty('--moz-glow', c);
-            wrap.style.setProperty('--moz-glow-a', rgba(c, 0.6));
-            if (img) {
-                // Neon tube traced around the graphic, cut-around contour in the backboard colour,
-                // glow and wall shadow are baked ONCE into a canvas (redrawn only when something
-                // changes) — stacked CSS drop-shadows made every frame very slow.
-                uvCompose(ctx, img, box.w, box.h, {
-                    contour: kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.55)' : bc.solid) : '',
-                    tube: lit ? c : (led ? '#e9e9ee' : ''),
-                    glow: lit ? c : ''
-                });
-            } else if (ctx._uv.canvas) {
-                ctx._uv.canvas.hidden = true;
-            }            const w = size ? num(size.w) : 0;
-            const h = size && num(size.h) ? num(size.h) : (w ? Math.round((w / aspect) * 10) / 10 : 0);
-            ctx.setDims(w ? cmText(w) : '', h ? cmText(h) : '');
-            ctx.dims = { w, h };
+            wrap.classList.toggle('is-rgb', rgb);
+            // Same realistic sizing as the Neon configurator: width grows with the square root of
+            // the size (40 cm small, 300 cm large) and shrinks on narrow screens.
+            const f = ctx.free();
+            const fit = Math.min(1, Math.max(0.5, f.w / 640));
+            const wCm = size ? num(size.w) : 60;
+            const boardPad = (kind === 'cut' || kind === 'naked') ? 1 : 1.2;
+            const targetW = Math.min(f.w * 0.92 / boardPad, 24.5 * Math.sqrt(Math.max(10, wCm)) * fit);
+            const textMode = ctx.hasText();
+            const symbols = textMode ? (ctx.v.symbols || []).map((sym) => uvSymbolImg(ctx, sym.u)).filter(Boolean) : [];
+            const fontFamily = ctx.v.font ? ctx.v.font.family : 'Arial, sans-serif';
+            const text = textMode ? ((ctx.text || '').trim() || 'Your Text') : '';
+            if (text && document.fonts && document.fonts.check && !document.fonts.check('400 30px ' + fontFamily)) {
+                document.fonts.load('400 30px ' + fontFamily).then(() => ctx.update()).catch(() => {});
+            }
+            const lightTint = uvMixWhite(c, 0.62);
+            const boardIsLight = !bc.clear && luminance(bc.solid) > 0.55;
+            const res = uvCompose(ctx, {
+                graphic,
+                text,
+                font: fontFamily,
+                textPos: ctx.v.textPos ? ctx.v.textPos.key : 'bottom',
+                symPos: ctx.v.symPos ? ctx.v.symPos.key : 'right',
+                symbols,
+                contour: kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.6)' : bc.solid) : '',
+                wallShadow: kind === 'naked',
+                tube: lit ? lightTint : (led ? '#e9e9ee' : ''),
+                light: lit ? uvMixWhite(c, 0.4) : '',
+                unlitText: led ? '#e9e9ee' : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
+                glow: lit ? c : '',
+                targetW,
+                maxH: f.h * 0.92 / boardPad
+            });
+            const h = size && res.W ? Math.round(num(size.w) * (res.H / res.W) * 10) / 10 : 0;
+            ctx.setDims(size ? cmText(size.w) : '', h ? cmText(h) : '');
+            ctx.dims = { w: size ? num(size.w) : 0, h };
         },
         properties(ctx) {
             const led = ctx.isLed();
+            const textMode = ctx.hasText();
             const p = {
-                'Design Source': 'Uploaded Graphic / Logo',
-                'Uploaded Design': designUrl(ctx),
+                'Design Type': textMode ? 'Text + Graphic' : 'Graphic Only',
+                'Uploaded Graphic': designUrl(ctx),
                 'Lighting': led ? 'With Neon Lighting' : 'Without Neon Lighting',
                 'Size': ctx.v.size ? ctx.v.size.label : '',
                 'Backboard Style': ctx.v.style ? ctx.v.style.label : 'Standard',
-                'Backboard Colour': ctx.v.board ? ctx.v.board.name : 'Standard',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
+            if (ctx.v.style && ctx.v.style.board !== 'naked' && ctx.v.board) p['Backboard Colour'] = ctx.v.board.name;
+            if (textMode) {
+                p['Custom Text'] = (ctx.text || '').trim() || 'Your Text';
+                p['Text Position'] = ctx.v.textPos ? ctx.v.textPos.label : 'Bottom';
+                if (ctx.v.font) p['Font'] = ctx.v.font.label;
+                if ((ctx.v.symbols || []).length) {
+                    p['Quick Symbols'] = ctx.v.symbols.map((x) => x.l).join(', ');
+                    p['Symbol Position'] = ctx.v.symPos ? ctx.v.symPos.label : 'Right';
+                }
+            }
             if (led) {
                 if (ctx.v.effect) p['Colour Effect'] = ctx.v.effect.label;
                 if (ctx.v.colour) p['Neon Colour'] = ctx.v.colour.name;
@@ -1328,109 +1582,258 @@
     });
 
     // -------------------------------------------------------------------------------------
-    // 2) Acrylic Neon Bonnet Stand / Wall Sign Combo (Neon configurator layout)
+    // 2) Acrylic Neon LED Bonnet Stand / Wall Sign (same live idea as the Graphic Neon sign):
+    // Plain Silhouette (glossy acrylic cut-out in the Front Face colour) or Graphic Printed,
+    // on a frosted white acrylic backboard with a top hook + bottom tab, LED glow behind it.
+    // Engine Bay / Garage Wall only change the background. Indoor use only, no mounting options.
     // -------------------------------------------------------------------------------------
+    const BONNET_RAINBOW = ['#ff2d55', '#ff9500', '#ffe600', '#34ff6a', '#00e5ff', '#3d7bff', '#c43dff'];
+    function bonnetIsBlack(c) {
+        return /\bblack\b/i.test(String(c.n || '')) || /^#?(0{3}|0{6})$/i.test(String(c.h || '').trim());
+    }
+
+    function bonnetCompose(ctx, o) {
+        const art = ctx._bn.art;
+        let cv = ctx._bn.canvas;
+        if (!cv) { cv = ctx._bn.canvas = el('canvas', 'moz-bnc__canvas'); art.appendChild(cv); }
+        const g0 = o.graphic;
+        const ar = (g0.naturalWidth || g0.width) / (g0.naturalHeight || g0.height);
+        let H = o.targetH;
+        let W = H * ar;
+        if (W > o.maxW) { W = o.maxW; H = W / ar; }
+        W = Math.round(W);
+        H = Math.round(H);
+        const tabH = Math.round(H * 0.16);
+        const pad = 46;
+        const key = [g0.src || 'ph', o.mode, o.face, o.led, o.multi, o.lit, W, H].join('|');
+        art.style.width = W + 'px';
+        art.style.height = (H + tabH * 2) + 'px';
+        cv.hidden = false;
+        if (cv._key === key) return { W, H };
+        cv._key = key;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const CW = W + pad * 2;
+        const CH = H + tabH * 2 + pad * 2;
+        cv.width = Math.round(CW * dpr);
+        cv.height = Math.round(CH * dpr);
+        cv.style.width = CW + 'px';
+        cv.style.height = CH + 'px';
+        cv.style.left = -pad + 'px';
+        cv.style.top = -pad + 'px';
+        const S = (v) => v * dpr;
+        const ox = pad;
+        const oy = pad + tabH;
+        const make = () => { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; return c; };
+        const tint = (src, fill) => {
+            const c = make();
+            const g = c.getContext('2d');
+            g.drawImage(src, 0, 0);
+            g.globalCompositeOperation = 'source-in';
+            g.fillStyle = fill;
+            g.fillRect(0, 0, c.width, c.height);
+            return c;
+        };
+        const ring = (g, src, r) => {
+            for (let a = 0; a < 360; a += 20) {
+                const rad = a * Math.PI / 180;
+                g.drawImage(src, Math.cos(rad) * S(r), Math.sin(rad) * S(r));
+            }
+        };
+        // Design silhouette
+        const sil = make();
+        sil.getContext('2d').drawImage(g0, S(ox), S(oy), S(W), S(H));
+        // Frosted white backboard = design outline + top hook + bottom tab
+        const board = make();
+        const bg = board.getContext('2d');
+        ring(bg, tint(sil, '#000'), 9);
+        ring(bg, tint(sil, '#000'), 5);
+        const tabW = Math.max(16, W * 0.12);
+        const roundRect = (x, y, w, h, r) => { bg.beginPath(); if (bg.roundRect) bg.roundRect(S(x), S(y), S(w), S(h), S(r)); else bg.rect(S(x), S(y), S(w), S(h)); bg.fill(); };
+        bg.fillStyle = '#000';
+        roundRect(ox + W / 2 - tabW / 2, oy - tabH - 2, tabW, tabH + 12, 4);
+        roundRect(ox + W / 2 - tabW / 2, oy + H - 10, tabW, tabH + 12, 4);
+        const g = cv.getContext('2d');
+        g.clearRect(0, 0, cv.width, cv.height);
+        // LED glow behind the frosted board (single colour, or multi / RGB rainbow)
+        let glowFill = o.led;
+        if (o.multi) {
+            const grad = g.createLinearGradient(0, S(oy - tabH), 0, S(oy + H + tabH));
+            BONNET_RAINBOW.forEach((c, i) => grad.addColorStop(i / (BONNET_RAINBOW.length - 1), c));
+            glowFill = grad;
+        }
+        if (o.lit) {
+            const halo = tint(board, glowFill);
+            g.save();
+            g.filter = 'blur(' + S(16) + 'px)';
+            g.globalAlpha = 0.95;
+            g.drawImage(halo, 0, 0);
+            g.filter = 'blur(' + S(6) + 'px)';
+            g.drawImage(halo, 0, 0);
+            g.restore();
+        } else {
+            g.save();
+            g.shadowColor = 'rgba(0,0,0,0.35)';
+            g.shadowBlur = S(12);
+            g.shadowOffsetX = S(3);
+            g.shadowOffsetY = S(8);
+            g.drawImage(board, 0, 0);
+            g.restore();
+        }
+        // Frosted white acrylic (lit: glowing white with the LED colour at its edge)
+        g.drawImage(tint(board, o.lit ? '#fbfcfd' : '#e9ecef'), 0, 0);
+        if (o.lit) {
+            const edge = make();
+            const eg = edge.getContext('2d');
+            eg.drawImage(tint(board, glowFill), 0, 0);
+            eg.globalCompositeOperation = 'destination-out';
+            eg.filter = 'blur(' + S(3) + 'px)';
+            eg.drawImage(board, 0, 0);
+            g.globalAlpha = 0.8;
+            g.drawImage(edge, 0, 0);
+            g.globalAlpha = 1;
+        }
+        // Screw holes in the hook and the tab
+        g.fillStyle = 'rgba(70,70,80,0.75)';
+        [oy - tabH * 0.55, oy + H + tabH * 0.45].forEach((y) => { g.beginPath(); g.arc(S(ox + W / 2), S(y), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2); g.fill(); });
+        // Front: glossy acrylic silhouette in the Face colour, or the printed graphic
+        if (o.mode === 'silhouette') {
+            g.drawImage(tint(sil, o.face), 0, 0);
+            const shine = make();
+            const sg = shine.getContext('2d');
+            const lg = sg.createLinearGradient(S(ox), S(oy), S(ox + W), S(oy + H));
+            lg.addColorStop(0, 'rgba(255,255,255,0.35)');
+            lg.addColorStop(0.35, 'rgba(255,255,255,0.05)');
+            lg.addColorStop(0.5, 'rgba(255,255,255,0)');
+            lg.addColorStop(1, 'rgba(0,0,0,0.18)');
+            sg.drawImage(sil, 0, 0);
+            sg.globalCompositeOperation = 'source-in';
+            sg.fillStyle = lg;
+            sg.fillRect(0, 0, shine.width, shine.height);
+            g.drawImage(shine, 0, 0);
+        } else {
+            g.drawImage(g0, S(ox), S(oy), S(W), S(H));
+        }
+        return { W, H };
+    }
+
     M.register('bonnet', {
         layout: 'neon',
-        hero: 'Design Your Bonnet / Wall Sign',
+        hero: 'Design Your Bonnet Stand / Wall Sign',
         build(ctx, d) {
             const opts = d.opts || [];
-            const cat = (c) => opts.filter((o) => String(o.c || '').trim().toLowerCase() === c);
-            const up = ctx.step('Upload Your Design', { note: 'Your logo, name, image or custom design — engraved and lit on the acrylic face.' });
-            up.appendChild(ctx.upload().el);
+            const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
 
-            const colours = cat('colour');
-            if (colours.length) ctx.step('Choose Face Colour').appendChild(ctx.swatches('face', swatchItems(colours.map((o) => ({ n: o.l, hc: o.hc || '#1a1a1a', p: o.p, s: o.s })))).el);
+            ctx.step('Design Type').appendChild(ctx.cards('design', [
+                { key: 'silhouette', label: 'Plain Silhouette', desc: 'Glossy acrylic cut-out of your silhouette or outline.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-silhouette')) },
+                { key: 'graphic', label: 'Graphic Printed', desc: 'Your graphic printed on top of the frosted acrylic.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) }
+            ], { price: 'none', cols: 2, onChange: () => { if (ctx.faceStep) ctx.faceStep.hidden = !(ctx.v.design && ctx.v.design.key === 'silhouette'); } }).el);
 
-            const modes = cat('lighting_mode');
-            if (modes.length) {
-                ctx.step('Lighting Option').appendChild(ctx.cards('lighting', cardItems(modes, (o) => ({
-                    key: String(o.k || 'single').toLowerCase(),
-                    visual: (v) => { const s = el('span', 'moz-cfg__light-sample is-on is-' + String(o.k || 'single').toLowerCase()); v.appendChild(s); }
-                })), { showIncluded: true, cols: 3, compact: true }).el);
+            ctx.step('Upload Your Design', { note: 'Your logo, silhouette, outline or graphic.' }).appendChild(ctx.upload().el);
+
+            // Engine Bay / Garage Wall — same product, only the background changes
+            if (ctx.walls && ctx.walls.length) {
+                const findWall = (re, fallback) => { const i = ctx.walls.findIndex((w) => re.test(String(w.l || ''))); return i > -1 ? i : fallback; };
+                const engine = findWall(/engine|bonnet|hood|car/i, 0);
+                const garage = findWall(/garage|wall/i, Math.min(1, ctx.walls.length - 1));
+                ctx.step('Display', { note: 'One sign, two uses — a portable bonnet stand or a wall sign.' }).appendChild(ctx.cards('display', [
+                    { key: 'engine', label: 'Engine Bay', price: 0, wall: engine, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-bonnet')) },
+                    { key: 'garage', label: 'Garage Wall', price: 0, wall: garage, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-wall')) }
+                ], { price: 'none', cols: 2, compact: true, onChange: (x) => { if (x) ctx.selectWall(x.wall); } }).el);
+                ctx.selectWall(engine);
             }
-            const sizes = bySort(cat('size'));
+
+            // Front face colour (all neon colours incl. black) — Plain Silhouette only
+            const colours = bySort(d.colours);
+            if (colours.length) {
+                ctx.faceStep = ctx.step('Front Face Colour');
+                ctx.faceStep.appendChild(ctx.swatches('face', colours.map((c) => ({ name: c.n, hex: c.h || '#111111', price: c.p }))).el);
+            }
+            // LED colour (neon colours, no black) + lighting options from Admin
+            const leds = colours.filter((c) => !bonnetIsBlack(c));
+            const modes = cat('lighting_mode');
+            if (leds.length || modes.length) {
+                const s = ctx.step('LED Colour');
+                if (modes.length) s.appendChild(ctx.cards('lighting', modes.map((o) => ({ label: o.l, price: o.p, key: String(o.k || 'single').toLowerCase() })), { showIncluded: true, cols: Math.min(3, modes.length), compact: true }).el);
+                if (leds.length) s.appendChild(ctx.swatches('led', leds.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
+            }
+
+            const sizes = cat('size');
             ctx.sizes = sizes;
-            ctx.step('Choose Size').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: num(s.h) ? 'Height: ' + cmText(s.h) : '', src: s })), { price: 'full', cols: 2 }).el);
+            ctx.step('Choose Height').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: (num(s.h) || cmFromLabel(s.l)) ? 'Height: ' + cmText(num(s.h) || cmFromLabel(s.l)) : '', src: s })), { price: 'full', cols: 2 }).el);
 
-            ctx.step('Display Use', { note: 'Both included as standard — one sign, two ways to show it. Choose which one to preview.' })
-                .appendChild(ctx.cards('display', [
-                    { label: 'Bonnet / Hood Display', key: 'bonnet', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-bonnet')) },
-                    { label: 'Wall Display', key: 'wall', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-wall')) }
-                ], { price: 'none', cols: 2, compact: true }).el);
+            const addons = cat('addon').map((a) => ({ label: a.l, price: a.p, free: !!a.f }));
+            if (addons.length) ctx.step('Power & Controls').appendChild(ctx.addons('addons', addons).el);
 
-            const addons = addonItems(cat('addon'));
-            if (addons.length) ctx.step('Add-ons').appendChild(ctx.addons('addons', addons).el);
-            powerStep(ctx);
+            ctx.step('Installation', { unnumbered: true, note: 'Wall mounting must be arranged at your own discretion using a suitable mounting method. For engine-bay use, this product features a universal fit and must be secured to the engine bay using zip ties. Ensure the sign is securely fitted before use. Indoor use only.' });
         },
         price(ctx) {
             const lines = [];
-            if (ctx.v.size) lines.push({ label: 'Size: ' + ctx.v.size.label, value: ctx.v.size.price, full: true });
-            if (ctx.v.face) lines.push({ label: 'Face colour: ' + ctx.v.face.name, value: ctx.v.face.price });
+            const sil = ctx.v.design && ctx.v.design.key === 'silhouette';
+            if (ctx.v.size) lines.push({ label: 'Height: ' + ctx.v.size.label, value: ctx.v.size.price, full: true });
+            lines.push({ label: 'Design: ' + (sil ? 'Plain Silhouette' : 'Graphic Printed'), value: 0 });
+            if (sil && ctx.v.face) lines.push({ label: 'Front face: ' + ctx.v.face.name, value: ctx.v.face.price });
             if (ctx.v.lighting) lines.push({ label: 'Lighting: ' + ctx.v.lighting.label, value: ctx.v.lighting.price });
-            lines.push({ label: 'Bonnet stand + wall display', value: 0 });
+            if (ctx.v.led && !(ctx.v.lighting && ctx.v.lighting.key !== 'single')) lines.push({ label: 'LED colour: ' + ctx.v.led.name, value: ctx.v.led.price });
+            lines.push({ label: 'Frosted white acrylic backboard', value: 0 });
             return lines.concat(addonLines(ctx, 'addons'));
         },
         render(ctx) {
             const sign = ctx.sign;
             if (!ctx._bn) {
                 sign.innerHTML = '';
-                const wrap = el('div', 'moz-bonnet');
-                const panel = el('div', 'moz-bonnet__panel');
-                panel.setAttribute('data-moz-measure', '');
-                const art = el('div', 'moz-bonnet__art');
-                const ph = el('div', 'moz-bonnet__placeholder', 'Your Design');
-                art.appendChild(ph);
-                panel.appendChild(art);
-                panel.appendChild(el('span', 'moz-bonnet__edge'));
-                const stand = el('div', 'moz-bonnet__stand');
-                stand.appendChild(el('span', 'moz-bonnet__foot'));
-                stand.appendChild(el('span', 'moz-bonnet__foot'));
-                wrap.appendChild(panel);
-                wrap.appendChild(stand);
+                const wrap = el('div', 'moz-bnc');
+                const art = el('div', 'moz-bnc__art');
+                art.setAttribute('data-moz-measure', '');
+                wrap.appendChild(art);
                 sign.appendChild(wrap);
-                ctx._bn = { wrap, panel, art, ph, stand };
+                ctx._bn = { wrap, art };
             }
-            const { wrap, panel, art, ph } = ctx._bn;
-            const img = designImg(ctx, art, 'moz-bonnet__img');
-            ph.hidden = !!img;
-            const aspect = ctx.logo.aspect || 1.6;
+            const { art } = ctx._bn;
+            const img = designImg(ctx, art, 'moz-bnc__img');
+            if (img) img.style.display = 'none';
+            let graphic = uvPlaceholder();
+            if (img) {
+                if (img.complete && img.naturalWidth) graphic = img;
+                else if (!img._mozWait) { img._mozWait = true; img.addEventListener('load', () => { img._mozWait = false; ctx.update(); }, { once: true }); }
+            }
             const size = ctx.v.size ? ctx.v.size.src : null;
-            const heights = ctx.sizes.map((s) => num(s.h) || cmFromLabel(s.l));
-            const hCm = size ? (num(size.h) || cmFromLabel(size.l)) : 0;
-            const share = ctx.sizeShare(hCm, heights) * 0.95;
-            const box = ctx.fit(share, aspect);
-            panel.style.width = box.w + 'px';
-            panel.style.height = box.h + 'px';
-            const face = ctx.v.face ? ctx.v.face.hex : '#111111';
-            panel.style.setProperty('--moz-face', face);
+            const hCm = size ? (num(size.h) || cmFromLabel(size.l)) : 60;
+            const f = ctx.free();
+            const fit = Math.min(1, Math.max(0.5, f.w / 640));
             const mode = ctx.v.lighting ? ctx.v.lighting.key : 'single';
             const lit = ctx.ledOn;
-            const c = glowColour(face);
-            panel.style.setProperty('--moz-glow', c);
-            panel.className = 'moz-bonnet__panel' + (lit ? ' is-lit is-' + mode : '') + (luminance(face) > 0.6 ? ' is-light-face' : '');
-            if (img) {
-                img.style.filter = !lit ? 'brightness(0.85)' : (mode === 'single'
-                    ? 'drop-shadow(0 0 2px ' + c + ') drop-shadow(0 0 8px ' + c + ') drop-shadow(0 0 20px ' + rgba(c, 0.6) + ')'
-                    : 'drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px rgba(255,80,200,0.8)) drop-shadow(0 0 22px rgba(80,160,255,0.6))');
-            }
-            wrap.classList.toggle('is-wall', !!(ctx.v.display && ctx.v.display.key === 'wall'));
-            ctx.setDims(hCm ? cmText(hCm * aspect) : '', hCm ? cmText(hCm) : '');
-            ctx.dims = { w: hCm ? Math.round(hCm * aspect * 10) / 10 : 0, h: hCm };
+            const res = bonnetCompose(ctx, {
+                graphic,
+                mode: ctx.v.design && ctx.v.design.key === 'graphic' ? 'graphic' : 'silhouette',
+                face: ctx.v.face ? ctx.v.face.hex : '#111111',
+                led: ctx.v.led ? ctx.v.led.hex : '#ff2ec4',
+                multi: mode === 'multiple' || mode === 'rgb',
+                lit,
+                // 1 m fills the preview height (hook + tab included); smaller heights scale down from it.
+                targetH: (f.h * 0.98 / 1.32) * Math.sqrt(Math.max(10, Math.min(100, hCm)) / 100) * Math.max(0.75, fit),
+                maxW: f.w * 0.85
+            });
+            ctx._bn.wrap.classList.toggle('is-rgb', lit && mode === 'rgb');
+            const wCm = res.H ? Math.round(hCm * (res.W / res.H) * 10) / 10 : 0;
+            ctx.setDims(wCm ? cmText(wCm) : '', cmText(hCm));
+            ctx.dims = { w: wCm, h: hCm };
         },
         properties(ctx) {
+            const sil = ctx.v.design && ctx.v.design.key === 'silhouette';
             const p = {
-                'Design Source': 'Uploaded Design',
+                'Design Type': sil ? 'Plain Silhouette' : 'Graphic Printed',
                 'Uploaded Design': designUrl(ctx),
-                'Face Colour': ctx.v.face ? ctx.v.face.name : 'Standard',
-                'Lighting': ctx.v.lighting ? ctx.v.lighting.label : 'Standard',
-                'Size': ctx.v.size ? ctx.v.size.label : '',
-                'Display Use': 'Bonnet / Hood Display + Wall Display (both included)',
+                'Height': ctx.v.size ? ctx.v.size.label : '',
+                'Backboard': 'Frosted white acrylic',
+                'Display': ctx.v.display ? ctx.v.display.label : 'Bonnet stand / wall sign',
+                'Use': 'Indoor only',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
-            if (ctx.v.power) p['Power Adapter'] = ctx.v.power.label;
+            if (sil && ctx.v.face) p['Front Face Colour'] = ctx.v.face.name;
+            if (ctx.v.lighting) p['Lighting'] = ctx.v.lighting.label;
+            if (ctx.v.led) p['LED Colour'] = ctx.v.led.name;
             return p;
         }
     });

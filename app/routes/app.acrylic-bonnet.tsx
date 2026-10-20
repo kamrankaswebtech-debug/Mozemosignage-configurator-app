@@ -9,10 +9,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
-    { title: "Sizes", path: "/app/acrylic-bonnet/sizes", description: "Manage available heights (30cm–150cm) and their selling prices." },
-    { title: "Face Colours", path: "/app/acrylic-bonnet/colours", description: "Manage front acrylic face colour options and their extra pricing." },
+    { title: "Heights", path: "/app/acrylic-bonnet/sizes", description: "Heights 40, 50, 60, 70, 80, 90 and 100 cm with their prices." },
+    { title: "Front Face & LED Colours", path: "/app/neon-signs/colours", description: "Shared with Neon Signs — Front Face uses all neon colours (incl. black), LED Colour the same list without black." },
+    { title: "Wallpapers (Engine Bay / Garage Wall)", path: "/app/settings/wallpapers", description: "Upload both photos and tick Acrylic Bonnet — name them Engine Bay and Garage Wall." },
     { title: "Lighting Modes", path: "/app/acrylic-bonnet/lighting-modes", description: "Manage Single Colour, Multiple Colours, and RGB lighting options." },
-    { title: "Add-ons", path: "/app/acrylic-bonnet/addons", description: "Manage optional add-ons for this product." },
+    { title: "Add-ons", path: "/app/acrylic-bonnet/addons", description: "Power & controls: Remote Control, Dimmer and Power Cable only." },
 ];
 
 export default function AcrylicBonnetHub() {

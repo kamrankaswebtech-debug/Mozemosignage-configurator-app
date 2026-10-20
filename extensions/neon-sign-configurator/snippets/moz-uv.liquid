@@ -1,5 +1,5 @@
 {%- comment -%}
-  UV Graphic Printed Signs — one configurator, With or Without Neon Lighting.
+  Graphic LED and Non-LED Neon Signs — one configurator, With or Without Neon Lighting.
   Uses the Neon Admin data (colours, effects, sizes, backboards, Indoor/Outdoor, add-ons) so both
   menus stay the same; UV Sizes only override prices per width, UV Add-ons add UV-only extras.
   Params: block_id, product_id, start ('led' or 'no_led').
@@ -15,6 +15,8 @@
 {%- assign uv_t_first = true -%}{%- assign uv_a_first = true -%}{%- capture uv_types -%}{%- for o in metaobjects["app--418838118401--signage_addon"].values -%}{%- if o.category.value == "neon_type" -%}{%- unless uv_t_first -%},{%- endunless -%}{%- assign uv_t_first = false -%}{"k":{{ o.type_key.value | json }},"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }}}{%- endif -%}{%- endfor -%}{%- endcapture -%}{%- capture uv_naddons -%}{%- for o in metaobjects["app--418838118401--signage_addon"].values -%}{%- if o.category.value == blank or o.category.value == "addon" -%}{%- unless uv_a_first -%},{%- endunless -%}{%- assign uv_a_first = false -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %}}{%- endif -%}{%- endfor -%}{%- endcapture -%}
 "types":[{{ uv_types }}],
 "naddons":[{{ uv_naddons }}],
+"fonts":[{%- assign uv_f_first = true -%}{%- for f in metaobjects["app--418838118401--neon_font"].values -%}{%- if f.visibility.value == "3d_only" -%}{%- continue -%}{%- endif -%}{%- unless uv_f_first -%},{%- endunless -%}{%- assign uv_f_first = false -%}{"n":{{ f.name.value | json }},"f":{{ f.css_font_family.value | default: '' | json }},"u":{% if f.font_file.value.url %}{{ f.font_file.value.url | json }}{% else %}""{% endif %},"h":{{ f.system.handle | json }},"p":{% if f.preview_image.value %}{{ f.preview_image.value | image_url: width: 240 | json }}{% else %}""{% endif %},"s":{{ f.sort_order.value | default: 999999 }}}{%- endfor -%}],
+"symbols":[{%- assign uv_s_first = true -%}{%- for sy in metaobjects["app--418838118401--neon_quick_symbol"].values -%}{%- if sy.visibility.value == "3d_only" or sy.icon.value == blank -%}{%- continue -%}{%- endif -%}{%- unless uv_s_first -%},{%- endunless -%}{%- assign uv_s_first = false -%}{"u":{{ sy.icon.value.url | json }},"l":{{ sy.label.value | json }},"s":{{ sy.sort_order.value | default: 999999 }}}{%- endfor -%}],
 "uaddons":[{%- for o in metaobjects["app--418838118401--uv_addon"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"sf":{{ o.show_for.value | default: 'both' | json }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
 {%- render 'moz-cfg-common', walls: 'neon', power: true, install: true -%}
 </div>

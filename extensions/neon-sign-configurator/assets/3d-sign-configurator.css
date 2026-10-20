@@ -2494,3 +2494,251 @@
         z-index: 4;
     }
 }
+/* =====================================================================
+   Infinity Mirror ('infinity') and Event Marquee ('marquee') modes of this
+   configurator (snippets/sign3d-core.liquid). Nothing here applies to 3D.
+   ===================================================================== */
+
+/* Five design types on Infinity: 3 + 2 per row */
+.sign3d-configurator__mode-toggle--five {
+    flex-wrap: wrap;
+}
+
+.sign3d-configurator__mode-toggle--five .sign3d-configurator__mode-btn {
+    flex: 1 1 calc(33.33% - 8px);
+}
+
+/* ---- Infinity Mirror letters: dark mirror face, side colour rim/depth, LED rings into the depth ---- */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
+    color: #0b0b10;
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent);
+}
+
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter::after,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter::before {
+    content: attr(data-char);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: none;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+    transform-origin: 50% 56%;
+    transition: opacity 0.3s ease;
+}
+
+/* Front LED ring + a second, fainter ring further back (crisp lines, no blur) */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter::after {
+    -webkit-text-stroke: 0.024em color-mix(in srgb, var(--sign3d-light, #ff3db8) var(--sign3d-int, 100%), #ffffff);
+    transform: scale(0.9);
+    filter: drop-shadow(0 0 1.5px color-mix(in srgb, var(--sign3d-light, #ff3db8) var(--sign3d-int, 100%), #ffffff));
+}
+
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter::before {
+    -webkit-text-stroke: 0.016em color-mix(in srgb, var(--sign3d-light, #ff3db8) calc(var(--sign3d-int, 100%) * 0.6), transparent);
+    transform: scale(0.78);
+}
+
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter::after,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter::before {
+    opacity: 0;
+}
+
+/* ---- Event Marquee: face colour + side/back depth, small recessed bulbs along every letter ---- */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter,
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) var(--sign3d-int, 100%), #ffffff);
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent);
+}
+
+/* Bulb light reflecting on the face and the inner sides of each letter */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter {
+    text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 0.08em color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 55%, transparent), 0 0 0.25em color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 25%, transparent);
+}
+
+.sign3d-configurator__bulb-probe {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    vertical-align: baseline;
+}
+
+.sign3d-configurator__bulb {
+    position: absolute;
+    z-index: 3;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle at 40% 35%, #ffffff 0 16%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 55%, #ffffff) 30%, var(--sign3d-bulb, #ffd27a) 62%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 65%, #000000) 100%);
+    /* dark socket ring = bulb recessed into the face */
+    box-shadow: 0 0 0 1.5px rgba(25, 22, 18, 0.65), inset 0 -1px 2px rgba(0, 0, 0, 0.3);
+    transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+
+.sign3d-configurator__preview-inner.led-on .sign3d-configurator__bulb {
+    box-shadow: 0 0 0 1.5px rgba(25, 22, 18, 0.5), 0 0 4px 1px var(--sign3d-bulb, #ffd27a), 0 0 12px 3px color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 55%, transparent);
+}
+
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__bulb {
+    background: radial-gradient(circle at 40% 35%, #ffffff 0 12%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 20%, #e2dfd8) 34%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 15%, #8f8b83) 100%);
+}
+/* =====================================================================
+   3D LED Lightbox mode ('lightbox'): glossy printed face in the chosen
+   shape, coloured sides (finish), rear face when double-sided, and the
+   pole / bracket for Wall Hanging. The uploaded design sits on the face.
+   ===================================================================== */
+.sign3d-lbx {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.sign3d-lbx[hidden] {
+    display: none;
+}
+
+.sign3d-lbx__face,
+.sign3d-lbx__side,
+.sign3d-lbx__rear {
+    position: absolute;
+    inset: 0;
+    clip-path: var(--lbx-clip);
+}
+
+/* Side return in the Side Colour (depth seen down and to the right) */
+.sign3d-lbx__side {
+    transform: translate(var(--lbx-depth, 8px), var(--lbx-depth, 8px));
+    background: linear-gradient(135deg, color-mix(in srgb, var(--lbx-side, #1a1a1a) 85%, #ffffff), var(--lbx-side, #1a1a1a) 45%, color-mix(in srgb, var(--lbx-side, #1a1a1a) 70%, #000000));
+}
+
+.sign3d-lbx.side-chrome .sign3d-lbx__side {
+    background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, var(--lbx-side, #1a1a1a) 55%, #ffffff) 25%, var(--lbx-side, #1a1a1a) 50%, color-mix(in srgb, var(--lbx-side, #1a1a1a) 40%, #ffffff) 75%, color-mix(in srgb, var(--lbx-side, #1a1a1a) 70%, #000000) 100%);
+}
+
+.sign3d-lbx.side-matte .sign3d-lbx__side {
+    background: color-mix(in srgb, var(--lbx-side, #1a1a1a) 92%, #000000);
+}
+
+/* Rear face (double-sided): a second lit face behind the side return */
+.sign3d-lbx__rear {
+    display: none;
+    transform: translate(calc(var(--lbx-depth, 8px) * 2), calc(var(--lbx-depth, 8px) * 2));
+    background: #f3f3ee;
+}
+
+.sign3d-lbx.is-double .sign3d-lbx__rear {
+    display: block;
+}
+
+.sign3d-lbx.is-double.is-lit .sign3d-lbx__rear {
+    background: #ffffff;
+}
+
+/* Glossy acrylic face with white LEDs behind it */
+.sign3d-lbx__face {
+    background: radial-gradient(ellipse at 50% 45%, #f1f1ee 0%, #d9d9d4 100%);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lbx-side, #1a1a1a) 80%, #000000);
+}
+
+.sign3d-lbx__face::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(125deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) 28%, rgba(255, 255, 255, 0.45) 36%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0) 54%);
+}
+
+.sign3d-lbx.is-lit .sign3d-lbx__face {
+    background: radial-gradient(ellipse at 50% 45%, #ffffff 0%, #fdfdf9 60%, #f1f1e9 100%);
+}
+
+.sign3d-lbx {
+    filter: drop-shadow(10px 20px 18px rgba(0, 0, 0, 0.35));
+}
+
+.sign3d-lbx.is-lit {
+    filter: drop-shadow(0 0 14px rgba(255, 255, 245, 0.75)) drop-shadow(0 0 36px rgba(255, 255, 240, 0.35)) drop-shadow(10px 20px 18px rgba(0, 0, 0, 0.3));
+}
+
+/* Wall Hanging: wall plate + two arms to the left of the box */
+.sign3d-lbx__plate,
+.sign3d-lbx__arm {
+    display: none;
+    position: absolute;
+    background: color-mix(in srgb, var(--lbx-bracket, #1a1a1a) var(--sign3d-int, 100%), #ffffff);
+}
+
+.sign3d-lbx.is-hanging .sign3d-lbx__plate,
+.sign3d-lbx.is-hanging .sign3d-lbx__arm {
+    display: block;
+}
+
+.sign3d-lbx__plate {
+    left: -32%;
+    top: 12%;
+    width: 7%;
+    min-width: 10px;
+    height: 76%;
+    border-radius: 3px;
+    box-shadow: inset -2px 0 3px rgba(0, 0, 0, 0.35), 2px 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+.sign3d-lbx__arm {
+    left: -26%;
+    width: 27%;
+    height: 3.2%;
+    min-height: 5px;
+    border-radius: 999px;
+    box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 3px 5px rgba(0, 0, 0, 0.3);
+}
+
+.sign3d-lbx__arm.is-top { top: 26%; }
+.sign3d-lbx__arm.is-bottom { top: 70%; }
+
+.sign3d-lbx.bracket-chrome .sign3d-lbx__plate,
+.sign3d-lbx.bracket-chrome .sign3d-lbx__arm {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.25) 100%);
+}
+
+.sign3d-lbx.bracket-glossy .sign3d-lbx__plate,
+.sign3d-lbx.bracket-glossy .sign3d-lbx__arm {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 50%);
+}
+
+.sign3d-lbx__tag {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff2ec4, #7a00ff);
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.sign3d-lbx__tag[hidden] {
+    display: none;
+}
+
+/* The uploaded design sits on the lightbox face */
+.sign3d-mode-lightbox .sign3d-configurator__preview-inner {
+    position: relative;
+    z-index: 1;
+}
+
+/* Shape cards */
+.sign3d-lbx-card__shape {
+    display: block;
+    width: 44px;
+    height: 44px;
+    margin: 6px auto 2px;
+    background: linear-gradient(135deg, #ffffff, #d7d7de);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+}
+
+.sign3d-configurator__pick-card.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

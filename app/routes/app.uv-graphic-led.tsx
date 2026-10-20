@@ -30,7 +30,7 @@ export default function UvGraphicLedHub() {
     }
 
     return (
-        <s-page heading="UV Graphic Printed Signs Configurator">
+        <s-page heading="Graphic LED & Non-LED Neon Signs Configurator">
             <s-section heading="Configurator Options">
                 <s-paragraph>
                     One configurator with both options: With Neon Lighting and Without Neon Lighting. It uses the same options and rules as the

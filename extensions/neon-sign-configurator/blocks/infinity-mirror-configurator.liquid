@@ -1,13 +1,5 @@
-{% comment %} Mozemo Signage - Infinity Mirror Letter Signs (3D layout). UI built by moz-configurator.js {% endcomment %}
-<div data-moz-cfg="infinity" data-block-id="{{ block.id }}" data-product-id="{{ product.id }}">
-<script type="application/json" data-moz-data>{
-"sizes":[{%- for o in metaobjects["app--418838118401--infinity_size"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"w":{{ o.width_cm.value | default: 0 }},"p":{{ o.price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
-"colours":[{%- for o in metaobjects["app--418838118401--infinity_colour"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"n":{{ o.name.value | json }},"h":{{ o.hex_code.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
-"frames":[{%- for o in metaobjects["app--418838118401--infinity_frame_finish"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
-"mountings":[{%- for o in metaobjects["app--418838118401--infinity_mounting"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}],
-"addons":[{%- for o in metaobjects["app--418838118401--infinity_addon"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
-{%- render 'moz-cfg-common', walls: '3d', lib: 'infinity', fonts: true, power: true, install: false -%}
-</div>
+{% comment %} Infinity Mirror Signs — the 3D configurator (same menus, styling and functions) in 'infinity' mode. {% endcomment %}
+{% render 'sign3d-core', block: block, product: product, mode: 'infinity' %}
 
 {% schema %}
 { "name": "Infinity Mirror Config", "target": "section", "settings": [] }
