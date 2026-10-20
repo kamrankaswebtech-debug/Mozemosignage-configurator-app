@@ -199,6 +199,14 @@ async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionId
     }
 }
 
+// Admin "Show On": an entry with a list of configurator keys only shows where "neon" is listed.
+// Empty = shown (previous behaviour).
+function neonShowOn(item) {
+    if (!item || typeof item !== 'object' || !item.so) return true;
+    const keys = String(item.so).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    return !keys.length || keys.indexOf('neon') > -1;
+}
+
 // Shows a spinning loader inside the button next to the given text.
 function setButtonLoadingText(button, text) {
     button.innerHTML = '<span class="neon-configurator__spinner"></span><span>' + text + '</span>';
@@ -227,7 +235,7 @@ function renderNeonFontsAndSymbols(root) {
 
     if (fontsDataEl && fontSelectEl && fontCardsEl) {
         let fonts = [];
-        try { fonts = JSON.parse(fontsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse fonts JSON.', err); }
+        try { fonts = (JSON.parse(fontsDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse fonts JSON.', err); }
         fonts.forEach((font, i) => {
             const option = document.createElement('option');
             option.value = font.value;
@@ -258,7 +266,7 @@ function renderNeonFontsAndSymbols(root) {
 
     if (symbolsDataEl && symbolButtonsEl) {
         let symbols = [];
-        try { symbols = JSON.parse(symbolsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse symbols JSON.', err); }
+        try { symbols = (JSON.parse(symbolsDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse symbols JSON.', err); }
         symbols.forEach((sym) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -435,7 +443,7 @@ function renderNeonDynamicOptions(root) {
     const colourNameLabelEl = root.querySelector('[data-colour-name-label]');
     if (coloursDataEl && swatchesEl) {
         let colours = [];
-        try { colours = JSON.parse(coloursDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse colours JSON.', err); }
+        try { colours = (JSON.parse(coloursDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse colours JSON.', err); }
         // Show colours in Admin "Sort Order" (ascending). Colours without a sort order go last,
         // keeping their original relative order (stable tiebreak on original index).
         colours = colours
@@ -481,7 +489,7 @@ function renderNeonDynamicOptions(root) {
     const backboardColourSelectEl = root.querySelector('[data-backboard-colour-select]');
     if (backboardColoursDataEl && backboardColourSelectEl) {
         let bColours = [];
-        try { bColours = JSON.parse(backboardColoursDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse backboard colours JSON.', err); }
+        try { bColours = (JSON.parse(backboardColoursDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse backboard colours JSON.', err); }
         let defaultLabel = null;
         let minSort = Infinity;
         bColours.forEach((c) => { if (c.sortOrder < minSort) { minSort = c.sortOrder; defaultLabel = c.label; } });
@@ -504,7 +512,7 @@ function renderNeonDynamicOptions(root) {
     const sizeSelectEl = root.querySelector('[data-size-select]');
     if (sizesDataEl && sizeCardsEl && sizeSelectEl) {
         let sizes = [];
-        try { sizes = JSON.parse(sizesDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse sizes JSON.', err); }
+        try { sizes = (JSON.parse(sizesDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse sizes JSON.', err); }
         let defaultWidth = null;
         let minSort = Infinity;
         sizes.forEach((s) => { if (s.sortOrder < minSort) { minSort = s.sortOrder; defaultWidth = s.width; } });
@@ -540,7 +548,7 @@ function renderNeonDynamicOptions(root) {
     const styleSelectEl = root.querySelector('[data-backboard-style-select]');
     if (stylesDataEl && styleCardsEl && styleSelectEl) {
         let styles = [];
-        try { styles = JSON.parse(stylesDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse backboard styles JSON.', err); }
+        try { styles = (JSON.parse(stylesDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse backboard styles JSON.', err); }
         let defaultLabel = null;
         let minSort = Infinity;
         styles.forEach((s) => { if (s.sortOrder < minSort) { minSort = s.sortOrder; defaultLabel = s.label; } });
@@ -577,7 +585,7 @@ function renderNeonDynamicOptions(root) {
     const includedListEl = root.querySelector('[data-included-list]');
     if (addonsDataEl) {
         let addons = [];
-        try { addons = JSON.parse(addonsDataEl.textContent) || []; } catch (err) { console.error('Neon Configurator: failed to parse addons JSON.', err); }
+        try { addons = (JSON.parse(addonsDataEl.textContent) || []).filter(neonShowOn); } catch (err) { console.error('Neon Configurator: failed to parse addons JSON.', err); }
         const paidAddons = addons.filter((a) => !a.isFree);
         const freeAddons = addons.filter((a) => a.isFree);
 

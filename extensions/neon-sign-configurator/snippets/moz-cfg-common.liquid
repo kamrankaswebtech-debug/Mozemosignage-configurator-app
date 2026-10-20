@@ -44,7 +44,7 @@
 ]</script>
 {%- endif -%}
 {%- if power -%}
-<script type="application/json" data-moz-power>[{%- for pa in metaobjects["app--418838118401--power_adapter"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ pa.label.value | json }},"s":{{ pa.sort_order.value | default: 999999 }}}{%- endfor -%}]</script>
+<script type="application/json" data-moz-power>[{%- for pa in metaobjects["app--418838118401--power_adapter"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ pa.label.value | json }},"s":{{ pa.sort_order.value | default: 999999 }},"so":{{ pa.show_on.value | default: "" | json }}}{%- endfor -%}]</script>
 {%- endif -%}
 {%- if install -%}
   {%- for i in metaobjects["app--418838118401--installation_settings"].values -%}

@@ -29,10 +29,27 @@
     }
     function money(value) { return '$' + num(value).toFixed(2); }
     function plusMoney(value) { return '+$' + num(value).toFixed(2); }
+    // Admin "Show On" key of each product (empty "so" on an entry = shown everywhere).
+    const SHOW_ON_KEY = { uv: 'graphic', bonnet: 'bonnet', lightbox: 'lightbox', infinity: 'infinity', marquee: 'marquee' };
+    function showOnFilter(value, key) {
+        if (Array.isArray(value)) {
+            return value.filter((x) => {
+                if (!x || typeof x !== 'object' || !x.so) return true;
+                const keys = String(x.so).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+                return !keys.length || keys.indexOf(key) > -1;
+            });
+        }
+        if (value && typeof value === 'object') {
+            const out = {};
+            Object.keys(value).forEach((k) => { out[k] = showOnFilter(value[k], key); });
+            return out;
+        }
+        return value;
+    }
     function readJson(root, selector, fallback) {
         const node = root.querySelector(selector);
         if (!node) return fallback;
-        try { return JSON.parse(node.textContent) || fallback; } catch (err) {
+        try { return showOnFilter(JSON.parse(node.textContent) || fallback, SHOW_ON_KEY[root.dataset.mozCfg] || root.dataset.mozCfg); } catch (err) {
             console.error('Mozemo configurator: bad JSON in ' + selector, err);
             return fallback;
         }

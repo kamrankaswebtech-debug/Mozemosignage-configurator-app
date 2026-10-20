@@ -16,6 +16,7 @@
 {% assign show_choose_size_indoor = true %}
 {% assign show_choose_size_outdoor = true %}
 {% for item in metaobjects["app--418838118401--signage_addon"].values %}
+  {% assign moz_so = item.show_on.value | default: "" | downcase | split: "," %}{% if moz_so.size > 0 %}{% unless moz_so contains "neon" %}{% continue %}{% endunless %}{% endif %}
   {% if item.category.value == "neon_type" %}
     {% assign neon_type_count = neon_type_count | plus: 1 %}
     {% if neon_type_first_key == "" %}{% assign neon_type_first_key = item.type_key.value %}{% endif %}
@@ -118,7 +119,7 @@
       {% for font in metaobjects["app--418838118401--neon_font"].values %}
         {% if font.font_file.value.url %}{% assign fv = "moz-font-" | append: font.system.handle %}{% else %}{% assign fv = font.css_font_family.value %}{% endif %}
         {% if nf_i > 0 %},{% endif %}
-        {"value":{{ fv | json }},"name":{{ font.name.value | json }},"isNew":{{ font.is_new.value | default: false }},"previewImage":{% if font.preview_image.value %}{{ font.preview_image.value | image_url: width: 200 | json }}{% else %}""{% endif %}}
+        {"value":{{ fv | json }},"name":{{ font.name.value | json }},"isNew":{{ font.is_new.value | default: false }},"previewImage":{% if font.preview_image.value %}{{ font.preview_image.value | image_url: width: 200 | json }}{% else %}""{% endif %},"so":{{ font.show_on.value | default: "" | json }}}
         {% assign nf_i = nf_i | plus: 1 %}
       {% endfor %}
     ]
@@ -128,7 +129,7 @@
       {% assign ns_i = 0 %}
       {% for symbol in metaobjects["app--418838118401--neon_quick_symbol"].values %}
         {% if ns_i > 0 %},{% endif %}
-        {"url":{{ symbol.icon.value.url | json }},"label":{{ symbol.label.value | json }},"transparentBg":{{ symbol.transparent_bg.value | default: false }}}
+        {"url":{{ symbol.icon.value.url | json }},"label":{{ symbol.label.value | json }},"transparentBg":{{ symbol.transparent_bg.value | default: false }},"so":{{ symbol.show_on.value | default: "" | json }}}
         {% assign ns_i = ns_i | plus: 1 %}
       {% endfor %}
     ]
@@ -181,6 +182,7 @@
       <label class="neon-configurator__label">4. Choose Colour / Effect</label>
       <div class="neon-configurator__effect-modes" data-effect-modes>
         {% for mode in effect_modes %}
+          {% assign moz_so = mode.show_on.value | default: "" | downcase | split: "," %}{% if moz_so.size > 0 %}{% unless moz_so contains "neon" %}{% continue %}{% endunless %}{% endif %}
           <label class="neon-configurator__effect-mode-option" data-sort-order="{{ mode.sort_order.value | default: 999999 }}">
             <input type="radio" name="neon-effect-mode-{{ block.id }}" data-effect-mode-radio value="{{ mode.mode_key.value }}" data-price="{{ mode.extra_price_decimal.value | default: 0 }}" {% if mode.mode_key.value == "single" %}checked{% elsif has_single_mode == false and forloop.first %}checked{% endif %}>
             <span>{{ mode.label.value }}{% if mode.extra_price_decimal.value and mode.extra_price_decimal.value != 0 %} (+${{ mode.extra_price_decimal.value }}){% endif %}</span>
@@ -196,7 +198,7 @@
       {% assign ncl_i = 0 %}
       {% for colour in metaobjects["app--418838118401--neon_colour"].values %}
         {% if ncl_i > 0 %},{% endif %}
-        {"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"name":{{ colour.name.value | json }},"sortOrder":{{ colour.sort_order.value | json }}}
+        {"hex":{{ colour.hex_code.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"name":{{ colour.name.value | json }},"sortOrder":{{ colour.sort_order.value | json }},"so":{{ colour.show_on.value | default: "" | json }}}
         {% assign ncl_i = ncl_i | plus: 1 %}
       {% endfor %}
     ]
@@ -211,7 +213,7 @@
       {% assign nsz_i = 0 %}
       {% for size in metaobjects["app--418838118401--sign_size"].values %}
         {% if nsz_i > 0 %},{% endif %}
-        {"width":{{ size.width_cm.value | default: 0 }},"height":{{ size.height_cm.value | default: 0 }},"price":{{ size.price_decimal.value | default: 0 }},"sortOrder":{{ size.sort_order.value | default: 999999 }},"badge":{{ size.badge_text.value | default: "" | json }},"label":{{ size.label.value | json }}}
+        {"width":{{ size.width_cm.value | default: 0 }},"height":{{ size.height_cm.value | default: 0 }},"price":{{ size.price_decimal.value | default: 0 }},"sortOrder":{{ size.sort_order.value | default: 999999 }},"badge":{{ size.badge_text.value | default: "" | json }},"label":{{ size.label.value | json }},"so":{{ size.show_on.value | default: "" | json }}}
         {% assign nsz_i = nsz_i | plus: 1 %}
       {% endfor %}
     ]
@@ -236,7 +238,7 @@
       {% assign nbs_i = 0 %}
       {% for style in metaobjects["app--418838118401--backboard_style"].values %}
         {% if nbs_i > 0 %},{% endif %}
-        {"label":{{ style.label.value | json }},"price":{{ style.extra_price_decimal.value | default: 0 }},"shape":{{ style.shape_type.value | default: "rectangle" | json }},"sortOrder":{{ style.sort_order.value | default: 999999 }},"previewImage":{% if style.preview_image.value %}{{ style.preview_image.value | image_url: width: 160 | json }}{% else %}""{% endif %},"shelfImage":{% if style.shelf_image.value %}{{ style.shelf_image.value | image_url: width: 600 | json }}{% else %}""{% endif %}}
+        {"label":{{ style.label.value | json }},"price":{{ style.extra_price_decimal.value | default: 0 }},"shape":{{ style.shape_type.value | default: "rectangle" | json }},"sortOrder":{{ style.sort_order.value | default: 999999 }},"previewImage":{% if style.preview_image.value %}{{ style.preview_image.value | image_url: width: 160 | json }}{% else %}""{% endif %},"shelfImage":{% if style.shelf_image.value %}{{ style.shelf_image.value | image_url: width: 600 | json }}{% else %}""{% endif %},"so":{{ style.show_on.value | default: "" | json }}}
         {% assign nbs_i = nbs_i | plus: 1 %}
       {% endfor %}
     ]
@@ -253,7 +255,7 @@
       {% assign nbc_i = 0 %}
       {% for colour in metaobjects["app--418838118401--backboard_colour"].values %}
         {% if nbc_i > 0 %},{% endif %}
-        {"label":{{ colour.label.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"hex":{{ colour.hex_or_swatch.value | default: "#e8e8e8" | json }},"isClear":{{ colour.is_clear.value | default: false }},"finish":{{ colour.finish_type.value | default: "" | json }},"sortOrder":{{ colour.sort_order.value | default: 999999 }}}
+        {"label":{{ colour.label.value | json }},"price":{{ colour.extra_price_decimal.value | default: 0 }},"hex":{{ colour.hex_or_swatch.value | default: "#e8e8e8" | json }},"isClear":{{ colour.is_clear.value | default: false }},"finish":{{ colour.finish_type.value | default: "" | json }},"sortOrder":{{ colour.sort_order.value | default: 999999 }},"so":{{ colour.show_on.value | default: "" | json }}}
         {% assign nbc_i = nbc_i | plus: 1 %}
       {% endfor %}
     ]
@@ -269,6 +271,7 @@
       <label class="neon-configurator__label">8. Indoor or Outdoor</label>
       <div class="neon-configurator__neon-type-cards" data-neon-type-cards>
         {% for item in metaobjects["app--418838118401--signage_addon"].values %}
+          {% assign moz_so = item.show_on.value | default: "" | downcase | split: "," %}{% if moz_so.size > 0 %}{% unless moz_so contains "neon" %}{% continue %}{% endunless %}{% endif %}
           {% if item.category.value == "neon_type" %}
             <button type="button" class="neon-configurator__neon-type-card{% if item.type_key.value == neon_type_first_key %} is-selected{% endif %}" data-neon-type-key="{{ item.type_key.value }}" data-neon-type-price="{{ item.extra_price_decimal.value | default: 0 }}" data-neon-type-label="{{ item.label.value }}">
               <span class="neon-configurator__neon-type-icon neon-configurator__neon-type-icon--{{ item.type_key.value }}"></span>
@@ -285,6 +288,7 @@
       <label class="neon-configurator__label">Power Adapter</label>
       <select class="neon-configurator__select" data-power-adapter-select>
         {% for adapter in metaobjects["app--418838118401--power_adapter"].values %}
+          {% assign moz_so = adapter.show_on.value | default: "" | downcase | split: "," %}{% if moz_so.size > 0 %}{% unless moz_so contains "neon" %}{% continue %}{% endunless %}{% endif %}
           <option data-sort-order="{{ adapter.sort_order.value | default: 999999 }}">{{ adapter.label.value }}</option>
         {% endfor %}
       </select>
@@ -296,7 +300,7 @@
       {% for addon in metaobjects["app--418838118401--signage_addon"].values %}
         {% if addon.category.value == blank or addon.category.value == "addon" %}
           {% if nad_i > 0 %},{% endif %}
-          {"label":{{ addon.label.value | json }},"price":{{ addon.extra_price_decimal.value | default: 0 }},"isFree":{{ addon.is_free.value | default: false }}}
+          {"label":{{ addon.label.value | json }},"price":{{ addon.extra_price_decimal.value | default: 0 }},"isFree":{{ addon.is_free.value | default: false }},"so":{{ addon.show_on.value | default: "" | json }}}
           {% assign nad_i = nad_i | plus: 1 %}
         {% endif %}
       {% endfor %}

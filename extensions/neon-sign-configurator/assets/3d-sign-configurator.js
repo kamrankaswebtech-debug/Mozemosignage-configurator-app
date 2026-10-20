@@ -220,11 +220,20 @@ function showTemporaryStatus(statusEl, text, durationMs) {
 // Set to true to bring the old Canva-style placement back (also remove the 3 cursor rules at the end of the CSS).
 
 
+// Admin "Show On": an entry with a list of configurator keys only shows on those configurators
+// (3d, infinity, marquee, lightbox). Empty = every configurator (previous behaviour).
+function sign3dVisibleFor(root, item) {
+    if (!item || typeof item !== 'object' || !item.so) return true;
+    const keys = String(item.so).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    return !keys.length || keys.indexOf(String(root.dataset.sign3dMode || '3d').toLowerCase()) > -1;
+}
+
 function sign3dReadJson(root, selector) {
     const el = root.querySelector(selector);
     if (!el) return [];
     try {
-        return JSON.parse(el.textContent) || [];
+        const data = JSON.parse(el.textContent) || [];
+        return Array.isArray(data) ? data.filter((x) => sign3dVisibleFor(root, x)) : data;
     } catch (err) {
         console.error('3D Sign Configurator: failed to parse JSON block ' + selector, err);
         return [];
@@ -3526,8 +3535,16 @@ function initSign3dConfigurator(root) {
         const wrapEl = root.querySelector('[data-finish-wrap="' + slot + '"]');
         if (wrapEl && wrapEl.hasAttribute('data-finish-off')) return [];
         const surfaces = sign3dSplitList(root.dataset.finishSurfaces);
+        if (surfaces.length) {
+            const seen = {};
+            return finishList.filter((f) => {
+                const s = sign3dFinishSurface(f);
+                if (surfaces.indexOf(s) === -1 || seen[s]) return false;
+                seen[s] = true;
+                return true;
+            });
+        }
         return finishList.filter((f) => {
-            if (surfaces.length && surfaces.indexOf(sign3dFinishSurface(f)) === -1) return false;
             const applies = sign3dSplitList(f.a);
             const offered = applies.length ? applies.indexOf(slot) > -1 : slot !== 'backing';
             return offered && (!allowed.length || allowed.indexOf(f.h) > -1);

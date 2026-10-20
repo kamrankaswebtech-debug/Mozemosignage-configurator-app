@@ -81,6 +81,11 @@ description = "Available font styles for neon sign configurators"
   admin = "merchant_read_write"
   storefront = "public_read"
 
+[metaobjects.app.neon_font.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
+
 [metaobjects.app.neon_font.fields.name]
 name = "Name"
 type = "single_line_text_field"
@@ -123,6 +128,11 @@ description = "Available LED colours for neon sign configurators"
   admin = "merchant_read_write"
   storefront = "public_read"
 
+[metaobjects.app.neon_colour.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
+
 [metaobjects.app.neon_colour.fields.name]
 name = "Name"
 type = "single_line_text_field"
@@ -155,6 +165,11 @@ description = "Available size options with pricing"
   [metaobjects.app.sign_size.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.sign_size.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.sign_size.fields.label]
 name = "Label"
@@ -193,6 +208,11 @@ description = "Cut Around, Rectangle, Cut-to-Letter, Naked Neon, etc."
   [metaobjects.app.backboard_style.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.backboard_style.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.backboard_style.fields.label]
 name = "Label"
@@ -235,6 +255,11 @@ description = "Clear, Gloss Black, Gloss White, Frosted White, Silver, Gold"
   admin = "merchant_read_write"
   storefront = "public_read"
 
+[metaobjects.app.backboard_colour.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
+
 [metaobjects.app.backboard_colour.fields.label]
 name = "Label"
 type = "single_line_text_field"
@@ -274,6 +299,11 @@ description = "Wall Mount Kit, Hanging Kit, Remote & Dimmer, Waterproofing etc."
   [metaobjects.app.signage_addon.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.signage_addon.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.signage_addon.fields.label]
 name = "Label"
@@ -324,6 +354,11 @@ description = "Region-specific power adapter options"
   [metaobjects.app.power_adapter.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.power_adapter.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.power_adapter.fields.label]
 name = "Label"
@@ -450,6 +485,11 @@ description = "Front acrylic colour options"
   admin = "merchant_read_write"
   storefront = "public_read"
 
+[metaobjects.app.sign3d_front_colour.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
+
 [metaobjects.app.sign3d_front_colour.fields.name]
 name = "Name"
 type = "single_line_text_field"
@@ -480,6 +520,11 @@ description = "Materials, Finish, Mounting, and Add-ons for 3D Illuminated Signs
   [metaobjects.app.sign3d_option.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.sign3d_option.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.sign3d_option.fields.category]
 name = "Category"
@@ -739,6 +784,11 @@ description = "SVG icons customers can click to add alongside their text (heart,
   admin = "merchant_read_write"
   storefront = "public_read"
 
+[metaobjects.app.neon_quick_symbol.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
+
 [metaobjects.app.neon_quick_symbol.fields.label]
 name = "Label"
 description = "e.g. 'Heart', 'Star' — shown as alt text / tooltip"
@@ -849,6 +899,11 @@ description = "Colour effect options: Single Colour, RGB Colour Changing, Multic
   [metaobjects.app.neon_effect_mode.access]
   admin = "merchant_read_write"
   storefront = "public_read"
+
+[metaobjects.app.neon_effect_mode.fields.show_on]
+name = "Show On"
+description = "Comma list of configurators that show this entry (neon, graphic, bonnet, 3d, infinity, marquee, lightbox). Empty = all."
+type = "single_line_text_field"
 
 [metaobjects.app.neon_effect_mode.fields.label]
 name = "Label"

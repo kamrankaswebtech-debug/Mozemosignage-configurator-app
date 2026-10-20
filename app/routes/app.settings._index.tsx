@@ -27,6 +27,12 @@ export default function SettingsHub() {
             path: "/app/settings/wallpapers",
             icon: "image",
         },
+        {
+            title: "Configurator Visibility",
+            description: "Choose which configurators show each colour, font, symbol, size, finish, mounting, add-on or power adapter (Neon, Graphic Neon, Bonnet, 3D, Infinity, Marquee, Lightbox).",
+            path: "/app/settings/visibility",
+            icon: "eye",
+        },
     ];
 
     return (
