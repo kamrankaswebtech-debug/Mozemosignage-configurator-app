@@ -1255,16 +1255,18 @@
         if (o.tube) ring(tube.getContext('2d'), tint(gSil, o.tube), 2.5);
         const textLayer = TG ? tint(tSil, o.light || o.unlitText) : null;
         if (o.glow) {
-            const light = make();
-            const lg = light.getContext('2d');
-            lg.drawImage(tube, 0, 0);
-            if (textLayer) lg.drawImage(textLayer, 0, 0);
             g.save();
             g.shadowColor = o.glow;
             g.shadowBlur = 24 * dpr;
-            g.drawImage(light, 0, 0);
+            g.drawImage(tube, 0, 0);
             g.shadowBlur = 8 * dpr;
-            g.drawImage(light, 0, 0);
+            g.drawImage(tube, 0, 0);
+            if (textLayer) {
+                g.shadowBlur = Math.max(3, L(text.fpx) * 0.18);
+                g.drawImage(textLayer, 0, 0);
+                g.shadowBlur = Math.max(6, L(text.fpx) * 0.45);
+                g.drawImage(textLayer, 0, 0);
+            }
             g.restore();
         }
         // 3) Neon tube behind the artwork edge, the artwork itself, then the neon text on top
@@ -1414,7 +1416,7 @@
                 else if (b.key === 'naked') styles.push({ l: 'Naked (No Backboard)', p: 0, i: '' });
             });
             ctx.step('Backboard Style', { note: 'The backboard only changes what sits behind your sign — the neon lighting stays the same.' })
-                .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 2, compact: true, showIncluded: true }).el);
+                .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 3, compact: true, showIncluded: true }).el);
             const bcolours = bySort(d.bcolours);
             let boardStep = null;
             if (bcolours.length) {
@@ -1656,9 +1658,28 @@
                 g.drawImage(src, Math.cos(rad) * S(r), Math.sin(rad) * S(r));
             }
         };
-        // Design silhouette
+        // Design silhouette: the artwork's transparency, or — for artwork on a plain background
+        // (JPG / PNG without transparency) — everything that differs from the corner colour.
         const sil = make();
-        sil.getContext('2d').drawImage(g0, S(ox), S(oy), S(W), S(H));
+        const silG = sil.getContext('2d', { willReadFrequently: true });
+        silG.drawImage(g0, S(ox), S(oy), S(W), S(H));
+        try {
+            const x0 = Math.round(S(ox)), y0 = Math.round(S(oy)), w0 = Math.max(1, Math.round(S(W))), h0 = Math.max(1, Math.round(S(H)));
+            const img = silG.getImageData(x0, y0, w0, h0);
+            const px = img.data;
+            let transparent = 0;
+            for (let i = 3; i < px.length; i += 16) if (px[i] < 200) transparent++;
+            if (transparent < (px.length / 16) * 0.02) {
+                const at = (x, y) => { const i = (y * w0 + x) * 4; return [px[i], px[i + 1], px[i + 2]]; };
+                const corners = [at(1, 1), at(w0 - 2, 1), at(1, h0 - 2), at(w0 - 2, h0 - 2)];
+                const bgc = [0, 1, 2].map((k) => corners.reduce((a, c) => a + c[k], 0) / 4);
+                for (let i = 0; i < px.length; i += 4) {
+                    const d = Math.abs(px[i] - bgc[0]) + Math.abs(px[i + 1] - bgc[1]) + Math.abs(px[i + 2] - bgc[2]);
+                    px[i + 3] = d > 90 ? 255 : (d > 45 ? Math.round((d - 45) / 45 * 255) : 0);
+                }
+                silG.putImageData(img, x0, y0);
+            }
+        } catch (err) { /* cross-origin artwork: keep its own transparency */ }
         // Frosted white backboard = design outline + top hook + bottom tab
         const board = make();
         const bg = board.getContext('2d');
@@ -1728,7 +1749,13 @@
             sg.fillRect(0, 0, shine.width, shine.height);
             g.drawImage(shine, 0, 0);
         } else {
-            g.drawImage(g0, S(ox), S(oy), S(W), S(H));
+            // Printed graphic on the frosted acrylic, cut to the same outline
+            const printed = make();
+            const pg = printed.getContext('2d');
+            pg.drawImage(g0, S(ox), S(oy), S(W), S(H));
+            pg.globalCompositeOperation = 'destination-in';
+            pg.drawImage(sil, 0, 0);
+            g.drawImage(printed, 0, 0);
         }
         return { W, H };
     }
@@ -1745,17 +1772,14 @@
                 { key: 'graphic', label: 'Graphic Printed', desc: 'Your graphic printed on top of the frosted acrylic.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) }
             ], { price: 'none', cols: 2, onChange: () => { if (ctx.faceStep) ctx.faceStep.hidden = !(ctx.v.design && ctx.v.design.key === 'silhouette'); } }).el);
 
-            ctx.step('Upload Your Design', { note: 'Your logo, silhouette, outline or graphic.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'One portable sign, two uses: fit it to your engine bay as a bonnet stand, then hang it on a wall. Switch the background below the preview (Engine Bay / Garage Wall) to see both.' }).appendChild(ctx.upload().el);
 
             // Engine Bay / Garage Wall — same product, only the background changes
             if (ctx.walls && ctx.walls.length) {
                 const findWall = (re, fallback) => { const i = ctx.walls.findIndex((w) => re.test(String(w.l || ''))); return i > -1 ? i : fallback; };
                 const engine = findWall(/engine|bonnet|hood|car/i, 0);
                 const garage = findWall(/garage|wall/i, Math.min(1, ctx.walls.length - 1));
-                ctx.step('Display', { note: 'One sign, two uses — a portable bonnet stand or a wall sign.' }).appendChild(ctx.cards('display', [
-                    { key: 'engine', label: 'Engine Bay', price: 0, wall: engine, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-bonnet')) },
-                    { key: 'garage', label: 'Garage Wall', price: 0, wall: garage, visual: (v) => v.appendChild(el('span', 'moz-cfg__use-icon is-wall')) }
-                ], { price: 'none', cols: 2, compact: true, onChange: (x) => { if (x) ctx.selectWall(x.wall); } }).el);
+                void garage;
                 ctx.selectWall(engine);
             }
 
@@ -1842,8 +1866,8 @@
                 'Uploaded Design': designUrl(ctx),
                 'Height': ctx.v.size ? ctx.v.size.label : '',
                 'Backboard': 'Frosted white acrylic',
-                'Display': ctx.v.display ? ctx.v.display.label : 'Bonnet stand / wall sign',
-                'Use': 'Indoor only',
+                'Use': 'Bonnet stand + wall sign (dual-purpose)',
+                'Environment': 'Indoor only',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
