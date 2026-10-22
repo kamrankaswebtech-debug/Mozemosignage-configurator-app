@@ -1666,7 +1666,8 @@
 .moz-bnc { position: relative; display: flex; align-items: center; justify-content: center; }
 .moz-bnc__art { position: relative; }
 .moz-bnc__canvas { position: absolute; pointer-events: none; }
-.moz-bnc.is-rgb .moz-bnc__canvas { animation: moz-hue 6s linear infinite; }
+.moz-bnc.is-rgb .moz-bnc__light { animation: moz-hue 6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .moz-bnc.is-rgb .moz-bnc__light { animation: none; } }
 .moz-cfg__design-icon.is-silhouette { width: 30px; height: 36px; border-radius: 50% 50% 12% 12%; background: #111; box-shadow: 0 0 0 4px #f4f6f8, 0 0 14px #ff4fd8; }
 .moz-cfg__design-icon.is-graphic { background: linear-gradient(135deg, #34ff6a, #0a7f2e); box-shadow: 0 0 0 4px #f4f6f8, 0 0 14px #ff4fd8; }
 

@@ -1601,10 +1601,11 @@
     });
 
     // -------------------------------------------------------------------------------------
-    // 2) Acrylic Neon LED Bonnet Stand / Wall Sign (same live idea as the Graphic Neon sign):
-    // Plain Silhouette (glossy acrylic cut-out in the Front Face colour) or Graphic Printed,
-    // on a frosted white acrylic backboard with a top hook + bottom tab, LED glow behind it.
-    // Engine Bay / Garage Wall only change the background. Indoor use only, no mounting options.
+    // 2) Acrylic LED Bonnet Stand / Wall Sign: the customer's graphic printed on a frosted acrylic
+    // panel cut to the design's shape (with a top hook + bottom tab). LEDs light the whole panel
+    // from behind the print — no outer glow. One LED Lighting option: any single colour or RGB,
+    // all fade / flash modes via the remote, always free. Engine Bay / Garage Wall only change the
+    // background. Indoor use only, no mounting options.
     // -------------------------------------------------------------------------------------
     const BONNET_RAINBOW = ['#ff2d55', '#ff9500', '#ffe600', '#34ff6a', '#00e5ff', '#3d7bff', '#c43dff'];
     function bonnetIsBlack(c) {
@@ -1624,10 +1625,12 @@
         H = Math.round(H);
         const tabH = Math.round(H * 0.16);
         const pad = 46;
-        const key = [g0.src || 'ph', o.mode, o.face, o.led, o.multi, o.lit, W, H].join('|');
+        const key = [g0.src || 'ph', o.led, o.rgb, o.lit, W, H].join('|');
         art.style.width = W + 'px';
         art.style.height = (H + tabH * 2) + 'px';
         cv.hidden = false;
+        let lc = ctx._bn.light;
+        if (!lc) { lc = ctx._bn.light = el('canvas', 'moz-bnc__canvas moz-bnc__light'); art.insertBefore(lc, cv); }
         if (cv._key === key) return { W, H };
         cv._key = key;
         const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -1639,6 +1642,9 @@
         cv.style.height = CH + 'px';
         cv.style.left = -pad + 'px';
         cv.style.top = -pad + 'px';
+        lc.width = cv.width;
+        lc.height = cv.height;
+        lc.style.cssText = cv.style.cssText;
         const S = (v) => v * dpr;
         const ox = pad;
         const oy = pad + tabH;
@@ -1653,7 +1659,7 @@
             return c;
         };
         const ring = (g, src, r) => {
-            for (let a = 0; a < 360; a += 20) {
+            for (let a = 0; a < 360; a += 10) {
                 const rad = a * Math.PI / 180;
                 g.drawImage(src, Math.cos(rad) * S(r), Math.sin(rad) * S(r));
             }
@@ -1690,73 +1696,45 @@
         bg.fillStyle = '#000';
         roundRect(ox + W / 2 - tabW / 2, oy - tabH - 2, tabW, tabH + 12, 4);
         roundRect(ox + W / 2 - tabW / 2, oy + H - 10, tabW, tabH + 12, 4);
+        // Light layer (own canvas so RGB can cycle colours without tinting the print):
+        // lit = the whole acrylic panel glows in the LED colour, evenly from behind, no outer glow;
+        // off = plain frosted acrylic with a soft wall shadow.
+        const lg0 = lc.getContext('2d');
+        lg0.clearRect(0, 0, lc.width, lc.height);
+        if (o.lit) {
+            lg0.drawImage(tint(board, o.rgb ? '#ff2d2d' : o.led), 0, 0);
+            const core = make();
+            const cg = core.getContext('2d');
+            const rg = cg.createRadialGradient(S(ox + W / 2), S(oy + H / 2), 0, S(ox + W / 2), S(oy + H / 2), S(Math.max(W, H) * 0.75));
+            rg.addColorStop(0, 'rgba(255,255,255,0.28)');
+            rg.addColorStop(0.6, 'rgba(255,255,255,0.08)');
+            rg.addColorStop(1, 'rgba(255,255,255,0)');
+            cg.drawImage(board, 0, 0);
+            cg.globalCompositeOperation = 'source-in';
+            cg.fillStyle = rg;
+            cg.fillRect(0, 0, core.width, core.height);
+            lg0.drawImage(core, 0, 0);
+        } else {
+            lg0.save();
+            lg0.shadowColor = 'rgba(0,0,0,0.35)';
+            lg0.shadowBlur = S(12);
+            lg0.shadowOffsetX = S(3);
+            lg0.shadowOffsetY = S(8);
+            lg0.drawImage(tint(board, '#e9ecef'), 0, 0);
+            lg0.restore();
+        }
         const g = cv.getContext('2d');
         g.clearRect(0, 0, cv.width, cv.height);
-        // LED glow behind the frosted board (single colour, or multi / RGB rainbow)
-        let glowFill = o.led;
-        if (o.multi) {
-            const grad = g.createLinearGradient(0, S(oy - tabH), 0, S(oy + H + tabH));
-            BONNET_RAINBOW.forEach((c, i) => grad.addColorStop(i / (BONNET_RAINBOW.length - 1), c));
-            glowFill = grad;
-        }
-        if (o.lit) {
-            const halo = tint(board, glowFill);
-            g.save();
-            g.filter = 'blur(' + S(16) + 'px)';
-            g.globalAlpha = 0.95;
-            g.drawImage(halo, 0, 0);
-            g.filter = 'blur(' + S(6) + 'px)';
-            g.drawImage(halo, 0, 0);
-            g.restore();
-        } else {
-            g.save();
-            g.shadowColor = 'rgba(0,0,0,0.35)';
-            g.shadowBlur = S(12);
-            g.shadowOffsetX = S(3);
-            g.shadowOffsetY = S(8);
-            g.drawImage(board, 0, 0);
-            g.restore();
-        }
-        // Frosted white acrylic (lit: glowing white with the LED colour at its edge)
-        g.drawImage(tint(board, o.lit ? '#fbfcfd' : '#e9ecef'), 0, 0);
-        if (o.lit) {
-            const edge = make();
-            const eg = edge.getContext('2d');
-            eg.drawImage(tint(board, glowFill), 0, 0);
-            eg.globalCompositeOperation = 'destination-out';
-            eg.filter = 'blur(' + S(3) + 'px)';
-            eg.drawImage(board, 0, 0);
-            g.globalAlpha = 0.8;
-            g.drawImage(edge, 0, 0);
-            g.globalAlpha = 1;
-        }
         // Screw holes in the hook and the tab
         g.fillStyle = 'rgba(70,70,80,0.75)';
         [oy - tabH * 0.55, oy + H + tabH * 0.45].forEach((y) => { g.beginPath(); g.arc(S(ox + W / 2), S(y), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2); g.fill(); });
-        // Front: glossy acrylic silhouette in the Face colour, or the printed graphic
-        if (o.mode === 'silhouette') {
-            g.drawImage(tint(sil, o.face), 0, 0);
-            const shine = make();
-            const sg = shine.getContext('2d');
-            const lg = sg.createLinearGradient(S(ox), S(oy), S(ox + W), S(oy + H));
-            lg.addColorStop(0, 'rgba(255,255,255,0.35)');
-            lg.addColorStop(0.35, 'rgba(255,255,255,0.05)');
-            lg.addColorStop(0.5, 'rgba(255,255,255,0)');
-            lg.addColorStop(1, 'rgba(0,0,0,0.18)');
-            sg.drawImage(sil, 0, 0);
-            sg.globalCompositeOperation = 'source-in';
-            sg.fillStyle = lg;
-            sg.fillRect(0, 0, shine.width, shine.height);
-            g.drawImage(shine, 0, 0);
-        } else {
-            // Printed graphic on the frosted acrylic, cut to the same outline
-            const printed = make();
-            const pg = printed.getContext('2d');
-            pg.drawImage(g0, S(ox), S(oy), S(W), S(H));
-            pg.globalCompositeOperation = 'destination-in';
-            pg.drawImage(sil, 0, 0);
-            g.drawImage(printed, 0, 0);
-        }
+        // Graphic print on the front of the acrylic, cut to the design outline
+        const printed = make();
+        const pg = printed.getContext('2d');
+        pg.drawImage(g0, S(ox), S(oy), S(W), S(H));
+        pg.globalCompositeOperation = 'destination-in';
+        pg.drawImage(sil, 0, 0);
+        g.drawImage(printed, 0, 0);
         return { W, H };
     }
 
@@ -1767,12 +1745,7 @@
             const opts = d.opts || [];
             const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
 
-            ctx.step('Design Type').appendChild(ctx.cards('design', [
-                { key: 'silhouette', label: 'Plain Silhouette', desc: 'Glossy acrylic cut-out of your silhouette or outline.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-silhouette')) },
-                { key: 'graphic', label: 'Graphic Printed', desc: 'Your graphic printed on top of the frosted acrylic.', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) }
-            ], { price: 'none', cols: 2, onChange: () => { if (ctx.faceStep) ctx.faceStep.hidden = !(ctx.v.design && ctx.v.design.key === 'silhouette'); } }).el);
-
-            ctx.step('Upload Your Design', { note: 'One portable sign, two uses: fit it to your engine bay as a bonnet stand, then hang it on a wall. Switch the background below the preview (Engine Bay / Garage Wall) to see both.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'Your uploaded image sets the shape and the printed graphic — all colours and details are handled in production from your image. One portable sign, two uses: an engine-bay bonnet stand and a wall sign (switch the background below the preview to see both).' }).appendChild(ctx.upload().el);
 
             // Engine Bay / Garage Wall — same product, only the background changes
             if (ctx.walls && ctx.walls.length) {
@@ -1783,20 +1756,14 @@
                 ctx.selectWall(engine);
             }
 
-            // Front face colour (all neon colours incl. black) — Plain Silhouette only
-            const colours = bySort(d.colours);
-            if (colours.length) {
-                ctx.faceStep = ctx.step('Front Face Colour');
-                ctx.faceStep.appendChild(ctx.swatches('face', colours.map((c) => ({ name: c.n, hex: c.h || '#111111', price: c.p }))).el);
-            }
-            // LED colour (neon colours, no black) + lighting options from Admin
-            const leds = colours.filter((c) => !bonnetIsBlack(c));
-            const modes = cat('lighting_mode');
-            if (leds.length || modes.length) {
-                const s = ctx.step('LED Colour');
-                if (modes.length) s.appendChild(ctx.cards('lighting', modes.map((o) => ({ label: o.l, price: o.p, key: String(o.k || 'single').toLowerCase() })), { showIncluded: true, cols: Math.min(3, modes.length), compact: true }).el);
-                if (leds.length) s.appendChild(ctx.swatches('led', leds.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
-            }
+            // One LED Lighting option: every single colour (Neon colours, no black) + RGB colour
+            // changing. Fade / flash modes come with the remote. Always free — Admin prices ignored.
+            const leds = bySort(d.colours).filter((c) => !bonnetIsBlack(c))
+                .map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: 0 }));
+            leds.push({ name: 'RGB (Colour Changing)', hex: 'linear-gradient(135deg,' + BONNET_RAINBOW.join(',') + ')', price: 0, rgb: true });
+            const modeNames = cat('lighting_mode').map((o) => o.l).filter(Boolean);
+            ctx.step('LED Lighting', { note: 'Single colour or RGB — all colours, fade and flash modes are controlled with the remote and included free of charge.' + (modeNames.length ? ' Modes: ' + modeNames.join(', ') + '.' : '') })
+                .appendChild(ctx.swatches('led', leds).el);
 
             const sizes = cat('size');
             ctx.sizes = sizes;
@@ -1809,13 +1776,9 @@
         },
         price(ctx) {
             const lines = [];
-            const sil = ctx.v.design && ctx.v.design.key === 'silhouette';
             if (ctx.v.size) lines.push({ label: 'Height: ' + ctx.v.size.label, value: ctx.v.size.price, full: true });
-            lines.push({ label: 'Design: ' + (sil ? 'Plain Silhouette' : 'Graphic Printed'), value: 0 });
-            if (sil && ctx.v.face) lines.push({ label: 'Front face: ' + ctx.v.face.name, value: ctx.v.face.price });
-            if (ctx.v.lighting) lines.push({ label: 'Lighting: ' + ctx.v.lighting.label, value: ctx.v.lighting.price });
-            if (ctx.v.led && !(ctx.v.lighting && ctx.v.lighting.key !== 'single')) lines.push({ label: 'LED colour: ' + ctx.v.led.name, value: ctx.v.led.price });
-            lines.push({ label: 'Frosted white acrylic backboard', value: 0 });
+            lines.push({ label: 'Graphic printed, fully backlit acrylic', value: 0 });
+            if (ctx.v.led) lines.push({ label: 'LED lighting: ' + ctx.v.led.name, value: 0 });
             return lines.concat(addonLines(ctx, 'addons'));
         },
         render(ctx) {
@@ -1841,28 +1804,25 @@
             const hCm = size ? (num(size.h) || cmFromLabel(size.l)) : 60;
             const f = ctx.free();
             const fit = Math.min(1, Math.max(0.5, f.w / 640));
-            const mode = ctx.v.lighting ? ctx.v.lighting.key : 'single';
+            const rgb = !!(ctx.v.led && ctx.v.led.rgb);
             const lit = ctx.ledOn;
             const res = bonnetCompose(ctx, {
                 graphic,
-                mode: ctx.v.design && ctx.v.design.key === 'graphic' ? 'graphic' : 'silhouette',
-                face: ctx.v.face ? ctx.v.face.hex : '#111111',
-                led: ctx.v.led ? ctx.v.led.hex : '#ff2ec4',
-                multi: mode === 'multiple' || mode === 'rgb',
+                led: ctx.v.led && !rgb ? ctx.v.led.hex : '#ff2ec4',
+                rgb,
                 lit,
                 // 1 m fills the preview height (hook + tab included); smaller heights scale down from it.
                 targetH: (f.h * 0.98 / 1.32) * Math.sqrt(Math.max(10, Math.min(100, hCm)) / 100) * Math.max(0.75, fit),
                 maxW: f.w * 0.85
             });
-            ctx._bn.wrap.classList.toggle('is-rgb', lit && mode === 'rgb');
+            ctx._bn.wrap.classList.toggle('is-rgb', lit && rgb);
             const wCm = res.H ? Math.round(hCm * (res.W / res.H) * 10) / 10 : 0;
             ctx.setDims(wCm ? cmText(wCm) : '', cmText(hCm));
             ctx.dims = { w: wCm, h: hCm };
         },
         properties(ctx) {
-            const sil = ctx.v.design && ctx.v.design.key === 'silhouette';
             const p = {
-                'Design Type': sil ? 'Plain Silhouette' : 'Graphic Printed',
+                'Design Type': 'Graphic Printed (fully backlit)',
                 'Uploaded Design': designUrl(ctx),
                 'Height': ctx.v.size ? ctx.v.size.label : '',
                 'Backboard': 'Frosted white acrylic',
@@ -1872,9 +1832,7 @@
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
-            if (sil && ctx.v.face) p['Front Face Colour'] = ctx.v.face.name;
-            if (ctx.v.lighting) p['Lighting'] = ctx.v.lighting.label;
-            if (ctx.v.led) p['LED Colour'] = ctx.v.led.name;
+            if (ctx.v.led) p['LED Lighting'] = ctx.v.led.rgb ? 'RGB colour changing (fade / flash modes via remote)' : ctx.v.led.name + ' (single colour)';
             return p;
         }
     });
