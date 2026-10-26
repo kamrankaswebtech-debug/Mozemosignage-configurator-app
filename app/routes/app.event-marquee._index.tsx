@@ -24,7 +24,7 @@ export default function EventMarqueeHub() {
     return (
         <s-page heading="Event Marquee Bulb Signs Configurator">
             <s-section heading="Configurator Options">
-                <p className="moz-hub-intro">Event Marquee Bulb Signs use the 3D Sign configurator (same menus, layout and functions) with only the options this sign needs: letters only, fonts, one illumination type, sizing, Indoor/Outdoor, bulb colour (no black), face colour and side &amp; back colour with finishes, colour intensity, freestanding mounting with power plug, and add-ons.</p>
+                <p className="moz-hub-intro">Event Marquee Bulb Signs use the 3D Sign configurator (same menus, layout and functions) with only the options this sign needs: letters only, fonts, one illumination type, sizing, Indoor/Outdoor, bulb colour (no black), face colour and side &amp; back colour with finishes, colour intensity, mounting (No Backing = freestanding, stands on the floor; every backing option = wall mounting only) with power plug, and add-ons.</p>
                 <HubCardGrid items={cards.map((card) => ({ title: card.title, description: card.desc, path: card.href }))} />
             </s-section>
         </s-page>

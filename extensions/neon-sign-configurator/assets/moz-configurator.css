@@ -1810,3 +1810,136 @@
     font-weight: 700;
     background: linear-gradient(90deg, #ff00c8, #7a00ff);
 }
+
+/* =====================================================================
+   Graphic Neon backboards — same look as the Neon Signs configurator:
+   Rectangle = flat board, Open Box = board + second offset frame + corner
+   clamps, Clear = see-through acrylic with a thin grey edge, solid colours
+   with their Gloss / Shiny / Frosted finish. Cut Around + Acrylic Stand are
+   painted on the canvas (shape-hugging).
+   ===================================================================== */
+.moz-uvb.is-stand .moz-uvb__board {
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    border: 0;
+    backdrop-filter: none;
+}
+
+.moz-uvb.is-rect .moz-uvb__board,
+.moz-uvb.is-openbox .moz-uvb__board {
+    padding: 7%;
+    border: 2px solid var(--moz-board, #e8e8e8);
+    border-radius: 6px;
+    background-color: var(--moz-board, #e8e8e8);
+    background-image: none;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    backdrop-filter: none;
+}
+
+.moz-uvb.is-openbox .moz-uvb__board {
+    padding: 9%;
+    border-radius: 2px;
+}
+
+.moz-uvb.is-fin-gloss.is-rect .moz-uvb__board,
+.moz-uvb.is-fin-gloss.is-openbox .moz-uvb__board {
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 32%, transparent 55%),
+        linear-gradient(135deg, transparent 45%, rgba(0, 0, 0, 0.28) 78%, rgba(0, 0, 0, 0.5) 100%);
+    background-blend-mode: soft-light, multiply;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.moz-uvb.is-fin-shiny.is-rect .moz-uvb__board,
+.moz-uvb.is-fin-shiny.is-openbox .moz-uvb__board {
+    background-image:
+        linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.55) 14%, transparent 28%, transparent 45%, rgba(255, 255, 255, 0.45) 60%, transparent 76%, rgba(255, 255, 255, 0.3) 92%, transparent 100%),
+        linear-gradient(115deg, rgba(0, 0, 0, 0.4) 0%, transparent 14%, rgba(0, 0, 0, 0.3) 28%, rgba(0, 0, 0, 0.5) 45%, transparent 60%, rgba(0, 0, 0, 0.35) 76%, transparent 92%, rgba(0, 0, 0, 0.25) 100%);
+    background-blend-mode: soft-light, multiply;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.5), 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.moz-uvb.is-fin-frosted.is-rect .moz-uvb__board,
+.moz-uvb.is-fin-frosted.is-openbox .moz-uvb__board {
+    background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.35'/></svg>"),
+        linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12));
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.moz-uvb.is-clear.is-rect .moz-uvb__board,
+.moz-uvb.is-clear.is-openbox .moz-uvb__board {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid #9a9a9a;
+    box-shadow: none;
+}
+
+/* Open Box: second frame offset diagonally from the main one */
+.moz-uvb.is-openbox .moz-uvb__board::before {
+    content: "";
+    position: absolute;
+    top: -12px;
+    left: 12px;
+    right: -12px;
+    bottom: 12px;
+    border: 1.5px solid var(--moz-board, rgba(255, 255, 255, 0.45));
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+.moz-uvb.is-openbox .moz-uvb__standoff {
+    display: none;
+}
+
+/* Open Box corner clamps that hold both frames together */
+.moz-uvb__clamp {
+    position: absolute;
+    display: none;
+    width: 28px;
+    height: 10px;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.moz-uvb.is-openbox .moz-uvb__clamp {
+    display: block;
+}
+
+.moz-uvb__clamp::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 0;
+    width: 19px;
+    height: 10px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(90deg, #6b6b78, #c4c4d0 45%, #6b6b78);
+}
+
+.moz-uvb__clamp::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #6b6b78;
+    box-shadow: inset 0 0 0 2px #2c2c38;
+}
+
+.moz-uvb__clamp.is-tl { top: -6px; left: -6px; transform: rotate(-45deg); transform-origin: left center; }
+.moz-uvb__clamp.is-tr { top: -6px; right: -6px; transform: rotate(45deg) scaleX(-1); transform-origin: left center; }
+.moz-uvb__clamp.is-bl { bottom: -6px; left: -6px; transform: rotate(45deg); transform-origin: left center; }
+.moz-uvb__clamp.is-br { bottom: -6px; right: -6px; transform: rotate(-45deg) scaleX(-1); transform-origin: left center; }
+
+/* Neon lighting instructions box */
+.moz-cfg textarea.moz-cfg__notes {
+    width: 100%;
+    min-height: 96px;
+    resize: vertical;
+    line-height: 1.45;
+    font-family: inherit;
+    box-sizing: border-box;
+}

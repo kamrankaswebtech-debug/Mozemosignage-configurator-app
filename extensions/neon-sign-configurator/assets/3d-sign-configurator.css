@@ -2558,6 +2558,66 @@
     text-shadow: var(--sign3d-extrusion-shadow, 0 0 0 transparent), 0 0 0.08em color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 55%, transparent), 0 0 0.25em color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 25%, transparent);
 }
 
+/* Infinity letters: the LED tunnel is drawn by .sign3d-configurator__tunnel (follows the letter
+   shape inward), so the two old scaled rings are switched off. */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter.sign3d-has-tunnel::after,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner .sign3d-configurator__letter.sign3d-has-tunnel::before {
+    content: none;
+}
+
+.sign3d-configurator__tunnel {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    background: color-mix(in srgb, color-mix(in srgb, var(--sign3d-light, #29d3ff) var(--sign3d-int, 100%), #ffffff) 78%, #ffffff);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    filter: drop-shadow(0 0 1px var(--sign3d-light, #29d3ff)) drop-shadow(0 0 4px var(--sign3d-light, #29d3ff)) drop-shadow(0 0 9px color-mix(in srgb, var(--sign3d-light, #29d3ff) 55%, transparent));
+    transition: opacity 0.3s ease, background 0.3s ease;
+}
+
+.sign3d-configurator__preview-inner.led-off .sign3d-configurator__tunnel {
+    background: rgba(255, 255, 255, 0.2);
+    filter: none;
+}
+
+/* Infinity "Logo Only": one round infinity mirror — dark mirror with LED rings into the depth,
+   a rim in the side colour, the logo in the middle. */
+.sign3d-configurator img.sign3d-infinity-disc {
+    box-sizing: border-box;
+    border-radius: 50%;
+    background-color: #05060a;
+    background-image: var(--sign3d-inf-rings, none), radial-gradient(circle closest-side, #020306 0 50%, #0a0c12 82%, #171a22 100%);
+    box-shadow:
+        0 0 0 var(--sign3d-inf-rim, 8px) var(--sign3d-side, #15161b),
+        0 0 0 calc(var(--sign3d-inf-rim, 8px) + 1px) rgba(255, 255, 255, 0.14),
+        6px 16px 28px rgba(0, 0, 0, 0.45);
+}
+
+.sign3d-configurator__preview-inner.led-on img.sign3d-infinity-disc {
+    box-shadow:
+        0 0 0 var(--sign3d-inf-rim, 8px) var(--sign3d-side, #15161b),
+        0 0 0 calc(var(--sign3d-inf-rim, 8px) + 1px) rgba(255, 255, 255, 0.14),
+        6px 16px 28px rgba(0, 0, 0, 0.45),
+        0 0 26px color-mix(in srgb, var(--sign3d-light, #29d3ff) 40%, transparent);
+}
+
+/* Event Marquee freestanding (No Backing): the letters stand on the floor — soft floor shadow */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.is-freestanding .sign3d-configurator__letter::before {
+    content: "";
+    position: absolute;
+    left: -6%;
+    right: -2%;
+    bottom: 0.13em;
+    height: 0.12em;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 55% 50%, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 70%);
+    pointer-events: none;
+    z-index: -1;
+}
+
 .sign3d-configurator__bulb-probe {
     display: inline-block;
     width: 0;

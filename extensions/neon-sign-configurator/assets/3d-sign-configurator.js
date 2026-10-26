@@ -294,6 +294,35 @@ function sign3dBuildSideShadow(depthMm, sideHex, tone) {
     return layers.join(', ');
 }
 
+// Marquee / Infinity letters are deep boxes: a return in the side colour sized in em (so it
+// scales with the letters and stays clearly visible at every size), shaded darker toward the
+// back so the side reads even when it is the same colour as the face, plus a soft wall shadow.
+function sign3dBuildLetterDepth(depthMm, sideHex, tone) {
+    const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
+    const D = Math.max(0.05, Math.min(0.11, 0.05 + (Number(depthMm) || 50) / 2000));
+    const layers = [];
+    const n = 16;
+    for (let k = 1; k <= n; k++) {
+        const t = k / n;
+        layers.push((t * D * 0.5).toFixed(4) + 'em ' + (t * D).toFixed(4) + 'em 0 ' + sign3dShadeRgb(rgb, 0.82 - t * 0.32));
+    }
+    layers.push((D * 0.7).toFixed(4) + 'em ' + (D * 1.6).toFixed(4) + 'em ' + (D * 1.8).toFixed(4) + 'em rgba(0,0,0,0.35)');
+    return layers.join(', ');
+}
+
+// Infinity Mirror logo disc: LED rings repeating into the depth (closer together and fainter
+// toward the centre), in the LED colour — dim grey reflections when the LEDs are off.
+function sign3dInfinityRings(hex, on) {
+    const out = [];
+    for (let k = 0; k < 9; k++) {
+        const r = 97 - 46 * (1 - Math.pow(0.72, k));
+        const w = Math.max(0.45, 1.25 - k * 0.09);
+        const col = on ? sign3dRgba(hex, Math.max(0.14, 0.95 - k * 0.1)) : 'rgba(255,255,255,' + Math.max(0.05, 0.2 - k * 0.018).toFixed(3) + ')';
+        out.push('radial-gradient(circle closest-side, transparent ' + (r - w).toFixed(2) + '%, ' + col + ' ' + r.toFixed(2) + '%, transparent ' + (r + w).toFixed(2) + '%)');
+    }
+    return out.join(', ');
+}
+
 // Logo depth (CSS filter). Chained drop-shadow()s COMPOUND (each one copies everything
 // before it), which is what produced the thick stacked-slab look — so this uses just two
 // soft passes: a blurred side-colour return that fades smoothly off the logo edge, then a
@@ -596,57 +625,393 @@ function sign3dMoney(root, value, plus) {
     return (plus ? '+$' : '$') + n.toFixed(2) + (root._sign3dCur ? ' ' + root._sign3dCur : '');
 }
 
-// Marquee bulbs for one character: the glyph is drawn on a canvas in the real font, a distance
-// transform finds the centre line of every stroke, and bulbs are spread evenly along it.
-// Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
+// True when the font is loaded (never throws — FontFaceSet.check can throw on odd font strings).
+function sign3dFontReady(fontCss) {
+    try { return !document.fonts || document.fonts.check(fontCss); } catch (err) { return true; }
+}
+
+// ---- Glyph geometry for Marquee bulbs and Infinity tunnels ----------------------------------
+// A character is drawn on a canvas in the real font (S px), giving its pixel mask and a distance
+// field (distance of every inside pixel to the nearest edge).
 const SIGN3D_BULB_CACHE = {};
-function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch;
-    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
-    const S = 100, W = 170, H = 170, ox = 25, base = 130;
+function sign3dGlyphField(ch, fontCss, S) {
+    const font = String(fontCss).replace(/\d+(\.\d+)?px/, S + 'px');
+    const m = document.createElement('canvas').getContext('2d');
+    m.font = font;
+    const adv = Math.ceil(m.measureText(ch).width) || S;
+    const ox = Math.round(S * 0.4);
+    const base = Math.round(S * 1.25);
+    const W = adv + Math.round(S * 0.8);
+    const H = Math.round(S * 1.7);
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const g = canvas.getContext('2d', { willReadFrequently: true });
-    g.font = fontCss;
+    g.font = font;
     g.textBaseline = 'alphabetic';
     g.fillText(ch, ox, base);
     const px = g.getImageData(0, 0, W, H).data;
-    const dist = new Float32Array(W * H);
+    const B = new Uint8Array(W * H);
     let any = false;
-    for (let i = 0; i < W * H; i++) { const inside = px[i * 4 + 3] > 127; dist[i] = inside ? 1e6 : 0; if (inside) any = true; }
-    if (!any) return [];
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
         const i = y * W + x;
-        if (dist[i]) dist[i] = Math.min(dist[i], dist[i - 1] + 1, dist[i - W] + 1, dist[i - W - 1] + 1.4, dist[i - W + 1] + 1.4);
+        if (px[i * 4 + 3] > 127) { B[i] = 1; any = true; }
+    }
+    if (!any) return null;
+    const dist = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) dist[i] = B[i] ? 1e6 : 0;
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        if (dist[i]) dist[i] = Math.min(dist[i], dist[i - 1] + 1, dist[i - W] + 1, dist[i - W - 1] + 1.414, dist[i - W + 1] + 1.414);
     }
     for (let y = H - 2; y > 0; y--) for (let x = W - 2; x > 0; x--) {
         const i = y * W + x;
-        if (dist[i]) dist[i] = Math.min(dist[i], dist[i + 1] + 1, dist[i + W] + 1, dist[i + W + 1] + 1.4, dist[i + W - 1] + 1.4);
+        if (dist[i]) dist[i] = Math.min(dist[i], dist[i + 1] + 1, dist[i + W] + 1, dist[i + W + 1] + 1.414, dist[i + W - 1] + 1.414);
     }
-    let maxD = 0;
-    for (let i = 0; i < W * H; i++) if (dist[i] > maxD) maxD = dist[i];
-    // Centre-line (ridge) pixels of the main strokes; thin serifs are skipped.
-    const cand = [];
+    return { W, H, ox, base, B, dist, S };
+}
+
+// Zhang-Suen thinning: 1px centre line of every stroke.
+function sign3dThin(src, W, H) {
+    const B = Uint8Array.from(src);
+    const del = [];
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (let step = 0; step < 2; step++) {
+            del.length = 0;
+            for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+                const i = y * W + x;
+                if (!B[i]) continue;
+                const p2 = B[i - W], p3 = B[i - W + 1], p4 = B[i + 1], p5 = B[i + W + 1];
+                const p6 = B[i + W], p7 = B[i + W - 1], p8 = B[i - 1], p9 = B[i - W - 1];
+                const b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+                if (b < 2 || b > 6) continue;
+                const a = (!p2 && p3) + (!p3 && p4) + (!p4 && p5) + (!p5 && p6) + (!p6 && p7) + (!p7 && p8) + (!p8 && p9) + (!p9 && p2);
+                if (a !== 1) continue;
+                if (step === 0 ? (p2 && p4 && p6) || (p4 && p6 && p8) : (p2 && p4 && p8) || (p2 && p6 && p8)) continue;
+                del.push(i);
+            }
+            if (del.length) { changed = true; del.forEach((i) => { B[i] = 0; }); }
+        }
+    }
+    // Staircase clean-up: a corner pixel whose two perpendicular neighbours already touch each
+    // other diagonally is redundant (it made diagonal strokes look like junctions).
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
         const i = y * W + x;
-        const d = dist[i];
-        if (d < maxD * 0.55) continue;
-        const ridge = (d >= dist[i - 1] && d >= dist[i + 1]) || (d >= dist[i - W] && d >= dist[i + W])
-            || (d >= dist[i - W - 1] && d >= dist[i + W + 1]) || (d >= dist[i - W + 1] && d >= dist[i + W - 1]);
-        if (ridge) cand.push({ x, y, d });
+        if (!B[i]) continue;
+        const N = B[i - W], E = B[i + 1], S = B[i + W], Wn = B[i - 1];
+        const NE = B[i - W + 1], SE = B[i + W + 1], SW = B[i + W - 1], NW = B[i - W - 1];
+        if ((Wn && S && !N && !NE && !E) || (S && E && !Wn && !NW && !N) || (E && N && !S && !SW && !Wn) || (N && Wn && !E && !SE && !S)) B[i] = 0;
     }
-    // Even spacing: pick points at least "gap" apart, strongest centre-line points first.
-    const gap = Math.max(maxD * 2.3, S * 0.13);
-    cand.sort((a, b) => b.d - a.d);
-    const pts = [];
-    for (const c of cand) {
-        if (pts.every((p) => (p.x - c.x) * (p.x - c.x) + (p.y - c.y) * (p.y - c.y) >= gap * gap)) pts.push(c);
+    return B;
+}
+
+// Typical half stroke width of the font (from "H" / "I"), so bulbs are the same size and spacing
+// in every letter of the sign.
+function sign3dStrokeHalf(fontCss, S) {
+    const key = fontCss + '|hw|' + S;
+    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
+    const vals = [];
+    ['H', 'I', 'l', '1'].some((ch) => {
+        const f = sign3dGlyphField(ch, fontCss, S);
+        if (!f) return false;
+        const sk = sign3dThin(f.B, f.W, f.H);
+        for (let i = 0; i < sk.length; i++) if (sk[i]) vals.push(f.dist[i]);
+        return vals.length > 10;
+    });
+    vals.sort((a, b) => a - b);
+    const hw = vals.length ? vals[Math.floor(vals.length / 2)] : S * 0.08;
+    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = hw;
+    return hw;
+}
+
+// Marquee bulbs for one character, like a professionally made marquee letter: the centre line of
+// every stroke is traced, a bulb sits at each stroke end (inset) and each junction, and the bulbs
+// in between are spread at equal spacing along each stroke; round letters start at the top so
+// they come out symmetrical. Same bulb size and spacing in every letter.
+// Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
+function sign3dBulbPoints(ch, fontCss) {
+    const key = fontCss + '|' + ch + '|v2';
+    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
+    const S = 120;
+    const f = sign3dGlyphField(ch, fontCss, S);
+    if (!f) return [];
+    const { W, H, ox, base, dist } = f;
+    const sk = sign3dThin(f.B, W, H);
+    const hw = sign3dStrokeHalf(fontCss, S);
+    const strokeW = hw * 2;
+    const dia = Math.max(S * 0.03, Math.min(S * 0.085, strokeW * 0.46));
+    const gap = Math.max(dia * 2.05, strokeW * 0.8);
+    const OFF = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
+    const nb = (i) => { const r = []; for (let k = 0; k < 8; k++) if (sk[i + OFF[k]]) r.push(i + OFF[k]); return r; };
+    const pix = [];
+    for (let i = 0; i < sk.length; i++) if (sk[i]) pix.push(i);
+    if (!pix.length) return [];
+    const deg = new Int8Array(W * H);
+    pix.forEach((i) => { deg[i] = nb(i).length; });
+    const isNode = (i) => deg[i] !== 2;
+    const XY = (i) => [i % W, (i / W) | 0];
+    const stepLen = (a, b) => ((a % W) !== (b % W) && ((a / W) | 0) !== ((b / W) | 0)) ? 1.414 : 1;
+
+    // Junction / end clusters
+    const cl = new Int32Array(W * H).fill(-1);
+    const clusters = [];
+    pix.forEach((i) => {
+        if (!isNode(i) || cl[i] > -1) return;
+        const c = { id: clusters.length, members: [], deg: 0, orig: 0, dead: false };
+        const st = [i];
+        cl[i] = c.id;
+        while (st.length) {
+            const p = st.pop();
+            c.members.push(p);
+            nb(p).forEach((q) => { if (isNode(q) && cl[q] < 0) { cl[q] = c.id; st.push(q); } });
+        }
+        clusters.push(c);
+    });
+    // Strokes between clusters, and closed loops
+    let segs = [];
+    const cycles = [];
+    const seen = new Uint8Array(W * H);
+    clusters.forEach((c) => c.members.forEach((n) => nb(n).forEach((q) => {
+        if (isNode(q) || seen[q]) return;
+        const path = [n];
+        let prev = n;
+        let cur = q;
+        for (let guard = 0; guard < W * H; guard++) {
+            seen[cur] = 1;
+            path.push(cur);
+            const next = nb(cur).find((x) => x !== prev);
+            if (next === undefined) break;
+            if (isNode(next)) { path.push(next); segs.push({ a: c.id, b: cl[next], path }); break; }
+            if (seen[next]) break;
+            prev = cur;
+            cur = next;
+        }
+    })));
+    pix.forEach((i) => {
+        if (isNode(i) || seen[i]) return;
+        const path = [i];
+        seen[i] = 1;
+        let prev = i;
+        let cur = nb(i)[0];
+        for (let guard = 0; guard < W * H && cur !== undefined && cur !== i && !seen[cur]; guard++) {
+            seen[cur] = 1;
+            path.push(cur);
+            const next = nb(cur).find((x) => x !== prev);
+            prev = cur;
+            cur = next;
+        }
+        if (path.length > 3) cycles.push(path);
+    });
+    const lengthOf = (p) => { let L = 0; for (let k = 1; k < p.length; k++) L += stepLen(p[k - 1], p[k]); return L; };
+    const degrees = () => {
+        clusters.forEach((c) => { c.deg = 0; });
+        segs.forEach((s) => { clusters[s.a].deg++; clusters[s.b].deg++; });
+    };
+    degrees();
+    clusters.forEach((c) => { c.orig = c.deg; });
+    // Drop short spurs — tiny artefacts, and the little forks thinning leaves at square stroke
+    // ends / serifs (2+ short spurs on one junction). A real short stroke (e.g. the leg of an
+    // "A" under its bar) is kept.
+    const isSpur = (s) => {
+        const da = clusters[s.a].deg;
+        const db = clusters[s.b].deg;
+        return ((da === 1 && db >= 3) || (db === 1 && da >= 3)) && lengthOf(s.path) < strokeW * 0.95;
+    };
+    for (let pass = 0; pass < 3; pass++) {
+        degrees();
+        const before = segs.length;
+        const shortAt = {};
+        segs.forEach((s) => { if (isSpur(s)) { const j = clusters[s.a].deg === 1 ? s.b : s.a; shortAt[j] = (shortAt[j] || 0) + 1; } });
+        segs = segs.filter((s) => {
+            const da = clusters[s.a].deg;
+            const db = clusters[s.b].deg;
+            const j = da === 1 ? s.b : s.a;
+            if (isSpur(s) && (lengthOf(s.path) < hw * 0.9 || shortAt[j] >= 2)) {
+                clusters[s.a].deg--;
+                clusters[s.b].deg--;
+                if (da === 1) clusters[s.a].dead = true;
+                if (db === 1) clusters[s.b].dead = true;
+                return false;
+            }
+            return true;
+        });
+        if (segs.length === before) break;
     }
-    const dia = Math.min(maxD * 1.15, S * 0.085) / S;
-    const res = pts.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: dia }));
-    if (!document.fonts || document.fonts.check(fontCss)) SIGN3D_BULB_CACHE[key] = res;
+    // Merge strokes that only pass through a cluster (2 strokes meet = no real junction)
+    for (let guard = 0; guard < 200; guard++) {
+        degrees();
+        const c = clusters.find((x) => !x.dead && x.deg === 2 && x.orig !== 0);
+        if (!c) break;
+        const ss = segs.filter((s) => s.a === c.id || s.b === c.id);
+        c.dead = true;
+        if (ss.length === 1) { segs.splice(segs.indexOf(ss[0]), 1); cycles.push(ss[0].path); continue; }
+        const [s1, s2] = ss;
+        const p1 = s1.b === c.id ? s1.path : s1.path.slice().reverse();
+        const e1 = s1.b === c.id ? s1.a : s1.b;
+        const p2 = s2.a === c.id ? s2.path : s2.path.slice().reverse();
+        const e2 = s2.a === c.id ? s2.b : s2.a;
+        segs.splice(segs.indexOf(s1), 1);
+        segs.splice(segs.indexOf(s2), 1);
+        if (e1 === c.id && e2 === c.id) { cycles.push(p1.concat(p2.slice(1))); continue; }
+        segs.push({ a: e1, b: e2, path: p1.concat(p2.slice(1)) });
+    }
+    degrees();
+
+    const out = [];
+    const add = (pt) => { if (pt) out.push(pt); };
+    const along = (path, closed) => {
+        const cum = [0];
+        for (let k = 1; k < path.length; k++) cum.push(cum[k - 1] + stepLen(path[k - 1], path[k]));
+        let total = cum[cum.length - 1];
+        if (closed) total += stepLen(path[path.length - 1], path[0]);
+        const at = (d) => {
+            d = Math.max(0, Math.min(total, d));
+            let k = 1;
+            while (k < cum.length && cum[k] < d) k++;
+            if (k >= cum.length) {
+                const [x0, y0] = XY(path[path.length - 1]);
+                if (!closed) return { x: x0, y: y0 };
+                const [x1, y1] = XY(path[0]);
+                const seg = total - cum[cum.length - 1] || 1;
+                const t = (d - cum[cum.length - 1]) / seg;
+                return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t };
+            }
+            const [x0, y0] = XY(path[k - 1]);
+            const [x1, y1] = XY(path[k]);
+            const t = (d - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1);
+            return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t };
+        };
+        return { total, at, cum };
+    };
+    // 1) Junctions and isolated dots (e.g. the dot of an "i")
+    clusters.forEach((c) => {
+        if (c.dead && c.orig !== 0) return;
+        if (c.deg >= 3 || c.orig === 0) {
+            let sx = 0, sy = 0;
+            c.members.forEach((m) => { const [x, y] = XY(m); sx += x; sy += y; });
+            add({ x: sx / c.members.length, y: sy / c.members.length });
+        }
+    });
+    // 2) Strokes: a bulb at each free end (inset), then even spacing in between
+    segs.forEach((s) => {
+        const { total, at, cum } = along(s.path, false);
+        const endA = clusters[s.a].deg === 1;
+        const endB = clusters[s.b].deg === 1;
+        // End bulb: the first centre-line point that sits well inside the stroke (blunt ends
+        // already stop there; pointed / slanted ends run into a corner and are pulled back).
+        const tip = (fromEnd) => {
+            const n = s.path.length;
+            // how thick this stroke is near its end
+            let near = 0;
+            for (let k = 0; k < n; k++) {
+                const idx = fromEnd ? n - 1 - k : k;
+                const along = fromEnd ? total - cum[idx] : cum[idx];
+                if (along > hw * 3) break;
+                if (dist[s.path[idx]] > near) near = dist[s.path[idx]];
+            }
+            const inside = Math.min(hw * 0.78, near * 0.85);
+            for (let k = 0; k < n; k++) {
+                const idx = fromEnd ? n - 1 - k : k;
+                if (dist[s.path[idx]] >= inside) return Math.min(total * 0.45, fromEnd ? total - cum[idx] : cum[idx]);
+            }
+            return total * 0.45;
+        };
+        const a0 = endA ? tip(false) : 0;
+        const b0 = endB ? total - tip(true) : total;
+        if (b0 - a0 < gap * 0.45) {
+            if (endA && endB) add(at(total / 2));
+            else if (endA) add(at(a0));
+            else if (endB) add(at(b0));
+            return;
+        }
+        if (endA) add(at(a0));
+        if (endB) add(at(b0));
+        const n = Math.max(1, Math.round((b0 - a0) / gap));
+        for (let k = 1; k < n; k++) add(at(a0 + (k * (b0 - a0)) / n));
+    });
+    // 3) Closed loops (O, 0, D bowls…): start at the top centre so the ring is symmetrical
+    cycles.forEach((path) => {
+        let cx = 0;
+        path.forEach((p) => { cx += p % W; });
+        cx /= path.length;
+        let best = 0;
+        path.forEach((p, k) => {
+            const [x, y] = XY(p);
+            const [bx, by] = XY(path[best]);
+            if (y < by - 0.5 || (Math.abs(y - by) <= 0.5 && Math.abs(x - cx) < Math.abs(bx - cx))) best = k;
+        });
+        const ring = path.slice(best).concat(path.slice(0, best));
+        const { total, at } = along(ring, true);
+        const n = Math.max(3, Math.round(total / gap));
+        for (let k = 0; k < n; k++) add(at((k * total) / n));
+    });
+    // Keep bulbs apart (junction bulbs win)
+    const keep = [];
+    const minD = gap * 0.5;
+    out.forEach((p) => { if (keep.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= minD * minD)) keep.push(p); });
+    const res = keep.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: dia / S }));
+    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
     return res;
+}
+
+// Infinity Mirror letter: nested outlines that follow the letter's own shape inward (the LED
+// strip reflected again and again into the depth), brightest at the front edge and fading into
+// the tunnel. Returned as a white mask (data URL) — the LED colour comes from CSS — plus its box
+// in em (x from the letter's left edge, y from the baseline).
+function sign3dInfinityMask(ch, fontCss) {
+    const key = fontCss + '|' + ch + '|inf';
+    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
+    const S = 160;
+    const f = sign3dGlyphField(ch, fontCss, S);
+    if (!f) return null;
+    const { W, H, ox, base, dist } = f;
+    const hw = sign3dStrokeHalf(fontCss, S);
+    const rings = [];
+    const q = 0.6;
+    for (let k = 0; k < 5; k++) {
+        const r = 1.8 + (hw * 0.92 - 1.8) * (1 - Math.pow(q, k));
+        rings.push({ r, a: [1, 0.85, 0.68, 0.52, 0.38][k], w: Math.max(1, hw * [0.15, 0.12, 0.1, 0.085, 0.07][k]) });
+    }
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d');
+    const id = g.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) {
+        const d = dist[i];
+        if (!d) continue;
+        let a = 0;
+        for (let k = 0; k < rings.length; k++) {
+            const v = rings[k].a * Math.min(1, 1.6 * Math.max(0, 1 - Math.abs(d - rings[k].r) / rings[k].w));
+            if (v > a) a = v;
+        }
+        if (a <= 0) continue;
+        id.data[i * 4] = 255;
+        id.data[i * 4 + 1] = 255;
+        id.data[i * 4 + 2] = 255;
+        id.data[i * 4 + 3] = Math.round(a * 255);
+    }
+    g.putImageData(id, 0, 0);
+    const res = { url: c.toDataURL('image/png'), x: -ox / S, y: -base / S, w: W / S, h: H / S };
+    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
+    return res;
+}
+
+// Logo placeholder for the Infinity Mirror "Logo Only" disc until a logo is uploaded.
+function sign3dInfinityPlaceholder() {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 400;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(255,255,255,0.92)';
+    g.font = '800 64px Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('YOUR', 200, 168);
+    g.fillText('LOGO', 200, 238);
+    return c.toDataURL('image/png');
 }
 
 // Placeholder artwork for the 3D LED Lightbox face until the customer uploads a design.
@@ -821,6 +1186,7 @@ function sign3dHydrateOptions(root) {
     };
     fillSelect('[data-material-select]', 'material', null, '[data-sign3d-materials]');
     fillSelect('[data-depth-select]', 'depth_tier', (opt, o) => { opt.value = o.t; opt.dataset.label = o.l; });
+    const isMarqueeMode = root.dataset.sign3dMode === 'marquee';
     fillSelect('[data-mounting-select]', 'mounting', (opt, o) => {
         opt.dataset.sortOrder = o.s;
         opt.dataset.image = o.i || '';
@@ -828,7 +1194,28 @@ function sign3dHydrateOptions(root) {
         opt.dataset.description = o.d || '';
         if (o.wmin) opt.dataset.wmin = o.wmin;
         if (o.wmax) opt.dataset.wmax = o.wmax;
+        // Event Marquee: "No Backing" means the sign is freestanding (stands on the floor);
+        // every backing option is for wall mounting only.
+        if (isMarqueeMode) {
+            if ((o.b || '') === 'none') {
+                if (!/freestand/i.test(o.l)) opt.textContent = o.l + ' (Freestanding)';
+                opt.dataset.description = 'Freestanding: the letters stand on the floor and plug into a standard power outlet — no backing panel or wall fixing needed.';
+            } else {
+                opt.dataset.description = (o.d ? o.d + ' ' : '') + 'Designed for wall mounting only (not freestanding).';
+            }
+        }
     }, '[data-sign3d-mountings]');
+    if (isMarqueeMode) {
+        // No separate Freestanding option: an Admin "Freestanding" mounting is dropped when a
+        // No Backing option exists (No Backing already is the freestanding sign).
+        const ms = root.querySelector('[data-mounting-select]');
+        if (ms) {
+            const opts = Array.from(ms.options);
+            const hasNoBacking = opts.some((op) => op.dataset.backingType === 'none' && !/freestand/i.test(op.value));
+            if (hasNoBacking) opts.forEach((op) => { if (/freestand/i.test(op.value)) op.remove(); });
+            if (ms.options.length) ms.selectedIndex = 0;
+        }
+    }
 
     const lhInput = root.querySelector('[data-letter-height-input]');
     if (lhInput) {
@@ -979,6 +1366,9 @@ function initSign3dConfigurator(root) {
     const selectionBox = root.querySelector('[data-selection-box]');
     const previewBox = root.querySelector('[data-preview-box]');
     const previewInnerForLed = root.querySelector('[data-preview-inner]');
+    // Marquee bulbs / Infinity tunnels are rebuilt only when wording, size, font or font-load state change.
+    let bulbSignature = '';
+    let tunnelSignature = '';
     const bgThumbs = root.querySelectorAll('[data-bg-thumbs] .sign3d-configurator__bg-thumb');
     const wallpaperToggle = root.querySelector('[data-hide-wallpaper-toggle]');
     const wallpaperToggleLabel = root.querySelector('[data-wallpaper-toggle-label]');
@@ -1093,6 +1483,9 @@ function initSign3dConfigurator(root) {
 
     // 'text' = wording only, 'upload' = logo only, 'both' = wording + logo
     function hasText() { return currentMode !== 'upload'; }
+    // Infinity Mirror "Logo Only": one round infinity mirror with the logo — sized and priced by
+    // the overall width only, as ONE element (no letter height, no per-letter pricing).
+    function isInfinityLogo() { return root.dataset.sign3dMode === 'infinity' && currentMode === 'upload'; }
     function hasLogo() { return currentMode !== 'text'; }
     // Name of the clicked design-type button when it differs from the base mode (e.g. "Graphic Print").
     let currentModeName = '';
@@ -1190,10 +1583,16 @@ function initSign3dConfigurator(root) {
         const depthOption = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
         const depthMm = parseFloat(depthOption?.value) || 10;
         if (previewInnerForLed) {
-            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', sign3dBuildSideShadow(depthMm, selectedSideHex));
-            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-dark', sign3dBuildSideShadow(depthMm, selectedSideHex, 'dark'));
-            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-lit', sign3dBuildSideShadow(depthMm, selectedSideHex, 'lit'));
+            const deepLetters = root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity';
+            const depthFn = deepLetters ? sign3dBuildLetterDepth : sign3dBuildSideShadow;
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', depthFn(depthMm, selectedSideHex));
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-dark', depthFn(depthMm, selectedSideHex, 'dark'));
+            previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-lit', depthFn(depthMm, selectedSideHex, 'lit'));
             previewInnerForLed.style.setProperty('--sign3d-light', selectedColourHex);
+            if (root.dataset.sign3dMode === 'infinity') {
+                previewInnerForLed.style.setProperty('--sign3d-side', selectedSideHex || '#111111');
+                previewInnerForLed.style.setProperty('--sign3d-inf-rings', sign3dInfinityRings(selectedColourHex || '#29d3ff', ledOn));
+            }
         }
         if (logoImg) {
             logoImg.style.filter = buildLogoIlluminationFilter(depthMm);
@@ -1211,6 +1610,18 @@ function initSign3dConfigurator(root) {
         let w = Math.max(100, targetW || area.w * 0.7);
         let h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
+        if (isInfinityLogo()) {
+            // Round infinity mirror: the overall width is the diameter; the logo sits inside it.
+            const d = Math.round(Math.max(120, Math.min(targetW || area.w * 0.6, area.h * 0.92)));
+            w = d;
+            h = d;
+            logoImg.classList.add('sign3d-infinity-disc');
+            logoImg.style.padding = Math.round(d * 0.2) + 'px';
+            logoImg.style.setProperty('--sign3d-inf-rim', Math.max(4, Math.round(d * 0.035)) + 'px');
+        } else {
+            logoImg.classList.remove('sign3d-infinity-disc');
+            logoImg.style.padding = '';
+        }
         logoImg.style.width = Math.round(w) + 'px';
         logoImg.style.height = Math.round(h) + 'px';
         logoImg.style.objectFit = 'contain';
@@ -1225,7 +1636,10 @@ function initSign3dConfigurator(root) {
     function unitFactor() { return UNIT_FACTORS[currentUnit] || 1; }
     function roundNice(v) { return Math.round(v * 100) / 100; }
     function getWidthCm() { return roundNice((parseFloat(widthInput && widthInput.value) || 0) * unitFactor()); }
-    function getHeightCm() { return roundNice((parseFloat(letterHeightInput && letterHeightInput.value) || 0) * unitFactor()); }
+    function getHeightCm() {
+        if (isInfinityLogo()) return getWidthCm();
+        return roundNice((parseFloat(letterHeightInput && letterHeightInput.value) || 0) * unitFactor());
+    }
     function formatDim(cm) { return roundNice(cm / unitFactor()) + ' ' + currentUnit; }
 
     function refreshUnitLabels() {
@@ -1362,6 +1776,12 @@ function initSign3dConfigurator(root) {
         });
 
         if (previewInner) previewInner.classList.toggle('mode-both', mode === 'both');
+        if (root.dataset.sign3dMode === 'infinity') {
+            const lhField = root.querySelector('[data-letter-height-field]');
+            if (lhField) lhField.hidden = mode === 'upload';
+            if (previewInner) previewInner.classList.toggle('mode-infinity-logo', mode === 'upload');
+            if (mode === 'upload' && !logoPreviewSrc) showLogoPreview(sign3dInfinityPlaceholder());
+        }
         if (textFlex) textFlex.style.display = showText ? '' : 'none';
         if (iconsContainer) iconsContainer.style.display = showText ? '' : 'none';
         if (logoImg) logoImg.style.display = (showLogo && logoPreviewSrc) ? 'block' : 'none';
@@ -1384,7 +1804,9 @@ function initSign3dConfigurator(root) {
         renderLetters();
         hideSelectionBox();
         updatePreviewScale();
+        updateDepthVisual();
         calculateTotal();
+        renumberSteps();
         updateDimensionLines();
     }
 
@@ -2130,7 +2552,8 @@ function initSign3dConfigurator(root) {
 
     function updateDimensionLines() {
         if (!previewStage) return;
-        placeMarqueeBulbs();
+        try { placeMarqueeBulbs(); } catch (err) { console.error('[Mozemo 3D] marquee bulbs:', err); }
+        try { placeInfinityTunnels(); } catch (err) { console.error('[Mozemo 3D] infinity tunnels:', err); }
         const stageRect = previewStage.getBoundingClientRect();
         const contentRect = getSignContentRect();
         updateBackingPanel(contentRect, stageRect);
@@ -2246,7 +2669,7 @@ function initSign3dConfigurator(root) {
         const basePrice = widthTier ? Number(widthTier.price) || 0 : 0;
         const baseLabel = widthTier ? widthTier.label : 'Base price';
 
-        const letterHeightTier = findAscendingTier(config.letterHeightTiers, 'height', letterHeightCm);
+        const letterHeightTier = isInfinityLogo() ? null : findAscendingTier(config.letterHeightTiers, 'height', letterHeightCm);
         const letterHeightAdjustment = letterHeightTier ? Number(letterHeightTier.adjustment) || 0 : 0;
 
         let letterCountSurcharge = 0;
@@ -2306,10 +2729,12 @@ function initSign3dConfigurator(root) {
 
         let mountingPrice = 0;
         let mountingLabel = '';
+        let mountingValue = '';
         if (mountingSelect) {
             const opt = mountingSelect.options[mountingSelect.selectedIndex];
             mountingPrice = parseFloat(opt?.dataset.price) || 0;
             mountingLabel = opt ? opt.textContent.trim() : '';
+            mountingValue = opt ? String(opt.value || '').trim() : '';
         }
 
         // Backing panel — calculated from real width x height area, not one flat price
@@ -2317,7 +2742,8 @@ function initSign3dConfigurator(root) {
         // selected Mounting option is literally "No Backing Panel".
         let panelSurcharge = 0;
         const panelRate = Number(settings.panelRate) || 0;
-        if (root.dataset.sign3dMode !== 'lightbox' && mountingLabel && mountingLabel.toLowerCase() !== 'no backing panel' && widthCm > 0 && letterHeightCm > 0) {
+        const freestandingMarquee = root.dataset.sign3dMode === 'marquee' && getBackingType() === 'none';
+        if (root.dataset.sign3dMode !== 'lightbox' && !freestandingMarquee && mountingLabel && mountingValue.toLowerCase() !== 'no backing panel' && widthCm > 0 && letterHeightCm > 0) {
             const areaSqm = (widthCm / 100) * (letterHeightCm / 100);
             panelSurcharge = Math.round(areaSqm * panelRate * 100) / 100;
         }
@@ -2358,7 +2784,8 @@ function initSign3dConfigurator(root) {
         // per the client's explicit "colour never changes price" instruction.
         const lines = [];
         lines.push({ label: baseLabel, value: basePrice, included: false });
-        lines.push({ label: 'Letter height (' + formatDim(letterHeightCm) + ')', value: letterHeightAdjustment, included: letterHeightAdjustment === 0 });
+        if (isInfinityLogo()) lines.push({ label: 'Logo: one complete element (priced by overall width)', value: 0, included: true });
+        else lines.push({ label: 'Letter height (' + formatDim(letterHeightCm) + ')', value: letterHeightAdjustment, included: letterHeightAdjustment === 0 });
         if (hasText()) {
             lines.push({
                 label: letterCountSurcharge > 0 ? ('Letters: ' + letterCount + ' (' + letterCountLabel + ')') : ('Letters: ' + letterCount + ' (included)'),
@@ -2908,6 +3335,18 @@ function initSign3dConfigurator(root) {
                 if (root.dataset.frontLabel) renameProp('Front Finish', root.dataset.frontLabel.replace(/Colour$/, 'Finish'));
                 if (root.dataset.sideLabel) renameProp('Side Finish', root.dataset.sideLabel.replace(/Colour$/, 'Finish'));
                 if (bulbSwatches.length) properties['Bulb Colour'] = selectedBulbName || 'Default';
+                if (root.dataset.sign3dMode === 'marquee') {
+                    properties['Display'] = getBackingType() === 'none' ? 'Freestanding (stands on the floor)' : 'Wall mounted (mounting only)';
+                }
+                if (isInfinityLogo()) {
+                    properties['Design Source'] = 'Logo Only';
+                    properties['Shape'] = 'Round infinity mirror (logo)';
+                    properties['Pricing'] = 'Logo priced as one complete element (by overall width)';
+                    renameProp('Overall Width', 'Overall Width / Diameter');
+                    delete properties['Overall / Letter Height'];
+                } else if (root.dataset.sign3dMode === 'infinity') {
+                    properties['Design Source'] = 'Text Only';
+                }
                 if (root.dataset.sign3dMode === 'lightbox') {
                     delete properties['Front Colour'];
                     delete properties['Front Finish'];
@@ -3194,7 +3633,14 @@ function initSign3dConfigurator(root) {
     }
 
     function getInstallRequirementText() {
-        if (root.dataset.plugIn === 'true') return 'Plug-in power — plugs into a standard power outlet';
+        if (root.dataset.plugIn === 'true') {
+            if (root.dataset.sign3dMode === 'marquee') {
+                return getBackingType() === 'none'
+                    ? 'Freestanding — stands on the floor, plugs into a standard power outlet'
+                    : 'Wall mounted (mounting only) — plugs into a standard power outlet';
+            }
+            return 'Plug-in power — plugs into a standard power outlet';
+        }
         return (getBackingType() === 'none' || getWidthCm() > 200) ? 'Qualified electrician required' : 'Plug-in connection available';
     }
 
@@ -3215,6 +3661,7 @@ function initSign3dConfigurator(root) {
     // Backing colour block, power supply, install badge and the yellow electrician note all follow the mounting + width rules.
     function updateMountingInfo() {
         const type = getBackingType();
+        if (previewInnerForLed) previewInnerForLed.classList.toggle('is-freestanding', root.dataset.sign3dMode === 'marquee' && type === 'none');
         const over2m = getWidthCm() > 200;
         const plugIn = root.dataset.plugIn === 'true';
         const needsElectrician = !plugIn && (type === 'none' || over2m);
@@ -3253,7 +3700,9 @@ function initSign3dConfigurator(root) {
                 }
             }
             if (installTextEl && plugIn) {
-                installTextEl.textContent = 'Freestanding plug-in sign: stands on the floor and plugs straight into a standard power outlet.';
+                installTextEl.textContent = (root.dataset.sign3dMode === 'marquee' && type !== 'none')
+                    ? 'Wall-mounted marquee sign: this backing is designed for mounting only — plugs straight into a standard power outlet.'
+                    : 'Freestanding plug-in sign: stands on the floor and plugs straight into a standard power outlet.';
             } else if (installTextEl) {
                 installTextEl.textContent = needsElectrician
                     ? 'Electrician installation required.'
@@ -3433,6 +3882,7 @@ function initSign3dConfigurator(root) {
     // Uploaded logo: same 4 illumination looks as the text, built as a CSS filter chain.
     function buildLogoIlluminationFilter(depthMm) {
         if (root.dataset.sign3dMode === 'lightbox') return ledOn ? 'none' : 'brightness(0.82) saturate(0.9)';
+        if (isInfinityLogo()) return ledOn ? 'none' : 'brightness(0.85)';
         const key = getIlluminationKey();
         const light = selectedColourHex || '#ffffff';
         if (!ledOn) {
@@ -3758,13 +4208,12 @@ function initSign3dConfigurator(root) {
     });
     if (bulbSwatches.length) setBulb(Array.from(bulbSwatches).find((s) => s.classList.contains('is-selected')) || bulbSwatches[0]);
 
-    let bulbSignature = '';
     function placeMarqueeBulbs() {
         if (!bulbSwatches.length || !textFlex) return;
         const fs = parseFloat(textFlex.style.fontSize) || 0;
         const cs = getComputedStyle(textFlex);
         const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
-        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length;
+        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length + '|' + sign3dFontReady(fontCss);
         if (sig === bulbSignature && textFlex.querySelector('.sign3d-configurator__bulb')) return;
         bulbSignature = sig;
         textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
@@ -3787,6 +4236,38 @@ function initSign3dConfigurator(root) {
                 b.style.top = (baseY + p.y * fs - dia / 2) + 'px';
                 span.appendChild(b);
             });
+        });
+    }
+
+    // ---- Infinity Mirror letters: the LED tunnel (nested outlines) inside every letter ----
+    function placeInfinityTunnels() {
+        if (root.dataset.sign3dMode !== 'infinity' || !textFlex) return;
+        const fs = parseFloat(textFlex.style.fontSize) || 0;
+        const cs = getComputedStyle(textFlex);
+        const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
+        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length + '|' + sign3dFontReady(fontCss);
+        if (sig === tunnelSignature && textFlex.querySelector('.sign3d-configurator__tunnel')) return;
+        tunnelSignature = sig;
+        textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
+            span.querySelectorAll('.sign3d-configurator__tunnel, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
+            const ch = span.dataset.char;
+            if (!ch || ch === '\u00A0' || !fs) return;
+            const m = sign3dInfinityMask(ch, fontCss);
+            if (!m) return;
+            const probe = document.createElement('i');
+            probe.className = 'sign3d-configurator__bulb-probe';
+            span.appendChild(probe);
+            const baseY = probe.getBoundingClientRect().top - span.getBoundingClientRect().top;
+            const t = document.createElement('i');
+            t.className = 'sign3d-configurator__tunnel';
+            t.style.left = (m.x * fs) + 'px';
+            t.style.top = (baseY + m.y * fs) + 'px';
+            t.style.width = (m.w * fs) + 'px';
+            t.style.height = (m.h * fs) + 'px';
+            t.style.webkitMaskImage = 'url("' + m.url + '")';
+            t.style.maskImage = 'url("' + m.url + '")';
+            span.appendChild(t);
+            span.classList.add('sign3d-has-tunnel');
         });
     }
 
@@ -3940,40 +4421,59 @@ function initSign3dConfigurator(root) {
     if (resetScaleSizeBtn) resetScaleSizeBtn.addEventListener('click', resetScaleAndSizeToDefault);
     if (resetFontBtn) resetFontBtn.addEventListener('click', resetFontToDefault);
 
-    ensureLogoImgElement();
-    setMode(root.dataset.startMode || 'text');
-    updatePreviewText();
-    updatePreviewFont();
-    updatePreviewColour();
-    updatePreviewScale();
-    updateLedState();
-    updateSymbolPositionClass();
-    updateIlluminationEffect();
-    updateDepthVisual();
-    applyWallpaperBackground();
-    applyContentBgFor(bgThumbs.length ? bgThumbs[0] : null);
-    updateContentStrip();
-    calculateTotal();
-    pushHistory();
-    updateUndoRedoButtons();
-    setupDimensionObserver();
-    initSizeSlider();
-    initLetterHeightSlider();
-    initLetterHeightInput();
-    initWidthInput();
-    renderFinishCards();
-    updateFinishClasses();
-    syncIndoorOutdoorCards();
-    calculateTotal();
-    buildPowerOptions();
-    initCustomColourBoxes();
-    initColourIntensity();
-    if (root.dataset.sign3dMode === 'lightbox') {
-        applyLightboxMounting();
-        if (!logoPreviewSrc) showLogoPreview(sign3dLightboxPlaceholder());
+    function sign3dStep(name, fn) {
+        try { fn(); } catch (err) { console.error('[Mozemo 3D] init step "' + name + '" failed:', err); }
     }
-    updateMountingInfo();
-    updateMetalNote();
-    renumberSteps();
-    updateDimensionLines();
+    sign3dStep('ensureLogoImgElement', () => ensureLogoImgElement());
+    sign3dStep('setMode', () => setMode(root.dataset.startMode || 'text'));
+    sign3dStep('updatePreviewText', () => updatePreviewText());
+    sign3dStep('updatePreviewFont', () => updatePreviewFont());
+    sign3dStep('updatePreviewColour', () => updatePreviewColour());
+    sign3dStep('updatePreviewScale', () => updatePreviewScale());
+    sign3dStep('updateLedState', () => updateLedState());
+    sign3dStep('updateSymbolPositionClass', () => updateSymbolPositionClass());
+    sign3dStep('updateIlluminationEffect', () => updateIlluminationEffect());
+    sign3dStep('updateDepthVisual', () => updateDepthVisual());
+    sign3dStep('applyWallpaperBackground', () => applyWallpaperBackground());
+    sign3dStep('applyContentBgFor', () => applyContentBgFor(bgThumbs.length ? bgThumbs[0] : null));
+    sign3dStep('updateContentStrip', () => updateContentStrip());
+    sign3dStep('calculateTotal', () => calculateTotal());
+    sign3dStep('pushHistory', () => pushHistory());
+    sign3dStep('updateUndoRedoButtons', () => updateUndoRedoButtons());
+    sign3dStep('setupDimensionObserver', () => setupDimensionObserver());
+    sign3dStep('initSizeSlider', () => initSizeSlider());
+    sign3dStep('initLetterHeightSlider', () => initLetterHeightSlider());
+    sign3dStep('initLetterHeightInput', () => initLetterHeightInput());
+    sign3dStep('initWidthInput', () => initWidthInput());
+    sign3dStep('renderFinishCards', () => renderFinishCards());
+    sign3dStep('updateFinishClasses', () => updateFinishClasses());
+    sign3dStep('syncIndoorOutdoorCards', () => syncIndoorOutdoorCards());
+    sign3dStep('calculateTotal', () => calculateTotal());
+    sign3dStep('buildPowerOptions', () => buildPowerOptions());
+    sign3dStep('initCustomColourBoxes', () => initCustomColourBoxes());
+    sign3dStep('initColourIntensity', () => initColourIntensity());
+    sign3dStep('block', () => {
+        if (root.dataset.sign3dMode === 'lightbox') {
+            applyLightboxMounting();
+            if (!logoPreviewSrc) showLogoPreview(sign3dLightboxPlaceholder());
+        }
+    });
+    sign3dStep('updateMountingInfo', () => updateMountingInfo());
+    sign3dStep('updateMetalNote', () => updateMetalNote());
+    sign3dStep('renumberSteps', () => renumberSteps());
+    sign3dStep('updateDimensionLines', () => updateDimensionLines());
+    // Final state pass: LED class, illumination effect and the colour / depth variables are always
+    // applied, even if an earlier step failed.
+    sign3dStep('final state', () => { updateLedState(); updateIlluminationEffect(); updateDepthVisual(); });
+    // Web fonts load after the first paint: re-fit the letters and rebuild bulbs / tunnels with the
+    // real font once it is ready.
+    if (document.fonts) {
+        let fontRefreshTimer = null;
+        const refreshForFonts = () => {
+            clearTimeout(fontRefreshTimer);
+            fontRefreshTimer = setTimeout(() => sign3dStep('fonts loaded', () => { bulbSignature = ''; tunnelSignature = ''; updatePreviewScale(); updateDepthVisual(); }), 120);
+        };
+        if (document.fonts.ready) document.fonts.ready.then(refreshForFonts).catch(() => {});
+        if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', refreshForFonts);
+    }
 }

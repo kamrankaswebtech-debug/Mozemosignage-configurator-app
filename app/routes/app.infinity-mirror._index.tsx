@@ -24,7 +24,7 @@ export default function InfinityMirrorHub() {
     return (
         <s-page heading="Infinity Mirror Signs Configurator">
             <s-section heading="Configurator Options">
-                <p className="moz-hub-intro">Infinity Mirror Signs use the 3D Sign configurator (same menus, layout and functions) with only the options this sign needs: design type (incl. Graphic Print and Letters Only), fonts, one illumination type, sizing, Indoor/Outdoor, lighting and side colours (no black), side finish, colour intensity, mounting and add-ons.</p>
+                <p className="moz-hub-intro">Infinity Mirror Signs use the 3D Sign configurator (same menus, layout and functions) with only the options this sign needs: two design types — Text Only (overall width + letter height, priced per letters) and Logo Only (one round infinity mirror sized and priced by the overall width only, as one element) — fonts, one illumination type, Indoor/Outdoor, lighting and side colours (no black), side finish, colour intensity, mounting and add-ons.</p>
                 <HubCardGrid items={cards.map((card) => ({ title: card.title, description: card.desc, path: card.href }))} />
             </s-section>
         </s-page>

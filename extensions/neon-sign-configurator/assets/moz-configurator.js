@@ -1105,9 +1105,192 @@
         return im.complete && im.naturalWidth ? im : null;
     }
 
+    // ---- Artwork cut-out + smooth mask tools (Graphic Neon sign and Bonnet) ----
+    // Customers upload logos as transparent PNGs, but also as JPGs / PNGs on a plain or soft
+    // background. The background is removed with a flood fill from the image border that follows
+    // gradual colour changes (white, black, satin…) and stops at the design's edge, so colours
+    // INSIDE the design (e.g. white letters) are kept. Faint semi-transparent bits are dropped.
+    // When nothing sensible can be removed (full-bleed photo), the artwork is used as it is.
+    function mozArtCutout(img) {
+        const src = img.currentSrc || img.src || '';
+        if (img._mozCut && img._mozCut.src === src) return img._mozCut.canvas;
+        const nw = img.naturalWidth || img.width;
+        const nh = img.naturalHeight || img.height;
+        const k = Math.min(1, 900 / Math.max(nw, nh));
+        const w = Math.max(1, Math.round(nw * k));
+        const h = Math.max(1, Math.round(nh * k));
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(img, 0, 0, w, h);
+        let out = img;
+        try {
+            const id = g.getImageData(0, 0, w, h);
+            const px = id.data;
+            const n = w * h;
+            let transparent = 0;
+            for (let i = 0; i < n; i += 4) if (px[i * 4 + 3] < 200) transparent++;
+            if (transparent > (n / 4) * 0.02) {
+                // Real transparency: keep it, drop faint / ghosted parts
+                for (let i = 3; i < px.length; i += 4) px[i] = px[i] < 90 ? 0 : Math.min(255, Math.round((px[i] - 90) * 255 / 110));
+                g.putImageData(id, 0, 0);
+                out = c;
+            } else {
+                const bg = new Uint8Array(n);
+                const queue = new Int32Array(n);
+                let qh = 0, qt = 0;
+                const diff = (a, b) => Math.abs(px[a * 4] - px[b * 4]) + Math.abs(px[a * 4 + 1] - px[b * 4 + 1]) + Math.abs(px[a * 4 + 2] - px[b * 4 + 2]);
+                // Border colour = most common corner tone (median of the 4 corners' brightness)
+                const corners = [0, w - 1, (h - 1) * w, n - 1];
+                const lum = (p) => px[p * 4] + px[p * 4 + 1] + px[p * 4 + 2];
+                const ref = corners.slice().sort((a, b) => lum(a) - lum(b))[1];
+                const far = (p) => Math.abs(px[p * 4] - px[ref * 4]) + Math.abs(px[p * 4 + 1] - px[ref * 4 + 1]) + Math.abs(px[p * 4 + 2] - px[ref * 4 + 2]);
+                const seed = (p) => { if (!bg[p] && far(p) < 90) { bg[p] = 1; queue[qt++] = p; } };
+                for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+                for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+                while (qh < qt) {
+                    const p = queue[qh++];
+                    const x = p % w;
+                    const tryq = (q) => { if (!bg[q] && diff(p, q) < 30 && far(q) < 200) { bg[q] = 1; queue[qt++] = q; } };
+                    if (x > 0) tryq(p - 1);
+                    if (x < w - 1) tryq(p + 1);
+                    if (p >= w) tryq(p - w);
+                    if (p < n - w) tryq(p + w);
+                }
+                const removed = qt / n;
+                // most of the border must be background, otherwise it is a full-bleed picture
+                let borderBg = 0;
+                for (let x = 0; x < w; x++) borderBg += bg[x] + bg[(h - 1) * w + x];
+                for (let y = 0; y < h; y++) borderBg += bg[y * w] + bg[y * w + w - 1];
+                const borderTotal = 2 * (w + h);
+                if (borderBg > borderTotal * 0.55 && removed > 0.03 && removed < 0.95) {
+                    for (let p = 0; p < n; p++) {
+                        if (bg[p]) { px[p * 4 + 3] = 0; continue; }
+                        // soften the 1px edge next to the removed background (no white fringe)
+                        const x = p % w;
+                        const edge = (x > 0 && bg[p - 1]) || (x < w - 1 && bg[p + 1]) || (p >= w && bg[p - w]) || (p < n - w && bg[p + w]);
+                        if (edge) px[p * 4 + 3] = Math.min(255, Math.round(far(p) * 1.6));
+                    }
+                    g.putImageData(id, 0, 0);
+                    out = c;
+                }
+            }
+        } catch (err) { out = img; /* cross-origin artwork: use as it is */ }
+        img._mozCut = { src, canvas: out };
+        return out;
+    }
+
+    // Alpha channel of a canvas as 0..1 floats, and back.
+    function mozMaskOf(canvas) {
+        const g = canvas.getContext('2d', { willReadFrequently: true });
+        const d = g.getImageData(0, 0, canvas.width, canvas.height).data;
+        const a = new Float32Array(canvas.width * canvas.height);
+        for (let i = 0; i < a.length; i++) a[i] = d[i * 4 + 3] / 255;
+        return a;
+    }
+    function mozMaskCanvas(a, w, h) {
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const g = c.getContext('2d');
+        const id = g.createImageData(w, h);
+        for (let i = 0; i < a.length; i++) id.data[i * 4 + 3] = Math.round(Math.max(0, Math.min(1, a[i])) * 255);
+        g.putImageData(id, 0, 0);
+        return c;
+    }
+    // Separable box blur (two passes ~ smooth, round corners) — speed does not depend on radius.
+    function mozBlur(src, w, h, r) {
+        const a = Float32Array.from(src);
+        const t = new Float32Array(a.length);
+        const rr = Math.max(1, Math.round(r / 2));
+        const d = 2 * rr + 1;
+        const pass = (from, to, horizontal) => {
+            const lines = horizontal ? h : w;
+            const len = horizontal ? w : h;
+            const step = horizontal ? 1 : w;
+            for (let l = 0; l < lines; l++) {
+                const o = horizontal ? l * w : l;
+                let s = 0;
+                for (let i = 0; i <= rr && i < len; i++) s += from[o + i * step];
+                for (let i = 0; i < len; i++) {
+                    to[o + i * step] = s / d;
+                    const add = i + rr + 1;
+                    const sub = i - rr;
+                    if (add < len) s += from[o + add * step];
+                    if (sub >= 0) s -= from[o + sub * step];
+                }
+            }
+        };
+        for (let k = 0; k < 2; k++) { pass(a, t, true); pass(t, a, false); }
+        return a;
+    }
+    const mozRamp = (a, lo, hi) => { for (let i = 0; i < a.length; i++) a[i] = a[i] <= lo ? 0 : (a[i] >= hi ? 1 : (a[i] - lo) / (hi - lo)); return a; };
+    // Distance (chamfer, 1 / 1.414) from every pixel to the nearest pixel inside (or outside) the
+    // shape. Used for exact grow / shrink: even hairline strokes (thin script text) count fully.
+    function mozDistance(m, w, h, toInside) {
+        const INF = 1e9;
+        const D2 = 1.4142;
+        const d = new Float32Array(w * h);
+        for (let i = 0; i < d.length; i++) d[i] = (toInside ? m[i] >= 0.35 : m[i] < 0.35) ? 0 : INF;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            let v = d[i];
+            if (!v) continue;
+            if (x > 0 && d[i - 1] + 1 < v) v = d[i - 1] + 1;
+            if (y > 0) {
+                if (d[i - w] + 1 < v) v = d[i - w] + 1;
+                if (x > 0 && d[i - w - 1] + D2 < v) v = d[i - w - 1] + D2;
+                if (x < w - 1 && d[i - w + 1] + D2 < v) v = d[i - w + 1] + D2;
+            }
+            d[i] = v;
+        }
+        for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+            const i = y * w + x;
+            let v = d[i];
+            if (!v) continue;
+            if (x < w - 1 && d[i + 1] + 1 < v) v = d[i + 1] + 1;
+            if (y < h - 1) {
+                if (d[i + w] + 1 < v) v = d[i + w] + 1;
+                if (x < w - 1 && d[i + w + 1] + D2 < v) v = d[i + w + 1] + D2;
+                if (x > 0 && d[i + w - 1] + D2 < v) v = d[i + w - 1] + D2;
+            }
+            d[i] = v;
+        }
+        return d;
+    }
+    const mozGrow = (m, w, h, r) => {                                                    // dilate by r (exact)
+        const d = mozDistance(m, w, h, true);
+        const o = new Float32Array(d.length);
+        for (let i = 0; i < d.length; i++) o[i] = Math.max(0, Math.min(1, r + 0.5 - d[i]));
+        return o;
+    };
+    const mozShrink = (m, w, h, r) => {                                                  // erode by r (exact)
+        const d = mozDistance(m, w, h, false);
+        const o = new Float32Array(d.length);
+        for (let i = 0; i < d.length; i++) o[i] = Math.max(0, Math.min(1, d[i] - r + 0.5));
+        return o;
+    };
+    const mozSmooth = (m, w, h, r) => mozRamp(mozBlur(m, w, h, r), 0.38, 0.62);        // clean edge, drop specks
+    const mozMax = (a, b) => { const o = new Float32Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] > b[i] ? a[i] : b[i]; return o; };
+    const mozMinus = (a, b) => { const o = new Float32Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.max(0, a[i] - b[i]); return o; };
+
+    // Acrylic finish of a backboard colour (same rules as the Neon configurator).
+    function uvBoardFinish(c) {
+        if (!c) return 'gloss';
+        if (c.clear) return 'clear';
+        const f = String(c.finish || '').trim().toLowerCase();
+        if (['clear', 'gloss', 'shiny', 'frosted'].indexOf(f) > -1) return f;
+        const l = String(c.name || '').toLowerCase();
+        if (/frost|matte/.test(l)) return 'frosted';
+        if (/shiny|mirror|chrome/.test(l)) return 'shiny';
+        return 'gloss';
+    }
+
     // Draws the whole sign — graphic, optional neon text and quick symbols, the neon lighting and
-    // the cut-around contour — on ONE canvas, so the lighting is identical on every backboard and a
-    // cut-around board follows the outline of everything. Redrawn only when an input changes.
+    // the cut-around / stand contour — on ONE canvas, so the lighting is identical on every
+    // backboard and a cut-around board follows the outline of everything. The shape work (cut-out,
+    // masks) is cached per layout; colour changes only repaint.
     function uvCompose(ctx, o) {
         const art = ctx._uv.art;
         let cv = ctx._uv.canvas;
@@ -1117,7 +1300,6 @@
         const gh0 = graphic.naturalHeight || graphic.height;
         // Layout in reference units (graphic 100 high).
         const R = 100;
-        const items = [];
         const gW = R * (gw0 / gh0);
         const G = { x: 0, y: 0, w: gW, h: R };
         let text = null;
@@ -1174,23 +1356,29 @@
         const H = Math.round(bh * s);
 
         const pad = 40;
-        const key = [graphic.src || 'ph', o.text, o.font, o.textPos, o.symPos, o.symbols.map((x) => x.src).join(','), o.contour, o.tube, o.light, o.glow, o.unlitText, W, H].join('|');
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        let fontReady = true;
+        try { fontReady = !o.text || !document.fonts || document.fonts.check('400 30px ' + o.font); } catch (err) { fontReady = true; }
+        const geoKey = [graphic.src || 'ph', fontReady, o.text, o.font, o.textPos, o.symPos, o.symbols.map((x) => x.src).join(','), W, H, dpr].join('|');
+        const key = [geoKey, o.board.kind, o.board.finish, o.board.colour, o.tube, o.light, o.glow, o.unlitText, o.wallShadow].join('|');
         cv.hidden = false;
         art.style.width = W + 'px';
         art.style.height = H + 'px';
         if (cv._key === key) return { W, H };
         cv._key = key;
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
         cv.width = Math.round((W + pad * 2) * dpr);
         cv.height = Math.round((H + pad * 2) * dpr);
         cv.style.width = (W + pad * 2) + 'px';
         cv.style.height = (H + pad * 2) + 'px';
         cv.style.left = -pad + 'px';
         cv.style.top = -pad + 'px';
+        const CW = cv.width;
+        const CH = cv.height;
         const X = (v) => (pad + (v - minX) * s) * dpr;
         const Y = (v) => (pad + (v - minY) * s) * dpr;
         const L = (v) => v * s * dpr;
-        const make = () => { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; return c; };
+        const D = (v) => v * dpr;
+        const make = () => { const c = document.createElement('canvas'); c.width = CW; c.height = CH; return c; };
         const tint = (src, colour) => {
             const c = make();
             const g = c.getContext('2d');
@@ -1200,67 +1388,135 @@
             g.fillRect(0, 0, c.width, c.height);
             return c;
         };
-        const ring = (g, src, r) => {
-            for (let a = 0; a < 360; a += 22.5) {
-                const rad = a * Math.PI / 180;
-                g.drawImage(src, Math.cos(rad) * r * dpr, Math.sin(rad) * r * dpr);
+
+        // ---- Shapes (cached per layout) ----
+        if (!cv._geo || cv._geo.key !== geoKey) {
+            const cut = mozArtCutout(graphic);
+            const print = make();
+            print.getContext('2d').drawImage(cut, X(G.x), Y(G.y), L(G.w), L(G.h));
+            const tSil = make();
+            if (TG) {
+                const g = tSil.getContext('2d');
+                g.font = '400 ' + L(text.fpx) + 'px ' + o.font;
+                g.textBaseline = 'alphabetic';
+                g.fillStyle = '#000';
+                g.fillText(o.text, X(TG.x + TG.T.x), Y(TG.y + TG.T.y + text.asc));
+                let sx = TG.x + TG.SY.x;
+                syms.forEach((sy) => {
+                    g.drawImage(sy.im, X(sx), Y(TG.y + TG.SY.y), L(sy.w), L(sy.h));
+                    sx += sy.w + text.fpx * 0.3 * 0.6;
+                });
             }
-        };
-        // Silhouettes
-        const gSil = make();
-        gSil.getContext('2d').drawImage(graphic, X(G.x), Y(G.y), L(G.w), L(G.h));
-        const tSil = make();
-        if (TG) {
-            const g = tSil.getContext('2d');
-            g.font = '400 ' + L(text.fpx) + 'px ' + o.font;
-            g.textBaseline = 'alphabetic';
-            g.fillStyle = '#000';
-            g.fillText(o.text, X(TG.x + TG.T.x), Y(TG.y + TG.T.y + text.asc));
-            let sx = TG.x + TG.SY.x;
-            syms.forEach((sy) => {
-                g.drawImage(sy.im, X(sx), Y(TG.y + TG.SY.y), L(sy.w), L(sy.h));
-                sx += sy.w + text.fpx * 0.3 * 0.6;
-            });
+            let geo;
+            try {
+                // Clean graphic shape: specks and hairlines removed, small gaps closed, so the
+                // neon follows the real outline of the design instead of every tiny detail.
+                const mg = mozSmooth(mozMaskOf(print), CW, CH, D(1.5));
+                const closed = mozShrink(mozGrow(mg, CW, CH, D(7)), CW, CH, D(7));
+                const shape = mozMax(mg, closed);
+                const lw = Math.max(1.6, Math.min(3.2, W / 170));
+                const tubeIn = mozGrow(shape, CW, CH, D(2.5));
+                const tubeOut = mozGrow(shape, CW, CH, D(2.5 + lw));
+                const tube = mozMinus(tubeOut, tubeIn);
+                const mt = TG ? mozMaskOf(tSil) : new Float32Array(CW * CH);
+                // Cut-around board: one connected piece around the neon + text, bridging gaps
+                const union = mozMax(tubeOut, mt);
+                const board = mozSmooth(mozShrink(mozGrow(union, CW, CH, D(28)), CW, CH, D(18)), CW, CH, D(6));
+                const inner = mozShrink(board, CW, CH, D(1.6));
+                geo = {
+                    print,
+                    tSil,
+                    tube: mozMaskCanvas(tube, CW, CH),
+                    board: mozMaskCanvas(board, CW, CH),
+                    ring: mozMaskCanvas(mozMinus(board, inner), CW, CH),
+                    shape: mozMaskCanvas(shape, CW, CH)
+                };
+            } catch (err) {
+                // Canvas read blocked (cross-origin artwork): simple shapes from the bounding box
+                const box = make();
+                const bxg = box.getContext('2d');
+                bxg.fillStyle = '#000';
+                bxg.fillRect(X(G.x), Y(G.y), L(G.w), L(G.h));
+                bxg.drawImage(tSil, 0, 0);
+                const ring = make();
+                const rg = ring.getContext('2d');
+                rg.strokeStyle = '#000';
+                rg.lineWidth = D(2.5);
+                rg.strokeRect(X(G.x) - D(4), Y(G.y) - D(4), L(G.w) + D(8), L(G.h) + D(8));
+                geo = { print, tSil, tube: ring, board: box, ring, shape: box };
+            }
+            geo.key = geoKey;
+            cv._geo = geo;
         }
+        const geo = cv._geo;
+
         const g = cv.getContext('2d');
-        g.clearRect(0, 0, cv.width, cv.height);
-        // 1) Cut-around board contour (behind everything, follows graphic + text + symbols)
-        if (o.contour) {
-            const both = make();
-            const bg = both.getContext('2d');
-            bg.drawImage(gSil, 0, 0);
-            bg.drawImage(tSil, 0, 0);
-            const contour = make();
-            const cg = contour.getContext('2d');
-            ring(cg, tint(both, o.contour), 9);
-            ring(cg, tint(both, o.contour), 5);
-            g.save();
-            g.shadowColor = 'rgba(0,0,0,0.3)';
-            g.shadowBlur = 12 * dpr;
-            g.shadowOffsetX = 3 * dpr;
-            g.shadowOffsetY = 8 * dpr;
-            g.drawImage(contour, 0, 0);
-            g.restore();
+        g.clearRect(0, 0, CW, CH);
+        // 1) Cut-around / acrylic-stand contour behind everything (graphic + neon + text + symbols)
+        if (o.board.kind === 'cut' || o.board.kind === 'stand') {
+            if (o.board.finish === 'clear') {
+                // Clear acrylic: see-through with a thin grey edge and a faint glass tint
+                g.save();
+                g.shadowColor = 'rgba(0,0,0,0.12)';
+                g.shadowBlur = D(6);
+                g.shadowOffsetY = D(3);
+                g.drawImage(tint(geo.board, 'rgba(255,255,255,0.07)'), 0, 0);
+                g.restore();
+                g.drawImage(tint(geo.ring, 'rgba(154,154,154,0.95)'), 0, 0);
+            } else {
+                const col = o.board.colour || '#e8e8e8';
+                g.save();
+                g.shadowColor = 'rgba(0,0,0,0.32)';
+                g.shadowBlur = D(12);
+                g.shadowOffsetX = D(3);
+                g.shadowOffsetY = D(8);
+                g.drawImage(tint(geo.board, col), 0, 0);
+                g.restore();
+                // Finish: gloss / shiny reflections or a frosted sheen, kept inside the board
+                const fin = make();
+                const fg = fin.getContext('2d');
+                if (o.board.finish === 'frosted') {
+                    fg.fillStyle = 'rgba(255,255,255,0.12)';
+                    fg.fillRect(0, 0, CW, CH);
+                } else {
+                    const lg = fg.createLinearGradient(0, 0, CW, CH);
+                    if (o.board.finish === 'shiny') {
+                        [[0, 0], [0.14, 0.5], [0.28, 0], [0.45, 0], [0.6, 0.42], [0.76, 0], [0.92, 0.28], [1, 0]].forEach((st) => lg.addColorStop(st[0], 'rgba(255,255,255,' + st[1] + ')'));
+                    } else {
+                        lg.addColorStop(0, 'rgba(255,255,255,0.42)');
+                        lg.addColorStop(0.32, 'rgba(255,255,255,0.06)');
+                        lg.addColorStop(0.55, 'rgba(255,255,255,0)');
+                        lg.addColorStop(0.78, 'rgba(0,0,0,0.12)');
+                        lg.addColorStop(1, 'rgba(0,0,0,0.25)');
+                    }
+                    fg.fillStyle = lg;
+                    fg.fillRect(0, 0, CW, CH);
+                }
+                fg.globalCompositeOperation = 'destination-in';
+                fg.drawImage(geo.board, 0, 0);
+                g.drawImage(fin, 0, 0);
+                // Polished acrylic edge
+                g.drawImage(tint(geo.ring, luminance(col) > 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.22)'), 0, 0);
+            }
         } else if (o.wallShadow) {
             g.save();
             g.shadowColor = 'rgba(0,0,0,0.3)';
-            g.shadowBlur = 12 * dpr;
-            g.shadowOffsetX = 3 * dpr;
-            g.shadowOffsetY = 8 * dpr;
-            g.drawImage(gSil, 0, 0);
+            g.shadowBlur = D(12);
+            g.shadowOffsetX = D(3);
+            g.shadowOffsetY = D(8);
+            g.drawImage(geo.print, 0, 0);
             g.restore();
         }
-        // 2) Light layer: neon tube traced around the graphic + the neon text / symbols
-        const tube = make();
-        if (o.tube) ring(tube.getContext('2d'), tint(gSil, o.tube), 2.5);
-        const textLayer = TG ? tint(tSil, o.light || o.unlitText) : null;
+        // 2) Light layer: one neon tube following the outline of the graphic + the neon text
+        const tube = o.tube ? tint(geo.tube, o.tube) : null;
+        const textLayer = TG ? tint(geo.tSil, o.light || o.unlitText) : null;
         if (o.glow) {
             g.save();
             g.shadowColor = o.glow;
-            g.shadowBlur = 24 * dpr;
-            g.drawImage(tube, 0, 0);
-            g.shadowBlur = 8 * dpr;
-            g.drawImage(tube, 0, 0);
+            g.shadowBlur = D(22);
+            if (tube) g.drawImage(tube, 0, 0);
+            g.shadowBlur = D(8);
+            if (tube) g.drawImage(tube, 0, 0);
             if (textLayer) {
                 g.shadowBlur = Math.max(3, L(text.fpx) * 0.18);
                 g.drawImage(textLayer, 0, 0);
@@ -1269,10 +1525,20 @@
             }
             g.restore();
         }
-        // 3) Neon tube behind the artwork edge, the artwork itself, then the neon text on top
-        g.drawImage(tube, 0, 0);
-        g.drawImage(graphic, X(G.x), Y(G.y), L(G.w), L(G.h));
-        if (textLayer) g.drawImage(textLayer, 0, 0);
+        // 3) Printed artwork (background removed), the neon tube, then the neon text on top. The
+        //    tube / text get a small contact shadow so light colours stay readable on any board.
+        g.drawImage(geo.print, 0, 0);
+        const contact = (layer) => {
+            g.save();
+            g.shadowColor = o.glow ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.38)';
+            g.shadowBlur = D(2.5);
+            g.shadowOffsetX = D(0.8);
+            g.shadowOffsetY = D(1.4);
+            g.drawImage(layer, 0, 0);
+            g.restore();
+        };
+        if (tube) contact(tube);
+        if (textLayer) contact(textLayer);
         return { W, H };
     }
 
@@ -1367,7 +1633,7 @@
                 textSteps.push(sStep);
                 const spStep = ctx.step('Symbol Position', { note: 'Where the symbols sit next to your text.' });
                 const spCtl = ctx.cards('symPos', posItems.map((p) => Object.assign({}, p)), { price: 'none', cols: 4, compact: true });
-                spCtl.select(2, true);
+                spCtl.select(0, true);
                 spStep.appendChild(spCtl.el);
                 textSteps.push(spStep);
             }
@@ -1402,6 +1668,17 @@
                 if (colours.length) s.appendChild(ctx.swatches('colour', colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
                 ledSteps.push(s);
             }
+
+            // Where the neon goes — every design is different. Saved with the order (line item
+            // property), so it shows in the Shopify order details for production.
+            const nStep = ctx.step('Neon Lighting Instructions (optional)', { note: 'Every design is different — tell us exactly where you want the neon lighting added to your design.' });
+            const notes = el('textarea', 'moz-cfg__text-input moz-cfg__notes');
+            notes.rows = 4;
+            notes.maxLength = 1000;
+            notes.placeholder = 'Example: Neon around the outer outline of the logo only, plus under the text — not around the small details.';
+            notes.addEventListener('input', () => { ctx.lightNotes = notes.value; });
+            nStep.appendChild(notes);
+            ledSteps.push(nStep);
 
             const sizeStep = ctx.step('Choose Size');
             sizeCtl = ctx.cards('size', sizeCards(), { price: 'full', cols: 2, onChange: () => { if (typeCtl) refreshTypes(); } });
@@ -1505,6 +1782,7 @@
                 const art = el('div', 'moz-uvb__art');
                 board.appendChild(art);
                 ['tl', 'tr', 'bl', 'br'].forEach((c) => board.appendChild(el('span', 'moz-uvb__standoff is-' + c)));
+                ['tl', 'tr', 'bl', 'br'].forEach((c) => board.appendChild(el('span', 'moz-uvb__clamp is-' + c)));
                 wrap.appendChild(board);
                 wrap.appendChild(el('div', 'moz-uvb__stand'));
                 sign.appendChild(wrap);
@@ -1522,9 +1800,11 @@
             const size = ctx.v.size ? ctx.v.size.src : null;
             const kind = ctx.v.style ? ctx.v.style.board : 'cut';
             if (ctx.boardStep) ctx.boardStep.hidden = kind === 'naked';
-            const bc = ctx.v.board || { solid: '#ffffff', clear: false, finish: '' };
-            board.style.setProperty('--moz-board', bc.clear ? 'rgba(255,255,255,0.14)' : bc.solid);
-            wrap.className = 'moz-uvb is-' + kind + (bc.clear ? ' is-clear' : '') + (/frost|matt/i.test(bc.finish || '') ? ' is-frosted' : '');
+            const bc = ctx.v.board || { name: '', solid: '#ffffff', clear: false, finish: '' };
+            const finish = uvBoardFinish(bc);
+            // Clear = see-through acrylic with a thin grey edge (never the stored hex) — as on Neon
+            board.style.setProperty('--moz-board', finish === 'clear' ? '#9a9a9a' : bc.solid);
+            wrap.className = 'moz-uvb is-' + kind + ' is-fin-' + finish + (finish === 'clear' ? ' is-clear' : '');
             const led = ctx.isLed();
             const lit = led && ctx.ledOn;
             const c = glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ff2ec4');
@@ -1536,7 +1816,7 @@
             const f = ctx.free();
             const fit = Math.min(1, Math.max(0.5, f.w / 640));
             const wCm = size ? num(size.w) : 60;
-            const boardPad = (kind === 'cut' || kind === 'naked') ? 1 : 1.2;
+            const boardPad = (kind === 'rect' || kind === 'openbox') ? 1.25 : 1;
             const targetW = Math.min(f.w * 0.92 / boardPad, 24.5 * Math.sqrt(Math.max(10, wCm)) * fit);
             const textMode = ctx.hasText();
             const symbols = textMode ? (ctx.v.symbols || []).map((sym) => uvSymbolImg(ctx, sym.u)).filter(Boolean) : [];
@@ -1552,9 +1832,9 @@
                 text,
                 font: fontFamily,
                 textPos: ctx.v.textPos ? ctx.v.textPos.key : 'bottom',
-                symPos: ctx.v.symPos ? ctx.v.symPos.key : 'right',
+                symPos: ctx.v.symPos ? ctx.v.symPos.key : 'left',
                 symbols,
-                contour: kind === 'cut' ? (bc.clear ? 'rgba(255,255,255,0.6)' : bc.solid) : '',
+                board: { kind, finish, colour: bc.solid },
                 wallShadow: kind === 'naked',
                 tube: lit ? lightTint : (led ? '#e9e9ee' : ''),
                 light: lit ? uvMixWhite(c, 0.4) : '',
@@ -1587,7 +1867,7 @@
                 if (ctx.v.font) p['Font'] = ctx.v.font.label;
                 if ((ctx.v.symbols || []).length) {
                     p['Quick Symbols'] = ctx.v.symbols.map((x) => x.l).join(', ');
-                    p['Symbol Position'] = ctx.v.symPos ? ctx.v.symPos.label : 'Right';
+                    p['Symbol Position'] = ctx.v.symPos ? ctx.v.symPos.label : 'Left';
                 }
             }
             if (led) {
@@ -1595,6 +1875,8 @@
                 if (ctx.v.colour) p['Neon Colour'] = ctx.v.colour.name;
                 if (ctx.v.neonType) p['Neon Type'] = ctx.v.neonType.label;
                 if (ctx.v.power) p['Power Adapter'] = ctx.v.power.label;
+                const notes = String(ctx.lightNotes || '').trim();
+                if (notes) p['Neon Lighting Instructions'] = notes;
             }
             return p;
         }
@@ -1664,38 +1946,37 @@
                 g.drawImage(src, Math.cos(rad) * S(r), Math.sin(rad) * S(r));
             }
         };
-        // Design silhouette: the artwork's transparency, or — for artwork on a plain background
-        // (JPG / PNG without transparency) — everything that differs from the corner colour.
+        // Design shape: the artwork with its background removed (transparent PNG, or JPG / PNG on a
+        // plain / soft background), and the frosted backboard as one smooth outline around it.
         const sil = make();
-        const silG = sil.getContext('2d', { willReadFrequently: true });
-        silG.drawImage(g0, S(ox), S(oy), S(W), S(H));
-        try {
-            const x0 = Math.round(S(ox)), y0 = Math.round(S(oy)), w0 = Math.max(1, Math.round(S(W))), h0 = Math.max(1, Math.round(S(H)));
-            const img = silG.getImageData(x0, y0, w0, h0);
-            const px = img.data;
-            let transparent = 0;
-            for (let i = 3; i < px.length; i += 16) if (px[i] < 200) transparent++;
-            if (transparent < (px.length / 16) * 0.02) {
-                const at = (x, y) => { const i = (y * w0 + x) * 4; return [px[i], px[i + 1], px[i + 2]]; };
-                const corners = [at(1, 1), at(w0 - 2, 1), at(1, h0 - 2), at(w0 - 2, h0 - 2)];
-                const bgc = [0, 1, 2].map((k) => corners.reduce((a, c) => a + c[k], 0) / 4);
-                for (let i = 0; i < px.length; i += 4) {
-                    const d = Math.abs(px[i] - bgc[0]) + Math.abs(px[i + 1] - bgc[1]) + Math.abs(px[i + 2] - bgc[2]);
-                    px[i + 3] = d > 90 ? 255 : (d > 45 ? Math.round((d - 45) / 45 * 255) : 0);
-                }
-                silG.putImageData(img, x0, y0);
-            }
-        } catch (err) { /* cross-origin artwork: keep its own transparency */ }
-        // Frosted white backboard = design outline + top hook + bottom tab
+        sil.getContext('2d').drawImage(mozArtCutout(g0), S(ox), S(oy), S(W), S(H));
+        // Frosted white backboard = smooth design outline + top hook + bottom tab
         const board = make();
         const bg = board.getContext('2d');
-        ring(bg, tint(sil, '#000'), 9);
-        ring(bg, tint(sil, '#000'), 5);
         const tabW = Math.max(16, W * 0.12);
+        // Where the hook / tab meet the shape (top-most / bottom-most edge around the centre line)
+        let topY = oy;
+        let botY = oy + H;
+        try {
+            const cw = cv.width;
+            const m = mozSmooth(mozMaskOf(sil), cw, cv.height, S(1.5));
+            const outline = mozSmooth(mozShrink(mozGrow(m, cw, cv.height, S(10)), cw, cv.height, S(3)), cw, cv.height, S(2.5));
+            bg.drawImage(mozMaskCanvas(outline, cw, cv.height), 0, 0);
+            const x0 = Math.round(S(ox + W / 2 - tabW / 2));
+            const x1 = Math.round(S(ox + W / 2 + tabW / 2));
+            let top = -1;
+            let bot = -1;
+            for (let y = 0; y < cv.height && top < 0; y++) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { top = y; break; }
+            for (let y = cv.height - 1; y >= 0 && bot < 0; y--) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { bot = y; break; }
+            if (top > -1 && bot > top) { topY = top / dpr; botY = bot / dpr; }
+        } catch (err) {
+            ring(bg, tint(sil, '#000'), 9);
+            ring(bg, tint(sil, '#000'), 5);
+        }
         const roundRect = (x, y, w, h, r) => { bg.beginPath(); if (bg.roundRect) bg.roundRect(S(x), S(y), S(w), S(h), S(r)); else bg.rect(S(x), S(y), S(w), S(h)); bg.fill(); };
         bg.fillStyle = '#000';
-        roundRect(ox + W / 2 - tabW / 2, oy - tabH - 2, tabW, tabH + 12, 4);
-        roundRect(ox + W / 2 - tabW / 2, oy + H - 10, tabW, tabH + 12, 4);
+        roundRect(ox + W / 2 - tabW / 2, topY - tabH - 2, tabW, tabH + 12, 4);
+        roundRect(ox + W / 2 - tabW / 2, botY - 10, tabW, tabH + 12, 4);
         // Light layer (own canvas so RGB can cycle colours without tinting the print):
         // lit = the whole acrylic panel glows in the LED colour, evenly from behind, no outer glow;
         // off = plain frosted acrylic with a soft wall shadow.
@@ -1727,7 +2008,7 @@
         g.clearRect(0, 0, cv.width, cv.height);
         // Screw holes in the hook and the tab
         g.fillStyle = 'rgba(70,70,80,0.75)';
-        [oy - tabH * 0.55, oy + H + tabH * 0.45].forEach((y) => { g.beginPath(); g.arc(S(ox + W / 2), S(y), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2); g.fill(); });
+        [topY - tabH * 0.55, botY + tabH * 0.45].forEach((y) => { g.beginPath(); g.arc(S(ox + W / 2), S(y), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2); g.fill(); });
         // Graphic print on the front of the acrylic, cut to the design outline
         const printed = make();
         const pg = printed.getContext('2d');
