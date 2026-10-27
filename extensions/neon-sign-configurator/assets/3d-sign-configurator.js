@@ -297,9 +297,9 @@ function sign3dBuildSideShadow(depthMm, sideHex, tone) {
 // Marquee / Infinity letters are deep boxes: a return in the side colour sized in em (so it
 // scales with the letters and stays clearly visible at every size), shaded darker toward the
 // back so the side reads even when it is the same colour as the face, plus a soft wall shadow.
-function sign3dBuildLetterDepth(depthMm, sideHex, tone) {
+function sign3dBuildLetterDepth(depthMm, sideHex, tone, scale) {
     const rgb = sign3dToneRgb(sign3dParseHex(sideHex), tone);
-    const D = Math.max(0.05, Math.min(0.11, 0.05 + (Number(depthMm) || 50) / 2000));
+    const D = Math.max(0.05, Math.min(0.11, 0.05 + (Number(depthMm) || 50) / 2000)) * (scale || 1);
     const layers = [];
     const n = 16;
     for (let k = 1; k <= n; k++) {
@@ -732,7 +732,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v2';
+    const key = fontCss + '|' + ch + '|v3';
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -951,7 +951,28 @@ function sign3dBulbPoints(ch, fontCss) {
     const keep = [];
     const minD = gap * 0.5;
     out.forEach((p) => { if (keep.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= minD * minD)) keep.push(p); });
-    const res = keep.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: dia / S }));
+    // Centre every bulb across its stroke (thin serif bars / horizontals included) and keep it
+    // fully inside the letter: it moves to the thickest nearby point and is never wider than the
+    // stroke there, so no bulb sticks out over an edge.
+    const R0 = Math.max(2, Math.round(hw * 0.7));
+    const fitted = keep.map((p) => {
+        const px0 = Math.round(p.x);
+        const py0 = Math.round(p.y);
+        let bx = px0, by = py0, best = -1e9;
+        for (let dy = -R0; dy <= R0; dy++) for (let dx = -R0; dx <= R0; dx++) {
+            const x = px0 + dx, y = py0 + dy;
+            if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+            const dd = dist[y * W + x];
+            if (!dd) continue;
+            const score = dd - 0.35 * Math.sqrt(dx * dx + dy * dy);
+            if (score > best) { best = score; bx = x; by = y; }
+        }
+        const local = dist[by * W + bx] || 1;
+        return { x: bx, y: by, d: Math.max(S * 0.02, Math.min(dia, local * 1.55)) };
+    });
+    const placed = [];
+    fitted.forEach((p) => { if (placed.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= (minD * 0.8) * (minD * 0.8))) placed.push(p); });
+    const res = placed.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: p.d / S }));
     if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
     return res;
 }
@@ -961,7 +982,7 @@ function sign3dBulbPoints(ch, fontCss) {
 // the tunnel. Returned as a white mask (data URL) — the LED colour comes from CSS — plus its box
 // in em (x from the letter's left edge, y from the baseline).
 function sign3dInfinityMask(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|inf';
+    const key = fontCss + '|' + ch + '|inf4';
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 160;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -969,10 +990,13 @@ function sign3dInfinityMask(ch, fontCss) {
     const { W, H, ox, base, dist } = f;
     const hw = sign3dStrokeHalf(fontCss, S);
     const rings = [];
-    const q = 0.6;
-    for (let k = 0; k < 5; k++) {
-        const r = 1.8 + (hw * 0.92 - 1.8) * (1 - Math.pow(q, k));
-        rings.push({ r, a: [1, 0.85, 0.68, 0.52, 0.38][k], w: Math.max(1, hw * [0.15, 0.12, 0.1, 0.085, 0.07][k]) });
+    const q = 0.55;
+    const r0 = Math.max(2.5, hw * 0.22);
+    const AL = [1, 0.85, 0.68, 0.5];
+    const WD = [0.12, 0.1, 0.085, 0.075];
+    for (let k = 0; k < AL.length; k++) {
+        const r = r0 + (hw * 0.96 - r0) * (1 - Math.pow(q, k));
+        rings.push({ r, a: AL[k], w: Math.max(0.9, hw * WD[k]) });
     }
     const c = document.createElement('canvas');
     c.width = W;
@@ -987,7 +1011,8 @@ function sign3dInfinityMask(ch, fontCss) {
             const v = rings[k].a * Math.min(1, 1.6 * Math.max(0, 1 - Math.abs(d - rings[k].r) / rings[k].w));
             if (v > a) a = v;
         }
-        if (a <= 0) continue;
+        // faint light filling the mirror between the lines (strongest near the front edge)
+        a = Math.max(a, 0.02 * Math.max(0, 1 - d / hw));
         id.data[i * 4] = 255;
         id.data[i * 4 + 1] = 255;
         id.data[i * 4 + 2] = 255;
@@ -1584,7 +1609,8 @@ function initSign3dConfigurator(root) {
         const depthMm = parseFloat(depthOption?.value) || 10;
         if (previewInnerForLed) {
             const deepLetters = root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity';
-            const depthFn = deepLetters ? sign3dBuildLetterDepth : sign3dBuildSideShadow;
+            const depthScale = root.dataset.sign3dMode === 'infinity' ? 1.3 : 1;
+            const depthFn = deepLetters ? (d, h, tone) => sign3dBuildLetterDepth(d, h, tone, depthScale) : sign3dBuildSideShadow;
             previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow', depthFn(depthMm, selectedSideHex));
             previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-dark', depthFn(depthMm, selectedSideHex, 'dark'));
             previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-lit', depthFn(depthMm, selectedSideHex, 'lit'));

@@ -2802,3 +2802,20 @@
     opacity: 0.45;
     cursor: not-allowed;
 }
+/* =====================================================================
+   Infinity Mirror letters — closer to real infinity letters: the side
+   wall shows as a frame around the mirror face (side colour), the LED
+   tunnel lines glow, the face is a dark glass mirror.
+   ===================================================================== */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
+    color: #07080d;
+    -webkit-text-stroke: 0.06em var(--sign3d-side, #e9e9ee);
+    paint-order: stroke fill;
+}
+
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-inner.led-on .sign3d-configurator__tunnel {
+    filter:
+        drop-shadow(0 0 0.6px var(--sign3d-light, #29d3ff))
+        drop-shadow(0 0 2px color-mix(in srgb, var(--sign3d-light, #29d3ff) 80%, transparent));
+}
