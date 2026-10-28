@@ -1377,8 +1377,12 @@
         const bh = cur.bh;
         // One scale that fits EVERY text / symbol position, so changing a position only moves
         // the text or symbols — nothing grows or shrinks.
-        const fitScale = (l) => Math.min(o.targetW / l.bw, o.maxH / l.bh);
-        let s = fitScale(cur);
+        // The GRAPHIC keeps the same size with or without text (it follows the chosen size);
+        // text / symbols are added around it, and everything only shrinks when it would not fit
+        // the preview area.
+        const maxW = o.maxW || o.targetW;
+        const fitScale = (l) => Math.min(maxW / l.bw, o.maxH / l.bh);
+        let s = Math.min(o.targetW / gW, o.maxH / R, fitScale(cur));
         if (text) {
             ['left', 'top', 'right', 'bottom'].forEach((tp) => {
                 (syms.length ? ['left', 'top', 'right', 'bottom'] : [o.symPos]).forEach((sp) => { s = Math.min(s, fitScale(layout(tp, sp))); });
@@ -1453,7 +1457,10 @@
                 const mt = TG ? mozMaskOf(tSil) : new Float32Array(CW * CH);
                 // Cut-around board: one connected piece around the neon + text, bridging gaps
                 const union = mozMax(tubeOut, mt);
-                const board = mozSmooth(mozShrink(mozGrow(union, CW, CH, D(28)), CW, CH, D(18)), CW, CH, D(6));
+                // bridge gaps between graphic and text (grows with the sign), then fill every
+                // enclosed hole so the cut-around board is one solid piece
+                const bridgeR = D(28) + L(R * 0.08);
+                const board = mozSmooth(mozFillHoles(mozShrink(mozGrow(union, CW, CH, bridgeR), CW, CH, bridgeR - D(10)), CW, CH), CW, CH, D(6));
                 const inner = mozShrink(board, CW, CH, D(1.6));
                 geo = {
                     print,
@@ -1879,6 +1886,7 @@
                 unlitText: led ? '#e9e9ee' : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
                 glow: lit ? c : '',
                 targetW,
+                maxW: f.w * 0.92 / boardPad,
                 maxH: f.h * 0.92 / boardPad
             });
             // Stand base + shelf scale with the sign (Neon: --moz-stand-unit)
