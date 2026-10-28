@@ -2712,6 +2712,15 @@
     background: radial-gradient(ellipse at 50% 45%, #ffffff 0%, #fdfdf9 60%, #f1f1e9 100%);
 }
 
+/* Uploaded artwork printed edge to edge on the face (cover, follows the shape) */
+.sign3d-lbx.has-art .sign3d-lbx__face,
+.sign3d-lbx.has-art.is-lit .sign3d-lbx__face {
+    background: var(--lbx-art) center / cover no-repeat, #ffffff;
+}
+.sign3d-lbx.has-art:not(.is-lit) .sign3d-lbx__face { filter: brightness(0.82) saturate(0.9); }
+.sign3d-lbx.has-art.is-lit .sign3d-lbx__face { filter: brightness(1.04) saturate(1.05); }
+.sign3d-configurator__preview-inner.lbx-art-fill img { opacity: 0 !important; }
+
 .sign3d-lbx {
     filter: drop-shadow(10px 20px 18px rgba(0, 0, 0, 0.35));
 }

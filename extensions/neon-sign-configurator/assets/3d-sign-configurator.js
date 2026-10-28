@@ -745,7 +745,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v3';
+    const key = fontCss + '|' + ch + '|v4';
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -984,7 +984,13 @@ function sign3dBulbPoints(ch, fontCss) {
         return { x: bx, y: by, d: Math.max(S * 0.02, Math.min(dia, local * 1.55)) };
     });
     const placed = [];
-    fitted.forEach((p) => { if (placed.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= (minD * 0.8) * (minD * 0.8))) placed.push(p); });
+    fitted.forEach((p) => {
+        const ok = placed.every((q) => {
+            const need = Math.max(minD * 0.8, (p.d + q.d) / 2 * 1.3);
+            return (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= need * need;
+        });
+        if (ok) placed.push(p);
+    });
     const res = placed.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: p.d / S }));
     if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
     return res;
@@ -995,7 +1001,7 @@ function sign3dBulbPoints(ch, fontCss) {
 // the tunnel. Returned as a white mask (data URL) — the LED colour comes from CSS — plus its box
 // in em (x from the letter's left edge, y from the baseline).
 function sign3dInfinityMask(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|inf4';
+    const key = fontCss + '|' + ch + '|inf5';
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 160;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1003,13 +1009,14 @@ function sign3dInfinityMask(ch, fontCss) {
     const { W, H, ox, base, dist } = f;
     const hw = sign3dStrokeHalf(fontCss, S);
     const rings = [];
-    const q = 0.55;
-    const r0 = Math.max(2.5, hw * 0.22);
-    const AL = [1, 0.85, 0.68, 0.5];
-    const WD = [0.12, 0.1, 0.085, 0.075];
+    const q = 0.72;
+    const r0 = Math.max(2.5, hw * 0.2);
+    const AL = [1, 0.86, 0.72, 0.6, 0.49, 0.4, 0.32, 0.25];
+    const WD = [0.12, 0.1, 0.088, 0.078, 0.07, 0.064, 0.058, 0.054];
     for (let k = 0; k < AL.length; k++) {
         const r = r0 + (hw * 0.96 - r0) * (1 - Math.pow(q, k));
-        rings.push({ r, a: AL[k], w: Math.max(0.9, hw * WD[k]) });
+        // each deeper reflection is shifted toward the vanishing point (down-right) = depth
+        rings.push({ r, a: AL[k], w: Math.max(0.9, hw * WD[k]), dx: Math.round(k * hw * 0.05), dy: Math.round(k * hw * 0.07) });
     }
     const c = document.createElement('canvas');
     c.width = W;
@@ -1020,12 +1027,22 @@ function sign3dInfinityMask(ch, fontCss) {
         const d = dist[i];
         if (!d) continue;
         let a = 0;
+        const x = i % W;
+        const y = (i / W) | 0;
         for (let k = 0; k < rings.length; k++) {
-            const v = rings[k].a * Math.min(1, 1.6 * Math.max(0, 1 - Math.abs(d - rings[k].r) / rings[k].w));
+            const rk = rings[k];
+            const sx = x - rk.dx;
+            const sy = y - rk.dy;
+            const ds = sx > 0 && sy > 0 && sx < W && sy < H ? dist[sy * W + sx] : 0;
+            if (!ds) continue;
+            const core = Math.max(0, 1 - Math.abs(ds - rk.r) / rk.w);
+            const halo = Math.max(0, 1 - Math.abs(ds - rk.r) / (rk.w * 3.2)) * 0.28;
+            const v = rk.a * Math.min(1, 1.6 * core + halo);
             if (v > a) a = v;
         }
         // faint light filling the mirror between the lines (strongest near the front edge)
-        a = Math.max(a, 0.02 * Math.max(0, 1 - d / hw));
+        // faint coloured light reflecting in the mirror, strongest near the front edge
+        a = Math.max(a, 0.09 * Math.max(0, 1 - d / hw));
         id.data[i * 4] = 255;
         id.data[i * 4 + 1] = 255;
         id.data[i * 4 + 2] = 255;
@@ -4418,7 +4435,8 @@ function initSign3dConfigurator(root) {
         if (root.dataset.sign3dMode !== 'lightbox') return 1;
         const key = lbShape ? lbShape.key : 'rectangle';
         const box = key === 'star' ? 2.4 : (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1 ? 1.45 : (key === 'oval' ? 1.5 : 1.3));
-        return box * (getBackingType() === 'bracket' ? 1.3 : 1);
+        // 1.35: the lightbox no longer fills most of the preview (client: "excessively large")
+        return box * (getBackingType() === 'bracket' ? 1.3 : 1) * 1.35;
     }
 
     let lbxEl = null;
@@ -4456,6 +4474,11 @@ function initSign3dConfigurator(root) {
         lbxEl.style.setProperty('--lbx-side', selectedSideHex || '#1a1a1a');
         lbxEl.style.setProperty('--lbx-bracket', selectedBackHex || '#1a1a1a');
         lbxEl.style.setProperty('--lbx-depth', Math.max(5, Math.min(18, Math.min(w, h) * 0.05)) + 'px');
+        // A real upload (not the placeholder) is printed edge to edge on the face.
+        const art = logoPreviewSrc && String(logoPreviewSrc).indexOf('data:') !== 0 ? logoPreviewSrc : '';
+        lbxEl.classList.toggle('has-art', !!art);
+        if (art) lbxEl.style.setProperty('--lbx-art', 'url("' + String(art).replace(/"/g, '\\"') + '")'); else lbxEl.style.removeProperty('--lbx-art');
+        if (previewInner) previewInner.classList.toggle('lbx-art-fill', !!art);
         const tag = lbxEl.querySelector('.sign3d-lbx__tag');
         tag.textContent = lbSides === 'double' ? 'Double-Sided' : '';
         tag.hidden = !tag.textContent;

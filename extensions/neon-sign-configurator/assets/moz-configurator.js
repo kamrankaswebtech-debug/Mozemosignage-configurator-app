@@ -1148,6 +1148,13 @@
                 // gradient / shadow in the background is followed), starting from the image border —
                 // so inner gaps, details and colours of the design are never touched.
                 const seed = (p) => { if (!bg[p] && far(p) < 70) { bg[p] = 1; queue[qt++] = p; } };
+                // A coloured border (e.g. a navy flag field) or a busy photo border is part of the
+                // design, not a background: only a plain white / grey / black border is removed.
+                const neutral = Math.max(px[ref * 4], px[ref * 4 + 1], px[ref * 4 + 2]) - Math.min(px[ref * 4], px[ref * 4 + 1], px[ref * 4 + 2]) < 36;
+                let plain = 0;
+                for (let x = 0; x < w; x++) { if (far(x) < 40) plain++; if (far((h - 1) * w + x) < 40) plain++; }
+                for (let y = 0; y < h; y++) { if (far(y * w) < 40) plain++; if (far(y * w + w - 1) < 40) plain++; }
+                const plainBorder = plain > 2 * (w + h) * 0.7;
                 for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
                 for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
                 while (qh < qt) {
@@ -1165,7 +1172,7 @@
                 for (let x = 0; x < w; x++) borderBg += bg[x] + bg[(h - 1) * w + x];
                 for (let y = 0; y < h; y++) borderBg += bg[y * w] + bg[y * w + w - 1];
                 const borderTotal = 2 * (w + h);
-                if (borderBg > borderTotal * 0.55 && removed > 0.03 && removed < 0.95) {
+                if (neutral && plainBorder && borderBg > borderTotal * 0.55 && removed > 0.03 && removed < 0.95) {
                     for (let p = 0; p < n; p++) {
                         if (bg[p]) { px[p * 4 + 3] = 0; continue; }
                         // soften the 1px edge next to the removed background (no white fringe)
@@ -1455,6 +1462,8 @@
                 const tubeOut = mozGrow(shape, CW, CH, D(2.5 + lw));
                 const tube = mozMinus(tubeOut, tubeIn);
                 const mt = TG ? mozMaskOf(tSil) : new Float32Array(CW * CH);
+                const faint = mozMaskOf(print);
+                for (let i = 0; i < faint.length; i++) { faint[i] = faint[i] > 0.06 ? 1 : 0; if (faint[i] > mt[i]) mt[i] = faint[i]; }
                 // Cut-around board: one connected piece around the neon + text, bridging gaps
                 const union = mozMax(tubeOut, mt);
                 // bridge gaps between graphic and text (grows with the sign), then fill every
@@ -1608,7 +1617,7 @@
                 meta: num(s.h) ? cmText(s.w) + ' x ' + cmText(s.h) : 'Width: ' + cmText(s.w), src: s
             }));
 
-            ctx.step('Upload Your Graphic / Logo', { note: 'Upload your logo, graphic or design — printed in full colour and lit with neon.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Graphic / Logo', { note: 'Printed in full colour and lit with neon.' }).appendChild(ctx.upload().el);
 
             // Design type + text options (Neon fonts, text position, quick symbols + their position)
             const textSteps = [];
@@ -1626,7 +1635,7 @@
             textSteps.push(tStep);
             const tpStep = ctx.step('Text Position', { note: 'Where the text sits next to your graphic.' });
             const tpCtl = ctx.cards('textPos', posItems.map((p) => Object.assign({}, p)), { price: 'none', cols: 4, compact: true });
-            tpCtl.select(3, true);
+            tpCtl.select(0, true);
             tpStep.appendChild(tpCtl.el);
             textSteps.push(tpStep);
 
@@ -1715,7 +1724,7 @@
 
             // Where the neon goes — every design is different. Saved with the order (line item
             // property), so it shows in the Shopify order details for production.
-            const nStep = ctx.step('Neon Lighting Instructions (optional)', { note: 'Every design is different — tell us exactly where you want the neon lighting added to your design.' });
+            const nStep = ctx.step('Neon Lighting Instructions (optional)', { note: 'Tell us where you want the neon on your design.' });
             const notes = el('textarea', 'moz-cfg__text-input moz-cfg__notes');
             notes.rows = 4;
             notes.maxLength = 1000;
@@ -1736,7 +1745,7 @@
                 if (hit) styles.push(hit);
                 else if (b.key === 'naked') styles.push({ l: 'Naked (No Backboard)', p: 0, i: '' });
             });
-            ctx.step('Backboard Style', { note: 'The backboard only changes what sits behind your sign — the neon lighting stays the same.' })
+            ctx.step('Backboard Style', {})
                 .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', shelf: st.sh || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 3, compact: true, showIncluded: true }).el);
             const bcolours = bySort(d.bcolours);
             let boardStep = null;
@@ -1787,7 +1796,7 @@
                 const uv = uvAddons.filter((a) => a.sf === 'both' || a.sf === '' || a.sf === mode);
                 return (isLed() ? neonAddons : []).concat(uv);
             }
-            const addStep = ctx.step('Add-ons & Included With Your Order', { note: 'Ticked items are included in the box with every sign at no additional cost.' });
+            const addStep = ctx.step('Add-ons & Included With Your Order', { note: 'Ticked items are included free.' });
             addonCtl = ctx.addons('addons', addonsFor());
             addStep.appendChild(addonCtl.el);
             addStep.hidden = !neonAddons.length && !uvAddons.length;
@@ -1862,7 +1871,8 @@
             const fit = Math.min(1, Math.max(0.5, f.w / 640));
             const wCm = size ? num(size.w) : 60;
             const boardPad = (kind === 'rect' || kind === 'openbox') ? 1.25 : (kind === 'stand' ? 1.2 : 1);
-            const targetW = Math.min(f.w * 0.92 / boardPad, 24.5 * Math.sqrt(Math.max(10, wCm)) * fit);
+            // Same curve as the Neon configurator (sqrt of the width, with a readable minimum)
+            const targetW = Math.min(f.w * 0.92 / boardPad, Math.max(230 * fit, 36 * Math.sqrt(Math.max(10, wCm)) * fit));
             const textMode = ctx.hasText();
             const symbols = textMode ? (ctx.v.symbols || []).map((sym) => uvSymbolImg(ctx, sym.u)).filter(Boolean) : [];
             const fontFamily = ctx.v.font ? ctx.v.font.family : 'Arial, sans-serif';
@@ -1876,14 +1886,14 @@
                 graphic,
                 text,
                 font: fontFamily,
-                textPos: ctx.v.textPos ? ctx.v.textPos.key : 'bottom',
+                textPos: ctx.v.textPos ? ctx.v.textPos.key : 'left',
                 symPos: ctx.v.symPos ? ctx.v.symPos.key : 'left',
                 symbols,
                 board: { kind, finish, colour: bc.solid },
                 wallShadow: kind === 'naked',
-                tube: lit ? lightTint : (led ? '#e9e9ee' : ''),
+                tube: lit ? lightTint : (led ? uvMixWhite(c, 0.12) : ''),
                 light: lit ? uvMixWhite(c, 0.4) : '',
-                unlitText: led ? '#e9e9ee' : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
+                unlitText: led ? uvMixWhite(c, 0.12) : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
                 glow: lit ? c : '',
                 targetW,
                 maxW: f.w * 0.92 / boardPad,
@@ -1913,7 +1923,7 @@
             if (ctx.v.style && ctx.v.style.board !== 'naked' && ctx.v.board) p['Backboard Colour'] = ctx.v.board.name;
             if (textMode) {
                 p['Custom Text'] = (ctx.text || '').trim() || 'Your Text';
-                p['Text Position'] = ctx.v.textPos ? ctx.v.textPos.label : 'Bottom';
+                p['Text Position'] = ctx.v.textPos ? ctx.v.textPos.label : 'Left';
                 if (ctx.v.font) p['Font'] = ctx.v.font.label;
                 if ((ctx.v.symbols || []).length) {
                     p['Quick Symbols'] = ctx.v.symbols.map((x) => x.l).join(', ');
@@ -2057,7 +2067,7 @@
             lg0.shadowBlur = S(12);
             lg0.shadowOffsetX = S(3);
             lg0.shadowOffsetY = S(8);
-            lg0.drawImage(tint(board, '#e9ecef'), 0, 0);
+            lg0.drawImage(tint(board, o.rgb ? '#e9ecef' : uvMixWhite(o.led, 0.55)), 0, 0);
             lg0.restore();
         }
         const g = cv.getContext('2d');
@@ -2082,7 +2092,7 @@
             const opts = d.opts || [];
             const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
 
-            ctx.step('Upload Your Design', { note: 'Your uploaded image sets the shape and the printed graphic — all colours and details are handled in production from your image. One portable sign, two uses: an engine-bay bonnet stand and a wall sign (switch the background below the preview to see both).' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'Your image sets the shape and print. Bonnet stand + wall sign in one.' }).appendChild(ctx.upload().el);
 
             // Engine Bay / Garage Wall — same product, only the background changes
             if (ctx.walls && ctx.walls.length) {
@@ -2098,8 +2108,7 @@
             const leds = bySort(d.colours).filter((c) => !bonnetIsBlack(c))
                 .map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: 0 }));
             leds.push({ name: 'RGB (Colour Changing)', hex: 'linear-gradient(135deg,' + BONNET_RAINBOW.join(',') + ')', price: 0, rgb: true });
-            const modeNames = cat('lighting_mode').map((o) => o.l).filter(Boolean);
-            const ledStep = ctx.step('LED Lighting — All Colours + RGB Included', { note: 'Every LED colour and RGB colour-changing (with all fade and flash modes, controlled by the remote) comes with your sign. The colours below are for the LIVE PREVIEW only — choose one to see how your sign looks in different colours. Selecting a colour never changes the price.' + (modeNames.length ? ' Modes: ' + modeNames.join(', ') + '.' : '') });
+            const ledStep = ctx.step('LED Lighting — All Colours + RGB Included', { note: 'Colours are for the live preview only — all included, remote controlled.' });
             ledStep.appendChild(el('p', 'moz-cfg__included-banner', '✓ ALL LED COLOURS + RGB ARE INCLUDED AT NO EXTRA COST'));
             let ledCtl = null;
             const ledLabel = (item) => {
@@ -2115,12 +2124,12 @@
             ctx.step('Choose Height').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: (num(s.h) || cmFromLabel(s.l)) ? 'Height: ' + cmText(num(s.h) || cmFromLabel(s.l)) : '', src: s })), { price: 'full', cols: 2 }).el);
 
             const addons = cat('addon').map((a) => ({ label: a.l, price: a.p, free: !!a.f }));
-            if (addons.length) ctx.step('Power & Controls', { note: 'The power cable and plug come connected to the sign — ready to plug straight into a power port.' }).appendChild(ctx.addons('addons', addons).el);
+            if (addons.length) ctx.step('Power & Controls', { note: 'Cable and plug come connected to the sign.' }).appendChild(ctx.addons('addons', addons).el);
 
-            ctx.step('Installation', { unnumbered: true, note: 'Wall mounting must be arranged at your own discretion using a suitable mounting method. For engine-bay use, this product features a universal fit and must be secured to the engine bay using zip ties. Ensure the sign is securely fitted before use. Indoor use only.' });
+            ctx.step('Installation', { unnumbered: true, note: 'Universal fit — secure with zip ties in the engine bay or mount on a wall. Indoor use only.' });
 
             // Plug-related options at the bottom (same place as the other configurators)
-            const plugStep = ctx.step('Power Plug & Connection', { note: 'Your sign is supplied with its power cable and plug already connected and plugs into a standard power port. You can keep the supplied plug, or have it rewired to suit your installation (rewiring must be carried out by a qualified electrician and is arranged by you).' });
+            const plugStep = ctx.step('Power Plug & Connection', { note: 'Supplied plugged and ready — keep the plug or have your electrician rewire it.' });
             if (ctx.power.length) {
                 plugStep.appendChild(el('p', 'moz-cfg__sublabel', 'Plug type'));
                 plugStep.appendChild(ctx.select('power', ctx.power.map((p) => ({ label: p.l }))).el);
@@ -2286,7 +2295,7 @@
             sidesStep.appendChild(sidesCtl.el);
 
             ctx.step('Choose Size').appendChild((sizeCtl = ctx.cards('size', sizesFor(), { price: 'full', cols: 2 })).el);
-            ctx.step('Upload Your Design', { note: 'Your logo, artwork, photo or full-colour design for the lit face.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'Fills the whole lit face.' }).appendChild(ctx.upload().el);
             const frames = cat('frame_colour');
             if (frames.length) ctx.step('Frame Colour').appendChild(ctx.swatches('frame', frames.map((o) => ({ name: o.l, hex: o.hc || '#1a1a1a', price: o.p }))).el);
             ctx.allSizes = allSizes;

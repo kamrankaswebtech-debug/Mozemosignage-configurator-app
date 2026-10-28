@@ -204,7 +204,7 @@
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Illumination Type</span></label>
-      <p class="sign3d-configurator__note">{% if s3d_mode == "lightbox" %}LED illumination is provided by white LEDs. The appearance and colour of your illuminated design will depend on your uploaded artwork and the acrylic printing.{% else %}Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.{% endif %}</p>
+      <p class="sign3d-configurator__note">{% if s3d_mode == "lightbox" %}White LEDs light your printed design.{% elsif s3d_mode != "3d" %}Included lighting for this sign.{% else %}Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.{% endif %}</p>
       <select data-illumination-select hidden>
         {% assign s3d_il_count = 0 %}
         {% for item in metaobjects["app--418838118401--illumination_type"].values %}
@@ -272,7 +272,7 @@
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Colours</span></label>
-      {% if s3d_mode == "lightbox" %}<p class="sign3d-configurator__note">Front: glossy acrylic face with your design printed on it — no colour to choose.</p><div hidden>{% endif %}
+      {% if s3d_mode == "lightbox" %}<p class="sign3d-configurator__note">Front: your design printed on glossy acrylic.</p><div hidden>{% endif %}
       {% if s3d_mode == "marquee" %}<p class="sign3d-configurator__subheading">Bulb Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-bulb-colour-swatches data-no-black></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-bulb-colour-name-label></span></p>{% endif %}
@@ -294,7 +294,7 @@
       <div class="sign3d-configurator__card-grid" data-mounting-cards></div>
       <div class="sign3d-configurator__backing-block" data-backing-colour-block>
         <p class="sign3d-configurator__subheading">{% if s3d_mode == "lightbox" %}Pole / Bracket Colour{% else %}Backing Mount Colour{% endif %}</p>
-        <p class="sign3d-configurator__backing-note" data-backing-note hidden>{% if s3d_mode == "lightbox" %}Choose Wall Hanging above to select the pole / bracket colour, finish and colour intensity.{% else %}Choose a backing mount option above (e.g. Raceway, Rectangle or Circle Backing Panel) to select its colour and material finish.{% endif %}</p>
+        <p class="sign3d-configurator__backing-note" data-backing-note hidden>{% if s3d_mode == "lightbox" %}Choose Wall Hanging to set the pole / bracket colour.{% else %}Choose a backing mount option above (e.g. Raceway, Rectangle or Circle Backing Panel) to select its colour and material finish.{% endif %}</p>
         <div class="sign3d-configurator__backing-lists" data-backing-lists>
           <div class="sign3d-configurator__swatch-groups" data-back-colour-swatches></div>
           <p class="sign3d-configurator__selected-label">Selected: <span data-back-colour-name-label></span></p>
