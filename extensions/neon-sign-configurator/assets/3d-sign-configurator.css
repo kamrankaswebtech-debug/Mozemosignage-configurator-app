@@ -2905,8 +2905,7 @@
     box-shadow: 0 0 9px rgba(216, 100, 255, 0.38), 0 0 24px rgba(216, 100, 255, 0.2);
 }
 .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-visual { aspect-ratio: 16 / 10; }
-.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-label,
-.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-card span:last-child { font-size: 11px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-label { font-size: 11px; }
 
 /* Design-type buttons, swatches */
 .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__mode-btn { padding: 9px 10px; font-size: 13px; }

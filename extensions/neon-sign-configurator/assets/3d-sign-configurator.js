@@ -3,6 +3,12 @@
 // Set to true to bring the old Canva-style placement back (also remove the 3 cursor rules at the end of the CSS).
 // IMPORTANT: this must stay ABOVE the first init call below (script is deferred and runs init immediately).
 const SIGN3D_ALLOW_MANUAL_PLACEMENT = false;
+// Shared state used during init — declared here, ABOVE the first init call (deferred script runs
+// init immediately, so anything declared further down is not ready yet).
+// Built-in Glossy finish (used only when Admin has no Glossy finish for Lightbox / Infinity / Marquee).
+var SIGN3D_BUILTIN_GLOSSY = null;
+// Cache for Marquee bulb positions / Infinity tunnels / stroke widths.
+var SIGN3D_BULB_CACHE = {};
 
 function initAllSign3dConfigurators() {
     document.querySelectorAll('.sign3d-configurator').forEach((root) => {
@@ -641,7 +647,6 @@ function sign3dFontReady(fontCss) {
 // ---- Glyph geometry for Marquee bulbs and Infinity tunnels ----------------------------------
 // A character is drawn on a canvas in the real font (S px), giving its pixel mask and a distance
 // field (distance of every inside pixel to the nearest edge).
-const SIGN3D_BULB_CACHE = {};
 function sign3dGlyphField(ch, fontCss, S) {
     const font = String(fontCss).replace(/\d+(\.\d+)?px/, S + 'px');
     const m = document.createElement('canvas').getContext('2d');
@@ -1082,9 +1087,6 @@ function sign3dSplitList(value) {
 // Finish surface: Admin "Finish Surface", otherwise guessed from the label.
 // Surfaces: glossy / matte / chrome (current client set) + the earlier matte_metal /
 // gloss_metal / gloss_acrylic, which keep working for finishes already saved in Admin.
-// Built-in Glossy finish (used only when Admin has no Glossy finish for Lightbox / Infinity / Marquee).
-let SIGN3D_BUILTIN_GLOSSY = null;
-
 function sign3dFinishSurface(f) {
     const k = String((f && f.k) || '').trim().toLowerCase();
     if (['glossy', 'matte', 'chrome', 'matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
@@ -4029,7 +4031,11 @@ function initSign3dConfigurator(root) {
             const bySurface = {};
             finishList.forEach((f) => { const s = canon(f); if (surfaces.indexOf(s) > -1 && !bySurface[s]) bySurface[s] = f; });
             if (surfaces.indexOf('glossy') > -1 && !bySurface.glossy) {
-                if (!SIGN3D_BUILTIN_GLOSSY) SIGN3D_BUILTIN_GLOSSY = { h: 'builtin-glossy', l: 'Glossy', p: 0, s: 0, k: 'glossy', a: 'front,side,backing', i: '' };
+                if (!SIGN3D_BUILTIN_GLOSSY) {
+                    // reuse the example photo of any Admin finish named Gloss / Glossy
+                    const g = finishList.find((x) => /gloss/i.test(String(x.l || '')) && x.i);
+                    SIGN3D_BUILTIN_GLOSSY = { h: 'builtin-glossy', l: 'Glossy', p: 0, s: 0, k: 'glossy', a: 'front,side,backing', i: g ? g.i : '' };
+                }
                 bySurface.glossy = SIGN3D_BUILTIN_GLOSSY;
             }
             return surfaces.map((s) => bySurface[s]).filter(Boolean);
