@@ -23,7 +23,7 @@ const TYPES: Record<string, TypeDef> = {
     sign3d_option: { title: "3D Material / Finish, Mounting & Add-ons", keys: FAMILY_3D, labelKey: "label", categories: ["finish", "mounting", "addon"] },
     neon_font: { title: "Fonts", keys: ["neon", "graphic", "3d", "infinity", "marquee"], labelKey: "name" },
     neon_quick_symbol: { title: "Quick Symbols", keys: ["neon", "graphic", "3d"], labelKey: "label" },
-    power_adapter: { title: "Power Adapters", keys: ["neon", "graphic", "3d", "infinity", "marquee", "lightbox"], labelKey: "label" },
+    power_adapter: { title: "Power Adapters", keys: ["neon", "graphic", "bonnet", "3d", "infinity", "marquee", "lightbox"], labelKey: "label" },
     neon_colour: { title: "Neon Colours", keys: ["neon", "graphic", "bonnet"], labelKey: "name" },
     sign_size: { title: "Neon Sizes", keys: ["neon", "graphic"], labelKey: "label" },
     backboard_style: { title: "Backboard Styles", keys: ["neon", "graphic"], labelKey: "label" },

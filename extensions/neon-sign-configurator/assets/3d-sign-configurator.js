@@ -363,7 +363,14 @@ function sign3dBuildFontPicker(root) {
     select.innerHTML = '';
     panel.innerHTML = '';
 
+    // Infinity / Marquee / Lightbox: fonts always visible (Neon layout) — no dropdown click needed.
+    const keepOpen = (root.dataset.sign3dMode || '3d') !== '3d';
+    if (keepOpen) {
+        toggle.hidden = true;
+        panel.classList.add('is-always-open');
+    }
     const setOpen = (open) => {
+        if (keepOpen) open = true;
         panel.hidden = !open;
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     };
@@ -428,6 +435,7 @@ function sign3dBuildFontPicker(root) {
     select._sign3dSync = sync;
     select.selectedIndex = 0;
     sync();
+    if (keepOpen) setOpen(true);
 }
 
 // Visual cards driven by a hidden <select> (Illumination Type, Mounting). The select keeps all existing logic working.
@@ -1074,6 +1082,9 @@ function sign3dSplitList(value) {
 // Finish surface: Admin "Finish Surface", otherwise guessed from the label.
 // Surfaces: glossy / matte / chrome (current client set) + the earlier matte_metal /
 // gloss_metal / gloss_acrylic, which keep working for finishes already saved in Admin.
+// Built-in Glossy finish (used only when Admin has no Glossy finish for Lightbox / Infinity / Marquee).
+let SIGN3D_BUILTIN_GLOSSY = null;
+
 function sign3dFinishSurface(f) {
     const k = String((f && f.k) || '').trim().toLowerCase();
     if (['glossy', 'matte', 'chrome', 'matte_metal', 'gloss_metal', 'gloss_acrylic'].indexOf(k) > -1) return k;
@@ -4012,13 +4023,16 @@ function initSign3dConfigurator(root) {
         if (wrapEl && wrapEl.hasAttribute('data-finish-off')) return [];
         const surfaces = sign3dSplitList(root.dataset.finishSurfaces);
         if (surfaces.length) {
-            const seen = {};
-            return finishList.filter((f) => {
-                const s = sign3dFinishSurface(f);
-                if (surfaces.indexOf(s) === -1 || seen[s]) return false;
-                seen[s] = true;
-                return true;
-            });
+            // One finish per surface, in the order of the surfaces list (Glossy, Matte, Chrome).
+            // A gloss-acrylic finish counts as Glossy; a missing Glossy gets a built-in example.
+            const canon = (f) => { const s = sign3dFinishSurface(f); return s === 'gloss_acrylic' ? 'glossy' : s; };
+            const bySurface = {};
+            finishList.forEach((f) => { const s = canon(f); if (surfaces.indexOf(s) > -1 && !bySurface[s]) bySurface[s] = f; });
+            if (surfaces.indexOf('glossy') > -1 && !bySurface.glossy) {
+                if (!SIGN3D_BUILTIN_GLOSSY) SIGN3D_BUILTIN_GLOSSY = { h: 'builtin-glossy', l: 'Glossy', p: 0, s: 0, k: 'glossy', a: 'front,side,backing', i: '' };
+                bySurface.glossy = SIGN3D_BUILTIN_GLOSSY;
+            }
+            return surfaces.map((s) => bySurface[s]).filter(Boolean);
         }
         return finishList.filter((f) => {
             const applies = sign3dSplitList(f.a);

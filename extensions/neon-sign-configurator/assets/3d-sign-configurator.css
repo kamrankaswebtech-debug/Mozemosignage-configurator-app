@@ -2819,3 +2819,115 @@
         drop-shadow(0 0 0.6px var(--sign3d-light, #29d3ff))
         drop-shadow(0 0 2px color-mix(in srgb, var(--sign3d-light, #29d3ff) 80%, transparent));
 }
+
+/* =====================================================================
+   Infinity Mirror / Event Marquee / 3D LED Lightbox — compact Neon-style
+   menu (smaller cards, tighter spacing, same hover / selected glow as the
+   Neon configurator). 3D Illuminated Signs are not affected.
+   ===================================================================== */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel { gap: 12px; padding: 18px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__label { font-size: 14px; margin-bottom: 6px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__text-input,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__select {
+    padding: 9px 12px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(216, 140, 255, 0.35);
+    background: #12121a;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__text-input:focus,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__select:focus {
+    outline: none;
+    border-color: #ff2ec4;
+    box-shadow: 0 0 8px rgba(216, 100, 255, 0.35);
+}
+
+/* Option cards (illumination, mounting, shapes…): 3 per row, small preview */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card {
+    gap: 4px;
+    padding: 6px 6px 8px;
+    border-radius: 8px;
+    border-color: rgba(216, 140, 255, 0.28);
+    background: #14141c;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card:hover { border-color: rgba(255, 46, 196, 0.6); }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.12);
+    box-shadow: 0 0 9px rgba(216, 100, 255, 0.38), 0 0 24px rgba(216, 100, 255, 0.2);
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card-img,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card-placeholder {
+    aspect-ratio: 16 / 9;
+    max-height: 64px;
+    border-radius: 5px;
+    font-size: 10px;
+    object-fit: cover;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card-label { font-size: 11.5px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card-desc { font-size: 10px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__pick-card-price { font-size: 10px; }
+
+/* Fonts: always open, compact 2-column grid with small white previews (Neon) */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__font-panel.is-always-open {
+    margin-top: 0;
+    gap: 8px;
+    max-height: 260px;
+    padding: 8px;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-configurator__pick-card-img,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-configurator__pick-card-placeholder {
+    aspect-ratio: auto;
+    height: 40px;
+    max-height: 40px;
+    object-fit: contain;
+    background: #0a0a0f;
+    color: #ffffff;
+    font-size: 16px;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-configurator__pick-card-label { font-size: 11px; font-weight: 600; }
+
+/* Material / Finish examples: three equal cards (Glossy, Matte, Chrome) */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-cards { gap: 8px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-card {
+    gap: 4px;
+    padding: 5px 5px 7px;
+    border-radius: 8px;
+    border-color: rgba(216, 140, 255, 0.28);
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.12);
+    box-shadow: 0 0 9px rgba(216, 100, 255, 0.38), 0 0 24px rgba(216, 100, 255, 0.2);
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-visual { aspect-ratio: 16 / 10; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-label,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__finish-card span:last-child { font-size: 11px; }
+
+/* Design-type buttons, swatches */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__mode-btn { padding: 9px 10px; font-size: 13px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__mode-btn.is-selected {
+    box-shadow: 0 0 9px rgba(216, 100, 255, 0.38), 0 0 24px rgba(216, 100, 255, 0.2);
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__swatch { width: 28px; height: 28px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__font-toggle[hidden] { display: none !important; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-card {
+    min-height: 0;
+    gap: 3px;
+    padding: 8px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-card svg { width: 26px; height: 26px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-card.is-selected {
+    border-color: #ff2ec4;
+    background: rgba(255, 46, 196, 0.12);
+    box-shadow: 0 0 9px rgba(216, 100, 255, 0.38), 0 0 24px rgba(216, 100, 255, 0.2);
+}
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__addon-card { min-height: 44px; padding: 7px 9px; border-radius: 8px; font-size: 12px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-icon,
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-icon svg { width: 28px; height: 28px; }

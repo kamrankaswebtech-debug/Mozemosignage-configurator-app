@@ -13,6 +13,8 @@ type Entry = {
     frontFinishes: string[];
     sideFinishes: string[];
     backingFinishes: string[];
+    imageUrl: string;
+    description: string;
 };
 type Finish = { handle: string; label: string; appliesTo: string[] };
 
@@ -34,7 +36,69 @@ const EFFECTS = [
     { value: "fully_illuminated", label: "Fully Illuminated (3D Signs)" },
     { value: "infinity", label: "Infinity Mirror (Infinity Mirror Signs only)" },
     { value: "marquee", label: "Marquee Bulbs (Event Marquee Signs only)" },
+    { value: "lightbox", label: "Lightbox (3D LED Lightbox only)" },
 ];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Standard 3-step upload: stagedUploadsCreate -> direct upload -> fileCreate. Returns the File gid.
+async function uploadImageFile(admin: any, file: File): Promise<string> {
+    const stagedRes = await admin.graphql(
+        `#graphql
+      mutation Staged($input: [StagedUploadInput!]!) {
+        stagedUploadsCreate(input: $input) {
+          stagedTargets { url resourceUrl parameters { name value } }
+          userErrors { field message }
+        }
+      }`,
+        { variables: { input: [{ filename: file.name, mimeType: file.type || "image/png", httpMethod: "POST", resource: "IMAGE" }] } }
+    );
+    const stagedData = await stagedRes.json();
+    const stagedErrors = stagedData.data?.stagedUploadsCreate?.userErrors;
+    if (stagedErrors?.length) throw new Error(stagedErrors[0].message);
+    const target = stagedData.data?.stagedUploadsCreate?.stagedTargets?.[0];
+    if (!target) throw new Error("Could not prepare the upload.");
+
+    const uploadForm = new FormData();
+    target.parameters.forEach((p: any) => uploadForm.append(p.name, p.value));
+    uploadForm.append("file", file);
+    const uploadRes = await fetch(target.url, { method: "POST", body: uploadForm });
+    if (!uploadRes.ok) throw new Error("Image upload failed (" + uploadRes.status + ").");
+
+    const createRes = await admin.graphql(
+        `#graphql
+      mutation FileCreate($files: [FileCreateInput!]!) {
+        fileCreate(files: $files) { files { id } userErrors { field message } }
+      }`,
+        { variables: { files: [{ originalSource: target.resourceUrl, contentType: "IMAGE", alt: file.name }] } }
+    );
+    const createData = await createRes.json();
+    const createErrors = createData.data?.fileCreate?.userErrors;
+    if (createErrors?.length) throw new Error(createErrors[0].message);
+    const fileId = createData.data?.fileCreate?.files?.[0]?.id;
+    if (!fileId) throw new Error("File was not created.");
+
+    // Wait (max ~7s) until Shopify finishes processing so the storefront URL is ready.
+    try {
+        for (let i = 0; i < 10; i++) {
+            const statusRes = await admin.graphql(
+                `#graphql
+          query FileStatus($id: ID!) { node(id: $id) { ... on MediaImage { fileStatus } } }`,
+                { variables: { id: fileId } }
+            );
+            const statusData = await statusRes.json();
+            const status = statusData.data?.node?.fileStatus;
+            if (status === "READY") break;
+            if (status === "FAILED") throw new Error("Shopify could not process this image.");
+            await sleep(700);
+        }
+    } catch (err: any) {
+        if (String(err?.message || "").includes("could not process")) throw err;
+    }
+    return fileId;
+}
+
+const hasFile = (v: FormDataEntryValue | null): v is File => !!v && typeof v === "object" && "size" in v && (v as File).size > 0;
 
 const splitList = (value: string | undefined) => String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -42,14 +106,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
     const response = await admin.graphql(
         `#graphql
-    query List { metaobjects(type: "$app:illumination_type", first: 100) { edges { node { id fields { key value } } } } }`
+    query List { metaobjects(type: "$app:illumination_type", first: 100) { edges { node { id fields { key value reference { ... on MediaImage { image { url } } } } } } } }`
     );
     const data = await response.json();
     const items: Entry[] = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
-        edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
+        let imageUrl = "";
+        edge.node.fields.forEach((x: any) => { f[x.key] = x.value; if (x.key === "preview_image" && x.reference?.image?.url) imageUrl = x.reference.image.url; });
         return {
             id: edge.node.id,
+            imageUrl,
+            description: f.description || "",
             label: f.label || "",
             extraPrice: f.extra_price_decimal || "0",
             sortOrder: f.sort_order || "0",
@@ -95,6 +162,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
         { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
     ];
+    if (formData.has("description")) fields.push({ key: "description", value: String(formData.get("description") || "") });
+    const imageFile = formData.get("imageFile");
+    if (hasFile(imageFile)) {
+        try { fields.push({ key: "preview_image", value: await uploadImageFile(admin, imageFile) }); }
+        catch (err: any) { return { error: err?.message || "Image upload failed" }; }
+    }
+    if (formData.get("removeImage") === "1" && !hasFile(imageFile)) fields.push({ key: "preview_image", value: "" });
     const effectKey = String(formData.get("effectKey") || "");
     if (EFFECTS.some((e) => e.value === effectKey)) fields.push({ key: "effect_key", value: effectKey });
     // Finish checkboxes are only part of the edit form, so a plain create keeps them empty (= all).
@@ -180,23 +254,26 @@ export default function IlluminationTypePage() {
         <s-page heading="Illumination Type">
             <s-section heading="Add New Illumination Type">
                 <s-link href="/app/3d-signs">← Back to 3D Illuminated Signs</s-link>
-                <fetcher.Form method="post">
+                <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
                         <input type="text" name="label" placeholder="Label (e.g. Backlit)" required />
                         <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
                         <select name="effectKey" defaultValue="front_lit">{EFFECTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}</select>
+                        <input type="text" name="description" placeholder="Short description (optional)" />
+                        <label>Example image: <input type="file" name="imageFile" accept="image/*" /></label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
                 </fetcher.Form>
             </s-section>
 
-            <s-section heading="Infinity Mirror & Event Marquee">
+            <s-section heading="Infinity Mirror, Event Marquee & 3D LED Lightbox">
                 <s-paragraph>
-                    Infinity Mirror Signs and Event Marquee Signs use this same 3D configurator with one illumination type each. Add one type
-                    with Effect "Infinity Mirror" and one with "Marquee Bulbs" (e.g. label "Infinity Mirror LED" / "Marquee Bulbs") and set
-                    their Extra Price — they only appear on their own product and never on 3D Illuminated Signs.
+                    Infinity Mirror Signs, Event Marquee Signs and 3D LED Lightbox use this same 3D configurator with one illumination type each.
+                    Add one type with Effect "Infinity Mirror", one with "Marquee Bulbs" and one with "Lightbox" (e.g. label "Infinity Mirror LED" /
+                    "Marquee Bulbs" / "White LED Illumination") and set their Extra Price — each only appears on its own product. The Example image
+                    is shown on the illumination card (all configurators), so customers can see the lighting effect before selecting it.
                 </s-paragraph>
             </s-section>
 
@@ -226,7 +303,7 @@ export default function IlluminationTypePage() {
                             <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === item.id ? (
                                     <td colSpan={7} style={{ padding: "8px" }}>
-                                        <fetcher.Form method="post">
+                                        <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={item.id} />
                                             <input type="hidden" name="hasFinishFields" value="1" />
@@ -237,6 +314,13 @@ export default function IlluminationTypePage() {
                                                     <input type="number" name="sortOrder" defaultValue={item.sortOrder} />
                                                     <select name="effectKey" defaultValue={item.effectKey || "front_lit"}>{EFFECTS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}</select>
                                                 </s-stack>
+                                                <s-stack direction="inline" gap="base">
+                                                    <input type="text" name="description" defaultValue={item.description} placeholder="Short description (optional)" style={{ minWidth: 320 }} />
+                                                    {item.imageUrl ? <img src={item.imageUrl} alt="" style={{ width: 80, height: 54, objectFit: "cover", background: "#111", borderRadius: 4 }} /> : null}
+                                                    <label>Example image: <input type="file" name="imageFile" accept="image/*" /></label>
+                                                    {item.imageUrl ? <label><input type="checkbox" name="removeImage" value="1" /> Remove image</label> : null}
+                                                </s-stack>
+                                                <small>Choose a new file only if you want to replace the current image.</small>
                                                 {SLOTS.map((slot) => {
                                                     const offered = finishes.filter((f) => f.appliesTo.includes(slot.key));
                                                     const current = slotValues(item, slot.key);
@@ -261,7 +345,7 @@ export default function IlluminationTypePage() {
                                     </td>
                                 ) : (
                                     <>
-                                        <td style={{ padding: "8px" }}>{item.label}<br /><small>{(EFFECTS.find((e) => e.value === (item.effectKey || "front_lit")) || { label: item.effectKey }).label}</small></td>
+                                        <td style={{ padding: "8px" }}>{item.imageUrl ? <img src={item.imageUrl} alt="" style={{ width: 64, height: 44, objectFit: "cover", background: "#111", borderRadius: 4, display: "block", marginBottom: 4 }} /> : null}{item.label}<br /><small>{(EFFECTS.find((e) => e.value === (item.effectKey || "front_lit")) || { label: item.effectKey }).label}</small></td>
                                         <td style={{ padding: "8px" }}>${item.extraPrice}</td>
                                         <td style={{ padding: "8px" }}>{item.sortOrder}</td>
                                         {SLOTS.map((slot) => (

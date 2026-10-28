@@ -2,7 +2,7 @@
 <div data-moz-cfg="bonnet" data-block-id="{{ block.id }}" data-product-id="{{ product.id }}">
 <script type="application/json" data-moz-data>{"colours":[{%- for o in metaobjects["app--418838118401--neon_colour"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"n":{{ o.name.value | json }},"h":{{ o.hex_code.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }},"so":{{ o.show_on.value | default: "" | json }}}{%- endfor -%}],
 "opts":[{%- for o in metaobjects["app--418838118401--bonnet_option"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"c":{{ o.category.value | json }},"l":{{ o.label.value | json }},"hc":{{ o.hex_code.value | default: '' | json }},"k":{{ o.mode_key.value | default: '' | json }},"h":{{ o.height_cm.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"f":{% if o.is_free.value %}true{% else %}false{% endif %},"s":{{ o.sort_order.value | default: 999999 }}}{%- endfor -%}]}</script>
-{%- render 'moz-cfg-common', walls: 'neon', lib: 'bonnet', power: false, install: false -%}
+{%- render 'moz-cfg-common', walls: 'neon', lib: 'bonnet', power: true, install: false -%}
 </div>
 
 {% schema %}

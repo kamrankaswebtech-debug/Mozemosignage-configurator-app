@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 // 3D Illuminated Signs pages (shared) — plus the items below that belong to this product only.
 export default function EventMarqueeHub() {
     const cards = [
-        { title: "Illumination (price)", desc: "Add ONE illumination type with Effect \"Marquee Bulbs\" and set its price.", href: "/app/3d-signs/illumination-type" },
+        { title: "Illumination (price)", desc: "Add ONE illumination type with Effect \"Marquee Bulbs\" — upload its example image and set its price.", href: "/app/3d-signs/illumination-type" },
         { title: "Fonts", desc: "Shared with 3D Signs — the same font list.", href: "/app/neon-signs/fonts" },
         { title: "Sizes & Pricing Settings", desc: "Shared with 3D Signs — overall width, letter height, tiers and outdoor surcharge.", href: "/app/3d-signs/pricing-settings" },
         { title: "Colours", desc: "Shared with 3D Signs — the same colour range (black is left out where this product can't use it).", href: "/app/3d-signs/front-colours" },

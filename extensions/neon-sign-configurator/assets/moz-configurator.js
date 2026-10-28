@@ -1132,10 +1132,8 @@
             let transparent = 0;
             for (let i = 0; i < n; i += 4) if (px[i * 4 + 3] < 200) transparent++;
             if (transparent > (n / 4) * 0.02) {
-                // Real transparency: keep it, drop faint / ghosted parts
-                for (let i = 3; i < px.length; i += 4) px[i] = px[i] < 90 ? 0 : Math.min(255, Math.round((px[i] - 90) * 255 / 110));
-                g.putImageData(id, 0, 0);
-                out = c;
+                // Real transparency: the artwork is used exactly as supplied (nothing removed)
+                out = img;
             } else {
                 const bg = new Uint8Array(n);
                 const queue = new Int32Array(n);
@@ -1146,13 +1144,16 @@
                 const lum = (p) => px[p * 4] + px[p * 4 + 1] + px[p * 4 + 2];
                 const ref = corners.slice().sort((a, b) => lum(a) - lum(b))[1];
                 const far = (p) => Math.abs(px[p * 4] - px[ref * 4]) + Math.abs(px[p * 4 + 1] - px[ref * 4 + 1]) + Math.abs(px[p * 4 + 2] - px[ref * 4 + 2]);
-                const seed = (p) => { if (!bg[p] && far(p) < 90) { bg[p] = 1; queue[qt++] = p; } };
+                // Only pixels that really match the outside background colour are removed (a slow
+                // gradient / shadow in the background is followed), starting from the image border —
+                // so inner gaps, details and colours of the design are never touched.
+                const seed = (p) => { if (!bg[p] && far(p) < 70) { bg[p] = 1; queue[qt++] = p; } };
                 for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
                 for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
                 while (qh < qt) {
                     const p = queue[qh++];
                     const x = p % w;
-                    const tryq = (q) => { if (!bg[q] && diff(p, q) < 30 && far(q) < 200) { bg[q] = 1; queue[qt++] = q; } };
+                    const tryq = (q) => { if (!bg[q] && (far(q) < 70 || (diff(p, q) < 10 && far(q) < 120))) { bg[q] = 1; queue[qt++] = q; } };
                     if (x > 0) tryq(p - 1);
                     if (x < w - 1) tryq(p + 1);
                     if (p >= w) tryq(p - w);
@@ -1178,6 +1179,27 @@
             }
         } catch (err) { out = img; /* cross-origin artwork: use as it is */ }
         img._mozCut = { src, canvas: out };
+        return out;
+    }
+
+    // Fills every hole inside a mask (anything not reachable from the border = inside the shape).
+    function mozFillHoles(m, w, h) {
+        const out = Float32Array.from(m);
+        const ext = new Uint8Array(w * h);
+        const q = new Int32Array(w * h);
+        let qh = 0, qt = 0;
+        const push = (p) => { if (!ext[p] && m[p] < 0.5) { ext[p] = 1; q[qt++] = p; } };
+        for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+        for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+        while (qh < qt) {
+            const p = q[qh++];
+            const x = p % w;
+            if (x > 0) push(p - 1);
+            if (x < w - 1) push(p + 1);
+            if (p >= w) push(p - w);
+            if (p < w * (h - 1)) push(p + w);
+        }
+        for (let i = 0; i < out.length; i++) if (!ext[i]) out[i] = 1;
         return out;
     }
 
@@ -1301,11 +1323,11 @@
         // Layout in reference units (graphic 100 high).
         const R = 100;
         const gW = R * (gw0 / gh0);
-        const G = { x: 0, y: 0, w: gW, h: R };
         let text = null;
         let syms = [];
         if (o.text) {
-            const fpx = (o.textPos === 'top' || o.textPos === 'bottom') ? Math.min(30, Math.max(18, gW * 0.2)) : 30;
+            // Same letter size for every position (Neon behaviour): it only depends on the graphic.
+            const fpx = Math.min(30, Math.max(18, gW * 0.2));
             const m = document.createElement('canvas').getContext('2d');
             m.font = '400 ' + fpx + 'px ' + o.font;
             const met = m.measureText(o.text);
@@ -1315,9 +1337,10 @@
             const S = fpx * 0.95;
             syms = o.symbols.map((im) => ({ im, w: S * ((im.naturalWidth || 1) / (im.naturalHeight || 1)), h: S }));
         }
-        // Text group = text + symbols around it.
-        let TG = null;
-        if (text) {
+        // Layout of graphic + text group (text + symbols) for one text / symbol position.
+        const layout = (textPos, symPos) => {
+            const g = { x: 0, y: 0, w: gW, h: R };
+            if (!text) return { G: g, TG: null, minX: 0, minY: 0, bw: gW, bh: R };
             const gap = text.fpx * 0.3;
             const sw = syms.reduce((a, s) => a + s.w, 0) + Math.max(0, syms.length - 1) * gap * 0.6;
             const sh = syms.length ? syms[0].h : 0;
@@ -1325,33 +1348,42 @@
             const SY = { x: 0, y: 0, w: sw, h: sh };
             let gw = T.w, gh = T.h;
             if (syms.length) {
-                if (o.symPos === 'left' || o.symPos === 'right') {
+                if (symPos === 'left' || symPos === 'right') {
                     gw = T.w + gap + SY.w; gh = Math.max(T.h, SY.h);
-                    if (o.symPos === 'left') { SY.x = 0; T.x = SY.w + gap; } else { T.x = 0; SY.x = T.w + gap; }
+                    if (symPos === 'left') { SY.x = 0; T.x = SY.w + gap; } else { T.x = 0; SY.x = T.w + gap; }
                     T.y = (gh - T.h) / 2; SY.y = (gh - SY.h) / 2;
                 } else {
                     gw = Math.max(T.w, SY.w); gh = T.h + gap + SY.h;
-                    if (o.symPos === 'top') { SY.y = 0; T.y = SY.h + gap; } else { T.y = 0; SY.y = T.h + gap; }
+                    if (symPos === 'top') { SY.y = 0; T.y = SY.h + gap; } else { T.y = 0; SY.y = T.h + gap; }
                     T.x = (gw - T.w) / 2; SY.x = (gw - SY.w) / 2;
                 }
             }
-            TG = { w: gw, h: gh, T, SY };
+            const tg = { w: gw, h: gh, T, SY };
             const gap2 = R * 0.14;
-            if (o.textPos === 'left') { TG.x = 0; G.x = TG.w + gap2; TG.y = (R - TG.h) / 2; }
-            else if (o.textPos === 'right') { G.x = 0; TG.x = gW + gap2; TG.y = (R - TG.h) / 2; }
-            else if (o.textPos === 'top') { TG.y = 0; G.y = TG.h + gap2; TG.x = (gW - TG.w) / 2; }
-            else { G.y = 0; TG.y = R + gap2; TG.x = (gW - TG.w) / 2; }
+            if (textPos === 'left') { tg.x = 0; g.x = tg.w + gap2; tg.y = (R - tg.h) / 2; }
+            else if (textPos === 'right') { g.x = 0; tg.x = gW + gap2; tg.y = (R - tg.h) / 2; }
+            else if (textPos === 'top') { tg.y = 0; g.y = tg.h + gap2; tg.x = (gW - tg.w) / 2; }
+            else { g.y = 0; tg.y = R + gap2; tg.x = (gW - tg.w) / 2; }
+            const minX = Math.min(g.x, tg.x);
+            const minY = Math.min(g.y, tg.y);
+            return { G: g, TG: tg, minX, minY, bw: Math.max(g.x + g.w, tg.x + tg.w) - minX, bh: Math.max(g.y + g.h, tg.y + tg.h) - minY };
+        };
+        const cur = layout(o.textPos, o.symPos);
+        const G = cur.G;
+        const TG = cur.TG;
+        const minX = cur.minX;
+        const minY = cur.minY;
+        const bw = cur.bw;
+        const bh = cur.bh;
+        // One scale that fits EVERY text / symbol position, so changing a position only moves
+        // the text or symbols — nothing grows or shrinks.
+        const fitScale = (l) => Math.min(o.targetW / l.bw, o.maxH / l.bh);
+        let s = fitScale(cur);
+        if (text) {
+            ['left', 'top', 'right', 'bottom'].forEach((tp) => {
+                (syms.length ? ['left', 'top', 'right', 'bottom'] : [o.symPos]).forEach((sp) => { s = Math.min(s, fitScale(layout(tp, sp))); });
+            });
         }
-        // Bounding box
-        const boxes = [G].concat(TG ? [{ x: TG.x, y: TG.y, w: TG.w, h: TG.h }] : []);
-        const minX = Math.min.apply(null, boxes.map((b) => b.x));
-        const minY = Math.min.apply(null, boxes.map((b) => b.y));
-        const maxX = Math.max.apply(null, boxes.map((b) => b.x + b.w));
-        const maxY = Math.max.apply(null, boxes.map((b) => b.y + b.h));
-        const bw = maxX - minX;
-        const bh = maxY - minY;
-        let s = o.targetW / bw;
-        if (bh * s > o.maxH) s = o.maxH / bh;
         const W = Math.round(bw * s);
         const H = Math.round(bh * s);
 
@@ -1513,9 +1545,12 @@
         if (o.glow) {
             g.save();
             g.shadowColor = o.glow;
-            g.shadowBlur = D(22);
+            // soft halo kept close to the tube (the backboard itself is not lit)
+            g.globalAlpha = 0.55;
+            g.shadowBlur = D(12);
             if (tube) g.drawImage(tube, 0, 0);
-            g.shadowBlur = D(8);
+            g.globalAlpha = 1;
+            g.shadowBlur = D(5);
             if (tube) g.drawImage(tube, 0, 0);
             if (textLayer) {
                 g.shadowBlur = Math.max(3, L(text.fpx) * 0.18);
@@ -1570,10 +1605,12 @@
 
             // Design type + text options (Neon fonts, text position, quick symbols + their position)
             const textSteps = [];
+            const dicons = d.dicons || {};
             const designCtl = ctx.cards('design', [
-                { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) },
-                { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-text')) }
+                { key: 'graphic', label: 'Graphic Only', price: 0, img: dicons.g || '', visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) },
+                { key: 'text', label: 'Text + Graphic', price: 0, img: dicons.t || '', visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-text')) }
             ], { price: 'none', cols: 2, compact: true, onChange: () => textSteps.forEach((s) => { s.hidden = !hasText(); }) });
+            designCtl.el.classList.add('moz-cfg__cards--design');
             ctx.step('Design Type').appendChild(designCtl.el);
 
             const posItems = [{ key: 'left', label: 'Left' }, { key: 'top', label: 'Top' }, { key: 'right', label: 'Right' }, { key: 'bottom', label: 'Bottom' }].map((p) => Object.assign({ price: 0 }, p));
@@ -1600,8 +1637,8 @@
             if (css) { const st = el('style'); st.textContent = css; ctx.root.appendChild(st); }
             if (fontItems.length) {
                 const fStep = ctx.step('Choose Font');
-                const fCtl = ctx.cards('font', fontItems, { price: 'none', cols: 3, compact: true, onChange: (f) => { if (f && document.fonts && document.fonts.load) document.fonts.load('400 30px ' + f.family).then(() => ctx.update()).catch(() => {}); } });
-                fCtl.el.classList.add('moz-cfg__cards--scroll');
+                const fCtl = ctx.cards('font', fontItems, { price: 'none', cols: 2, compact: true, onChange: (f) => { if (f && document.fonts && document.fonts.load) document.fonts.load('400 30px ' + f.family).then(() => ctx.update()).catch(() => {}); } });
+                fCtl.el.classList.add('moz-cfg__cards--scroll', 'moz-cfg__cards--fonts');
                 fStep.appendChild(fCtl.el);
                 textSteps.push(fStep);
             }
@@ -1693,7 +1730,7 @@
                 else if (b.key === 'naked') styles.push({ l: 'Naked (No Backboard)', p: 0, i: '' });
             });
             ctx.step('Backboard Style', { note: 'The backboard only changes what sits behind your sign — the neon lighting stays the same.' })
-                .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 3, compact: true, showIncluded: true }).el);
+                .appendChild(ctx.cards('style', styles.map((st) => ({ label: st.l, price: st.p, img: st.i || '', shelf: st.sh || '', board: uvBoardKey(st.l), visual: (v) => v.appendChild(el('span', 'moz-cfg__board-icon is-' + uvBoardKey(st.l))) })), { cols: 3, compact: true, showIncluded: true }).el);
             const bcolours = bySort(d.bcolours);
             let boardStep = null;
             if (bcolours.length) {
@@ -1743,7 +1780,7 @@
                 const uv = uvAddons.filter((a) => a.sf === 'both' || a.sf === '' || a.sf === mode);
                 return (isLed() ? neonAddons : []).concat(uv);
             }
-            const addStep = ctx.step('Add-ons & Included With Your Order');
+            const addStep = ctx.step('Add-ons & Included With Your Order', { note: 'Ticked items are included in the box with every sign at no additional cost.' });
             addonCtl = ctx.addons('addons', addonsFor());
             addStep.appendChild(addonCtl.el);
             addStep.hidden = !neonAddons.length && !uvAddons.length;
@@ -1785,6 +1822,7 @@
                 ['tl', 'tr', 'bl', 'br'].forEach((c) => board.appendChild(el('span', 'moz-uvb__clamp is-' + c)));
                 wrap.appendChild(board);
                 wrap.appendChild(el('div', 'moz-uvb__stand'));
+                wrap.appendChild(el('div', 'moz-uvb__shelf'));
                 sign.appendChild(wrap);
                 ctx._uv = { wrap, board, art };
             }
@@ -1816,7 +1854,7 @@
             const f = ctx.free();
             const fit = Math.min(1, Math.max(0.5, f.w / 640));
             const wCm = size ? num(size.w) : 60;
-            const boardPad = (kind === 'rect' || kind === 'openbox') ? 1.25 : 1;
+            const boardPad = (kind === 'rect' || kind === 'openbox') ? 1.25 : (kind === 'stand' ? 1.2 : 1);
             const targetW = Math.min(f.w * 0.92 / boardPad, 24.5 * Math.sqrt(Math.max(10, wCm)) * fit);
             const textMode = ctx.hasText();
             const symbols = textMode ? (ctx.v.symbols || []).map((sym) => uvSymbolImg(ctx, sym.u)).filter(Boolean) : [];
@@ -1843,6 +1881,10 @@
                 targetW,
                 maxH: f.h * 0.92 / boardPad
             });
+            // Stand base + shelf scale with the sign (Neon: --moz-stand-unit)
+            wrap.style.setProperty('--moz-stand-unit', Math.max(24, Math.round(res.W * 0.16)) + 'px');
+            const shelfUrl = ctx.v.style && ctx.v.style.shelf ? ctx.v.style.shelf : '';
+            if (shelfUrl) wrap.style.setProperty('--moz-shelf-photo', "url('" + shelfUrl + "')"); else wrap.style.removeProperty('--moz-shelf-photo');
             const h = size && res.W ? Math.round(num(size.w) * (res.H / res.W) * 10) / 10 : 0;
             ctx.setDims(size ? cmText(size.w) : '', h ? cmText(h) : '');
             ctx.dims = { w: size ? num(size.w) : 0, h };
@@ -1959,8 +2001,14 @@
         let botY = oy + H;
         try {
             const cw = cv.width;
-            const m = mozSmooth(mozMaskOf(sil), cw, cv.height, S(1.5));
-            const outline = mozSmooth(mozShrink(mozGrow(m, cw, cv.height, S(10)), cw, cv.height, S(3)), cw, cv.height, S(2.5));
+            // every visible part of the artwork (faint / semi-transparent details too) sits on the acrylic
+            const m = mozMaskOf(sil);
+            for (let i = 0; i < m.length; i++) m[i] = m[i] > 0.06 ? 1 : 0;
+            // Grow around the design, bridge the gaps between separate parts, fill every inner
+            // gap, then smooth: the frosted acrylic is one solid piece behind the complete design.
+            const bridge = S(Math.max(14, Math.min(40, W * 0.06)));
+            const grown = mozGrow(m, cw, cv.height, S(10) + bridge);
+            const outline = mozSmooth(mozFillHoles(mozShrink(grown, cw, cv.height, bridge + S(3)), cw, cv.height), cw, cv.height, S(2.5));
             bg.drawImage(mozMaskCanvas(outline, cw, cv.height), 0, 0);
             const x0 = Math.round(S(ox + W / 2 - tabW / 2));
             const x1 = Math.round(S(ox + W / 2 + tabW / 2));
@@ -2021,7 +2069,7 @@
 
     M.register('bonnet', {
         layout: 'neon',
-        hero: 'Design Your Bonnet Stand / Wall Sign',
+        hero: 'Design Your Bonnet / Hood Stand + Wall Sign',
         build(ctx, d) {
             const opts = d.opts || [];
             const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
@@ -2043,17 +2091,36 @@
                 .map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: 0 }));
             leds.push({ name: 'RGB (Colour Changing)', hex: 'linear-gradient(135deg,' + BONNET_RAINBOW.join(',') + ')', price: 0, rgb: true });
             const modeNames = cat('lighting_mode').map((o) => o.l).filter(Boolean);
-            ctx.step('LED Lighting', { note: 'Single colour or RGB — all colours, fade and flash modes are controlled with the remote and included free of charge.' + (modeNames.length ? ' Modes: ' + modeNames.join(', ') + '.' : '') })
-                .appendChild(ctx.swatches('led', leds).el);
+            const ledStep = ctx.step('LED Lighting — All Colours + RGB Included', { note: 'Every LED colour and RGB colour-changing (with all fade and flash modes, controlled by the remote) comes with your sign. The colours below are for the LIVE PREVIEW only — choose one to see how your sign looks in different colours. Selecting a colour never changes the price.' + (modeNames.length ? ' Modes: ' + modeNames.join(', ') + '.' : '') });
+            ledStep.appendChild(el('p', 'moz-cfg__included-banner', '✓ ALL LED COLOURS + RGB ARE INCLUDED AT NO EXTRA COST'));
+            let ledCtl = null;
+            const ledLabel = (item) => {
+                const lab = ledCtl ? ledCtl.el.querySelector('.moz-cfg__selected') : null;
+                if (lab && item) lab.textContent = 'Previewing: ' + item.name + ' — included, no extra cost';
+            };
+            ledCtl = ctx.swatches('led', leds, { onChange: ledLabel });
+            ledLabel(ctx.v.led);
+            ledStep.appendChild(ledCtl.el);
 
             const sizes = cat('size');
             ctx.sizes = sizes;
             ctx.step('Choose Height').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: (num(s.h) || cmFromLabel(s.l)) ? 'Height: ' + cmText(num(s.h) || cmFromLabel(s.l)) : '', src: s })), { price: 'full', cols: 2 }).el);
 
             const addons = cat('addon').map((a) => ({ label: a.l, price: a.p, free: !!a.f }));
-            if (addons.length) ctx.step('Power & Controls').appendChild(ctx.addons('addons', addons).el);
+            if (addons.length) ctx.step('Power & Controls', { note: 'The power cable and plug come connected to the sign — ready to plug straight into a power port.' }).appendChild(ctx.addons('addons', addons).el);
 
             ctx.step('Installation', { unnumbered: true, note: 'Wall mounting must be arranged at your own discretion using a suitable mounting method. For engine-bay use, this product features a universal fit and must be secured to the engine bay using zip ties. Ensure the sign is securely fitted before use. Indoor use only.' });
+
+            // Plug-related options at the bottom (same place as the other configurators)
+            const plugStep = ctx.step('Power Plug & Connection', { note: 'Your sign is supplied with its power cable and plug already connected and plugs into a standard power port. You can keep the supplied plug, or have it rewired to suit your installation (rewiring must be carried out by a qualified electrician and is arranged by you).' });
+            if (ctx.power.length) {
+                plugStep.appendChild(el('p', 'moz-cfg__sublabel', 'Plug type'));
+                plugStep.appendChild(ctx.select('power', ctx.power.map((p) => ({ label: p.l }))).el);
+            }
+            plugStep.appendChild(ctx.cards('plug', [
+                { key: 'keep', label: 'Keep the supplied plug', desc: 'Cable and plug come connected — plug in and go.', price: 0 },
+                { key: 'rewire', label: 'I will have it rewired', desc: 'Keep the cable; your electrician fits it to suit your installation.', price: 0 }
+            ], { price: 'none', cols: 2, compact: true }).el);
         },
         price(ctx) {
             const lines = [];
@@ -2114,6 +2181,10 @@
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
             if (ctx.v.led) p['LED Lighting'] = ctx.v.led.rgb ? 'RGB colour changing (fade / flash modes via remote)' : ctx.v.led.name + ' (single colour)';
+            p['LED Colours'] = 'All LED colours + RGB included (preview colour only)';
+            p['Power'] = 'Cable and plug connected to the sign';
+            if (ctx.v.power) p['Plug Type'] = ctx.v.power.label;
+            if (ctx.v.plug) p['Plug Connection'] = ctx.v.plug.key === 'rewire' ? 'Customer will have it rewired (own electrician)' : 'Keep the supplied plug';
             return p;
         }
     });
