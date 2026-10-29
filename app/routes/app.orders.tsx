@@ -1,15 +1,32 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { PRODUCTION_STAGES, normalizeStage, stageInfo } from "../production-stages";
 import { Resend } from "resend";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session } = await authenticate.admin(request);
+    const url = new URL(request.url);
+    const stageParam = url.searchParams.get("stage");
+    const stage = stageParam ? normalizeStage(stageParam) : null;
+
+    // Orders per production stage (for the filter tabs)
+    const grouped = await db.productionBlueprint.groupBy({
+        by: ["productionStatus"],
+        where: { shop: session.shop },
+        _count: { _all: true },
+    });
+    const stageCounts: Record<string, number> = {};
+    grouped.forEach((g) => {
+        const k = normalizeStage(g.productionStatus);
+        stageCounts[k] = (stageCounts[k] || 0) + g._count._all;
+    });
+    const totalCount = Object.values(stageCounts).reduce((s, n) => s + n, 0);
 
     const records = await db.productionBlueprint.findMany({
-        where: { shop: session.shop },
+        where: { shop: session.shop, ...(stage ? { productionStatus: stage } : {}) },
         orderBy: { createdAt: "desc" },
         select: {
             id: true,
@@ -24,6 +41,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             emailSentAt: true,
             emailSentTo: true,
             shareToken: true,
+            productionStatus: true,
+            statusUpdatedAt: true,
         },
     });
 
@@ -34,7 +53,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shareUrl: `${appUrl}/blueprint/${record.shareToken}`,
     }));
 
-    return { records: recordsWithShareUrl };
+    return { records: recordsWithShareUrl, stage, stageCounts, totalCount };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -42,6 +61,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const formData = await request.formData();
     const intent = formData.get("intent");
     const id = String(formData.get("id"));
+
+    if (intent === "set-status") {
+        const status = normalizeStage(String(formData.get("status") || ""));
+        const updated = await db.productionBlueprint.updateMany({
+            where: { id, shop: session.shop },
+            data: { productionStatus: status, statusUpdatedAt: new Date() },
+        });
+        if (!updated.count) return { ok: false, error: "Order not found" };
+        return { ok: true, status };
+    }
 
     if (intent === "delete") {
         await db.productionBlueprint.delete({ where: { id } });
@@ -93,7 +122,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function ProductionOrders() {
-    const { records } = useLoaderData<typeof loader>();
+    const { records, stage, stageCounts, totalCount } = useLoaderData<typeof loader>();
     const deleteFetcher = useFetcher();
     const emailFetchers: Record<string, ReturnType<typeof useFetcher>> = {};
 
@@ -106,7 +135,16 @@ export default function ProductionOrders() {
 
                 </s-paragraph>
 
-                {records.length === 0 && <s-paragraph>No blueprint has been generated yet.</s-paragraph>}
+                <div className="moz-stage-tabs">
+                    <Link to="/app/orders" className={"moz-stage-tab" + (!stage ? " is-active" : "")}>All <b>{totalCount}</b></Link>
+                    {PRODUCTION_STAGES.map((s) => (
+                        <Link key={s.key} to={"/app/orders?stage=" + s.key} className={"moz-stage-tab" + (stage === s.key ? " is-active" : "")} style={{ ["--stage" as any]: s.color }}>
+                            {s.label} <b>{stageCounts[s.key] || 0}</b>
+                        </Link>
+                    ))}
+                </div>
+
+                {records.length === 0 && <s-paragraph>{stage ? "No orders in this stage." : "No blueprint has been generated yet."}</s-paragraph>}
 
                 <s-stack direction="block" gap="base">
                     {records.map((record) => (
@@ -120,6 +158,10 @@ export default function ProductionOrders() {
 
 function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: ReturnType<typeof useFetcher> }) {
     const emailFetcher = useFetcher();
+    const statusFetcher = useFetcher();
+    const currentStage = normalizeStage(
+        statusFetcher.formData ? String(statusFetcher.formData.get("status")) : record.productionStatus
+    );
     const isDeleting = deleteFetcher.state !== "idle" && deleteFetcher.formData?.get("id") === record.id;
     const [downloadError, setDownloadError] = useState<string | null>(null);
     const [linkCopied, setLinkCopied] = useState(false);
@@ -170,6 +212,23 @@ function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: R
                     <s-paragraph>
                         {record.customerName} • Qty {record.quantity} • {record.destination}
                     </s-paragraph>
+                    <statusFetcher.Form method="post" className="moz-stage-select">
+                        <input type="hidden" name="intent" value="set-status" />
+                        <input type="hidden" name="id" value={record.id} />
+                        <span className="moz-stage-dot" style={{ background: stageInfo(currentStage).color }}></span>
+                        <label>
+                            Production stage:{" "}
+                            <select
+                                name="status"
+                                value={currentStage}
+                                onChange={(e) => statusFetcher.submit(e.currentTarget.form)}
+                            >
+                                {PRODUCTION_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                            </select>
+                        </label>
+                        {statusFetcher.state !== "idle" ? <small> Saving…</small> : null}
+                        {record.statusUpdatedAt && statusFetcher.state === "idle" ? <small> Updated {new Date(record.statusUpdatedAt).toLocaleDateString("en-AU")}</small> : null}
+                    </statusFetcher.Form>
                     <s-paragraph>
                         {new Date(record.createdAt).toLocaleString("en-AU")}
                         {record.emailSentAt ? ` • Last emailed to ${record.emailSentTo}` : " • Not emailed yet"}

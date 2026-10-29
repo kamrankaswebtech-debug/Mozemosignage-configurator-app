@@ -590,3 +590,75 @@ s-page td img {
     flex-direction: column;
     gap: 8px;
 }
+
+/* ---------- Dashboard: Production Pipeline + Popular Choices ---------- */
+.moz-section-hint { margin: 0 0 12px; font-size: 13px; color: var(--moz-text-subdued); }
+
+.moz-pipeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 10px;
+    margin-bottom: 4px;
+}
+.moz-pipeline__stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 12px 10px;
+    border: 1px solid var(--moz-border);
+    border-top: 3px solid var(--stage, var(--moz-accent));
+    border-radius: 12px;
+    background: var(--moz-surface);
+    color: inherit;
+    text-decoration: none;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.moz-pipeline__stage:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); }
+.moz-pipeline__step { font-size: 11px; font-weight: 700; color: var(--moz-text-subdued); }
+.moz-pipeline__count { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.moz-pipeline__label { font-size: 12.5px; font-weight: 600; }
+.moz-pipeline__bar { display: block; height: 5px; margin-top: 4px; border-radius: 4px; background: var(--moz-border); overflow: hidden; }
+.moz-pipeline__bar span { display: block; height: 100%; border-radius: 4px; background: var(--stage, var(--moz-accent)); }
+
+.moz-choices-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.moz-choices-head .moz-section-hint { margin: 0; }
+.moz-period { display: inline-flex; gap: 4px; padding: 3px; border: 1px solid var(--moz-border); border-radius: 999px; background: var(--moz-surface); }
+.moz-period__btn { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--moz-text-subdued); text-decoration: none; }
+.moz-period__btn.is-active { color: #ffffff; background: linear-gradient(135deg, #e0179f, #7a00ff); }
+
+.moz-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 10px; }
+.moz-choice-card { padding: 14px; border: 1px solid var(--moz-border); border-radius: 12px; background: var(--moz-surface); }
+.moz-choice-card__title { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.moz-choice-card__empty { margin: 0; font-size: 12.5px; color: var(--moz-text-subdued); }
+.moz-choice-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.moz-choice-list__top { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.moz-choice-list__top span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moz-choice-list__top b { flex: 0 0 auto; font-weight: 700; }
+.moz-choice-list__bar { display: block; height: 6px; margin-top: 4px; border-radius: 4px; background: var(--moz-border); overflow: hidden; }
+.moz-choice-list__bar span { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #e0179f, #7a00ff); }
+
+/* Stage chip (dashboard recent activity) */
+.moz-stage-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--stage); color: var(--moz-text, inherit);
+    background: color-mix(in srgb, var(--stage) 12%, transparent);
+}
+.moz-stage-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--stage); }
+
+/* ---------- Production Orders: stage tabs + stage selector ---------- */
+.moz-stage-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.moz-stage-tab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--moz-border); background: var(--moz-surface);
+    color: inherit; text-decoration: none;
+    border-bottom: 2px solid var(--stage, var(--moz-border));
+}
+.moz-stage-tab b { font-weight: 800; }
+.moz-stage-tab.is-active { color: #ffffff; border-color: transparent; background: linear-gradient(135deg, #e0179f, #7a00ff); }
+.moz-stage-select { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.moz-stage-select select { padding: 4px 8px; border-radius: 8px; border: 1px solid var(--moz-border-strong, #ccc); font-size: 13px; }
+.moz-stage-select small { color: var(--moz-text-subdued); }
+.moz-stage-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }

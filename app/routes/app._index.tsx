@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { AdminIcon } from "../components/admin-ui";
+import { PRODUCTION_STAGES, normalizeStage, stageInfo, popularChoices } from "../production-stages";
 
 // Icon names refer to the shared line-icon set in app/components/admin-ui.tsx.
 const CONFIGURATOR_SOURCES = [
@@ -32,6 +33,10 @@ function toVimeoEmbedUrl(url: string) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  // Popular choices period: 30 / 90 / 365 days or all time ("0")
+  const periodParam = url.searchParams.get("period") || "90";
+  const periodDays = ["30", "90", "365", "0"].includes(periodParam) ? Number(periodParam) : 90;
 
   const uniqueTypes = Array.from(new Set(CONFIGURATOR_SOURCES.flatMap((c) => c.types)));
   const aliasFor = (type: string) => `t_${type}`;
@@ -57,19 +62,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   `;
 
-  const [graphqlResponse, recentBlueprints, last7DaysBlueprints] = await Promise.all([
+  const [graphqlResponse, recentBlueprints, last7DaysBlueprints, stageGroups, choiceRecords] = await Promise.all([
     admin.graphql(combinedQuery).then((r) => r.json()),
     db.productionBlueprint.findMany({
       where: { shop: session.shop },
       orderBy: { createdAt: "desc" },
       take: 6,
-      select: { id: true, orderName: true, productTitle: true, customerName: true, destination: true, orderStatus: true, createdAt: true },
+      select: { id: true, orderName: true, productTitle: true, customerName: true, destination: true, orderStatus: true, productionStatus: true, createdAt: true },
     }),
     db.productionBlueprint.findMany({
       where: { shop: session.shop, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { shopifyOrderId: true },
     }),
+    db.productionBlueprint.groupBy({
+      by: ["productionStatus"],
+      where: { shop: session.shop },
+      _count: { _all: true },
+    }),
+    db.productionBlueprint.findMany({
+      where: { shop: session.shop, ...(periodDays ? { createdAt: { gte: new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000) } } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: 2000,
+      select: { propertiesJson: true, quantity: true },
+    }),
   ]);
+
+  const pipelineCounts: Record<string, number> = {};
+  stageGroups.forEach((g) => {
+    const k = normalizeStage(g.productionStatus);
+    pipelineCounts[k] = (pipelineCounts[k] || 0) + g._count._all;
+  });
+  const pipeline = PRODUCTION_STAGES.map((s) => ({ key: s.key, label: s.label, color: s.color, count: pipelineCounts[s.key] || 0 }));
+  const pipelineTotal = pipeline.reduce((sum, s) => sum + s.count, 0);
+  const choices = popularChoices(choiceRecords, 5);
 
   const gqlData = graphqlResponse.data || {};
   const countsByType: Record<string, number> = {};
@@ -157,6 +182,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     themeEditorUrl,
     themeEditorProductTemplateUrl,
     demoVideos,
+    pipeline,
+    pipelineTotal,
+    choices,
+    periodDays,
+    choiceOrderCount: choiceRecords.length,
   };
 };
 
@@ -224,6 +254,11 @@ export default function Dashboard() {
     themeEditorUrl,
     themeEditorProductTemplateUrl,
     demoVideos,
+    pipeline,
+    pipelineTotal,
+    choices,
+    periodDays,
+    choiceOrderCount,
   } = useLoaderData<typeof loader>();
 
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
@@ -309,6 +344,51 @@ export default function Dashboard() {
         </div>
       </s-section>
 
+      <s-section heading="Production Pipeline">
+        <p className="moz-section-hint">Where every configurator order is right now. Click a stage to see its orders and move them along.</p>
+        <div className="moz-pipeline">
+          {pipeline.map((s, i) => (
+            <Link key={s.key} to={"/app/orders?stage=" + s.key} className="moz-pipeline__stage" style={{ ["--stage" as any]: s.color }}>
+              <span className="moz-pipeline__step">{i + 1}</span>
+              <span className="moz-pipeline__count">{s.count}</span>
+              <span className="moz-pipeline__label">{s.label}</span>
+              <span className="moz-pipeline__bar"><span style={{ width: pipelineTotal ? Math.max(4, Math.round((s.count / pipelineTotal) * 100)) + "%" : "0%" }}></span></span>
+            </Link>
+          ))}
+        </div>
+        {pipelineTotal === 0 && <div className="moz-empty">No orders yet — new configurator orders appear here automatically as "New Order".</div>}
+      </s-section>
+
+      <s-section heading="Popular Choices">
+        <div className="moz-choices-head">
+          <p className="moz-section-hint">What customers order most — from {choiceOrderCount} configurator order line{choiceOrderCount === 1 ? "" : "s"}.</p>
+          <div className="moz-period">
+            {[{ d: 30, l: "30 days" }, { d: 90, l: "90 days" }, { d: 365, l: "12 months" }, { d: 0, l: "All time" }].map((p) => (
+              <Link key={p.d} to={"/app?period=" + p.d} className={"moz-period__btn" + (periodDays === p.d ? " is-active" : "")}>{p.l}</Link>
+            ))}
+          </div>
+        </div>
+        <div className="moz-choices">
+          {choices.map((g) => (
+            <div key={g.key} className="moz-choice-card">
+              <p className="moz-choice-card__title">{g.title}</p>
+              {g.rows.length === 0 ? (
+                <p className="moz-choice-card__empty">No data yet</p>
+              ) : (
+                <ol className="moz-choice-list">
+                  {g.rows.map((r) => (
+                    <li key={r.label}>
+                      <div className="moz-choice-list__top"><span>{r.label}</span><b>{r.count} · {r.percent}%</b></div>
+                      <span className="moz-choice-list__bar"><span style={{ width: r.percent + "%" }}></span></span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ))}
+        </div>
+      </s-section>
+
       <s-section heading="Recent Activity & Production Orders">
         {recentBlueprints.length === 0 ? (
           <div className="moz-empty">No production blueprints yet — they're generated automatically when a configurator order comes in.</div>
@@ -323,7 +403,10 @@ export default function Dashboard() {
                     {b.customerName} • {b.destination} • {new Date(b.createdAt).toLocaleDateString("en-AU")}
                   </p>
                 </div>
-                <s-badge>{formatStatus(b.orderStatus)}</s-badge>
+                <s-stack direction="inline" gap="small-200">
+                  <span className="moz-stage-chip" style={{ ["--stage" as any]: stageInfo(b.productionStatus).color }}>{stageInfo(b.productionStatus).label}</span>
+                  <s-badge>{formatStatus(b.orderStatus)}</s-badge>
+                </s-stack>
               </div>
             ))}
           </div>

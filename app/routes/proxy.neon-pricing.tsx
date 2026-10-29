@@ -17,6 +17,17 @@ export async function action({ request }: ActionFunctionArgs) {
         return handleFileUpload(request, admin);
     }
 
+    // Any unexpected failure (Shopify API throttling, network) answers with JSON, so the storefront
+    // can retry instead of failing on an HTML error page.
+    try {
+        return await handlePricing(request, admin);
+    } catch (err) {
+        console.error("Neon Pricing Proxy: unexpected error", err);
+        return Response.json({ error: "Pricing temporarily unavailable — please try again", retry: true }, { status: 503 });
+    }
+}
+
+async function handlePricing(request: Request, admin: any) {
     const body = await request.json();
     const { productId, price } = body;
 

@@ -101,6 +101,48 @@
         black: 'linear-gradient(180deg,#3a3a40 0%,#141416 55%,#060607 100%)'
     };
 
+
+    // ---------- Pricing proxy with retries (shared by all configurators) ----------
+    // The app proxy can briefly fail (Shopify API throttling, a cold server, a slow network). Instead of
+    // showing "Something went wrong" straight away, the call is retried a few times. Returns a
+    // Response-like object so the existing code (ok / json()) keeps working unchanged.
+    async function mozPricingFetch(url, opts) {
+        let wantPrice = null;
+        try { wantPrice = Number(JSON.parse(opts.body).price); } catch (e) { wantPrice = null; }
+        let lastStatus = 0;
+        let lastData = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+                const res = await fetch(url, Object.assign({}, opts, { cache: 'no-store' }));
+                lastStatus = res.status;
+                const text = await res.text();
+                let data = null;
+                try { data = JSON.parse(text); } catch (e) { data = null; }
+                lastData = data;
+                const priceOk = !data || data.price === undefined || wantPrice === null || Math.abs(Number(data.price) - Number(wantPrice.toFixed(2))) <= 0.005;
+                if (res.ok && data && data.variantId && !data.error && priceOk) {
+                    return { ok: true, status: res.status, json: async () => data };
+                }
+                // A clear client error (bad request / not authorised) will not change on retry.
+                if (res.status === 400 || res.status === 401 || res.status === 403) break;
+            } catch (err) {
+                lastStatus = 0;
+            }
+            await new Promise((r) => setTimeout(r, 900 * (attempt + 1)));
+        }
+        console.error('Mozemo pricing proxy failed after retries', lastStatus, lastData);
+        return { ok: false, status: lastStatus, json: async () => (lastData || { error: 'Pricing sync failed' }) };
+    }
+
+    // Back / forward from checkout restores this page from the browser cache with an old cart drawer
+    // (e.g. "Your cart is empty"). Reload it so the cart always shows its real contents.
+    if (!window.__mozCartBfcacheFix) {
+        window.__mozCartBfcacheFix = true;
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) window.location.reload();
+        });
+    }
+
     // ---------- Reliable add of a configured-price line (same flow as Neon / 3D) ----------
     async function addItemToCartWithRetry(routesRoot, variantId, properties, sectionIds, maxRetries) {
         let lastError;
@@ -208,9 +250,9 @@
         const added = addResult && Array.isArray(addResult.items)
             ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
             : null;
-        if (linePriceOk(added, want)) return;
-        for (let attempt = 0; attempt < 10; attempt++) {
-            await sleep(attempt === 0 ? 700 : 1000);
+        const firstOk = linePriceOk(added, want);
+        for (let attempt = 0; attempt < 15; attempt++) {
+            await sleep(attempt === 0 ? (firstOk ? 1200 : 700) : 1000);
             let cart;
             try { cart = await (await fetch(routesRoot + 'cart.js', { cache: 'no-store' })).json(); } catch (err) { continue; }
             const lines = (cart.items || []).filter((item) => String(item.variant_id) === String(variantId));
@@ -895,7 +937,7 @@
             addBtn.disabled = true;
             setLoading('Syncing price...');
             try {
-                const proxyResponse = await fetch('/apps/neon-pricing', {
+                const proxyResponse = await mozPricingFetch('/apps/neon-pricing', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ productId, price: ctx.total })

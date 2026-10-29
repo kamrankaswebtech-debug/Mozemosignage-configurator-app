@@ -33,6 +33,8 @@ model ProductionBlueprint {
   createdAt      DateTime  @default(now())
   emailSentAt    DateTime?
   emailSentTo    String?
+  productionStatus String    @default("NEW")
+  statusUpdatedAt  DateTime?
 
   @@index([shop])
   @@index([shopifyOrderId])
