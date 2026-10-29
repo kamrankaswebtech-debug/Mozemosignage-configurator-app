@@ -2939,3 +2939,34 @@
 .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__addon-card { min-height: 44px; padding: 7px 9px; border-radius: 8px; font-size: 12px; }
 .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-icon,
 .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__io-icon svg { width: 28px; height: 28px; }
+
+/* =====================================================================
+   Event Marquee bulbs — realistic: chrome socket ring recessed into the
+   face, glass globe with a warm filament core and a soft highlight,
+   warm halo when lit; frosted glass with a faint tint when off.
+   ===================================================================== */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.95) 0 9%, rgba(255, 255, 255, 0) 22%),
+        radial-gradient(circle at 50% 54%, #ffffff 0 18%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 45%, #ffffff) 34%, var(--sign3d-bulb, #ffd27a) 62%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 70%, #6b4a10) 100%);
+    box-shadow:
+        0 0 0 max(1px, 0.07em) #cfd3d8,
+        0 0 0 max(1.6px, 0.11em) #6d7178,
+        0 1px 1.5px max(1.6px, 0.11em) rgba(0, 0, 0, 0.45),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.led-on .sign3d-configurator__bulb {
+    box-shadow:
+        0 0 0 max(1px, 0.07em) #e2e5e9,
+        0 0 0 max(1.6px, 0.11em) #7a7e85,
+        0 0 4px 2px color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 85%, #ffffff),
+        0 0 12px 4px color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 45%, transparent),
+        inset 0 -1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.led-off .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.9) 0 9%, rgba(255, 255, 255, 0) 24%),
+        radial-gradient(circle at 50% 55%, #f4f2ec 0 22%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 22%, #d9d5cc) 60%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 15%, #8e8a82) 100%);
+}

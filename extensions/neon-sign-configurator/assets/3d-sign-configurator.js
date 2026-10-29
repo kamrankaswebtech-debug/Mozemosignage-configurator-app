@@ -723,7 +723,7 @@ function sign3dThin(src, W, H) {
 // Typical half stroke width of the font (from "H" / "I"), so bulbs are the same size and spacing
 // in every letter of the sign.
 function sign3dStrokeHalf(fontCss, S) {
-    const key = fontCss + '|hw|' + S;
+    const key = fontCss + '|hw|' + S + '|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const vals = [];
     ['H', 'I', 'l', '1'].some((ch) => {
@@ -735,7 +735,7 @@ function sign3dStrokeHalf(fontCss, S) {
     });
     vals.sort((a, b) => a - b);
     const hw = vals.length ? vals[Math.floor(vals.length / 2)] : S * 0.08;
-    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = hw;
+    SIGN3D_BULB_CACHE[key] = hw;
     return hw;
 }
 
@@ -745,7 +745,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v4';
+    const key = fontCss + '|' + ch + '|v5|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -967,7 +967,7 @@ function sign3dBulbPoints(ch, fontCss) {
     // Centre every bulb across its stroke (thin serif bars / horizontals included) and keep it
     // fully inside the letter: it moves to the thickest nearby point and is never wider than the
     // stroke there, so no bulb sticks out over an edge.
-    const R0 = Math.max(2, Math.round(hw * 0.7));
+    const R0 = Math.max(2, Math.round(hw * 0.45));
     const fitted = keep.map((p) => {
         const px0 = Math.round(p.x);
         const py0 = Math.round(p.y);
@@ -977,7 +977,7 @@ function sign3dBulbPoints(ch, fontCss) {
             if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
             const dd = dist[y * W + x];
             if (!dd) continue;
-            const score = dd - 0.35 * Math.sqrt(dx * dx + dy * dy);
+            const score = dd - 0.6 * Math.sqrt(dx * dx + dy * dy);
             if (score > best) { best = score; bx = x; by = y; }
         }
         const local = dist[by * W + bx] || 1;
@@ -992,7 +992,7 @@ function sign3dBulbPoints(ch, fontCss) {
         if (ok) placed.push(p);
     });
     const res = placed.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: p.d / S }));
-    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
+    SIGN3D_BULB_CACHE[key] = res;
     return res;
 }
 
@@ -1001,7 +1001,7 @@ function sign3dBulbPoints(ch, fontCss) {
 // the tunnel. Returned as a white mask (data URL) — the LED colour comes from CSS — plus its box
 // in em (x from the letter's left edge, y from the baseline).
 function sign3dInfinityMask(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|inf5';
+    const key = fontCss + '|' + ch + '|inf5|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 160;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1050,7 +1050,7 @@ function sign3dInfinityMask(ch, fontCss) {
     }
     g.putImageData(id, 0, 0);
     const res = { url: c.toDataURL('image/png'), x: -ox / S, y: -base / S, w: W / S, h: H / S };
-    if (sign3dFontReady(fontCss)) SIGN3D_BULB_CACHE[key] = res;
+    SIGN3D_BULB_CACHE[key] = res;
     return res;
 }
 
@@ -1424,6 +1424,26 @@ function initSign3dConfigurator(root) {
     // Marquee bulbs / Infinity tunnels are rebuilt only when wording, size, font or font-load state change.
     let bulbSignature = '';
     let tunnelSignature = '';
+    // Marquee bulbs / Infinity tunnels: placed right away, but while the customer is typing they
+    // are placed just after the last keystroke so typing / backspace never lag.
+    let lastTypedAt = 0;
+    let glyphDecorTimer = null;
+    function runGlyphDecor() {
+        glyphDecorTimer = null;
+        try { placeMarqueeBulbs(); } catch (err) { console.error('[Mozemo 3D] marquee bulbs:', err); }
+        try { placeInfinityTunnels(); } catch (err) { console.error('[Mozemo 3D] infinity tunnels:', err); }
+    }
+    function scheduleGlyphDecor() {
+        const mode = root.dataset.sign3dMode;
+        if (mode !== 'marquee' && mode !== 'infinity') return;
+        if (Date.now() - lastTypedAt < 400) {
+            clearTimeout(glyphDecorTimer);
+            glyphDecorTimer = setTimeout(runGlyphDecor, 220);
+            return;
+        }
+        if (glyphDecorTimer) { clearTimeout(glyphDecorTimer); glyphDecorTimer = null; }
+        runGlyphDecor();
+    }
     const bgThumbs = root.querySelectorAll('[data-bg-thumbs] .sign3d-configurator__bg-thumb');
     const wallpaperToggle = root.querySelector('[data-hide-wallpaper-toggle]');
     const wallpaperToggleLabel = root.querySelector('[data-wallpaper-toggle-label]');
@@ -2608,8 +2628,7 @@ function initSign3dConfigurator(root) {
 
     function updateDimensionLines() {
         if (!previewStage) return;
-        try { placeMarqueeBulbs(); } catch (err) { console.error('[Mozemo 3D] marquee bulbs:', err); }
-        try { placeInfinityTunnels(); } catch (err) { console.error('[Mozemo 3D] infinity tunnels:', err); }
+        scheduleGlyphDecor();
         const stageRect = previewStage.getBoundingClientRect();
         const contentRect = getSignContentRect();
         updateBackingPanel(contentRect, stageRect);
@@ -2887,6 +2906,7 @@ function initSign3dConfigurator(root) {
 
     let textHistoryTimer = null;
     textInput.addEventListener('input', () => {
+        lastTypedAt = Date.now();
         updatePreviewText();
         clearTimeout(textHistoryTimer);
         textHistoryTimer = setTimeout(() => {
@@ -4294,6 +4314,7 @@ function initSign3dConfigurator(root) {
                 b.className = 'sign3d-configurator__bulb';
                 const dia = Math.max(3, p.d * fs);
                 b.style.width = dia + 'px';
+                b.style.fontSize = dia + 'px'; // socket ring / glass sizes in em follow the bulb
                 b.style.height = dia + 'px';
                 b.style.left = (p.x * fs - dia / 2) + 'px';
                 b.style.top = (baseY + p.y * fs - dia / 2) + 'px';
