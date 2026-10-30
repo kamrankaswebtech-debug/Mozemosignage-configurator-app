@@ -13,7 +13,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     query List { metaobjects(type: "$app:uv_finish", first: 100) { edges { node { id fields { key value } } } } }`
     );
     const data = await response.json();
-    const items: Entry[] = data.data.metaobjects.edges.map((edge: any) => {
+    // Entries with a design_key belong to the Design Type Images page.
+    const finishEdges = data.data.metaobjects.edges.filter((edge: any) => !edge.node.fields.some((x: any) => x.key === "design_key" && x.value));
+    const items: Entry[] = finishEdges.map((edge: any) => {
         const f: Record<string, string> = {};
         edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
         return { id: edge.node.id, label: f.label || "", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0" };

@@ -9,6 +9,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const SECTIONS = [
+    { title: "Design Type Images", path: "/app/uv-graphic-led/design-type", description: "Images on the Graphic Only and Text + Graphic cards. Without an image a simple icon is shown." },
     { title: "Size Prices (UV)", path: "/app/uv-graphic-led/sizes", description: "Optional UV prices per Neon size width — With and Without Neon Lighting. Sizes not listed use the Neon price." },
     { title: "UV Add-ons", path: "/app/uv-graphic-led/addons", description: "Extra UV-only add-ons, shown With Neon, Without Neon, or both (Neon add-ons are included automatically)." },
     { title: "Neon Colours", path: "/app/neon-signs/colours", description: "Shared with Neon Signs — neon colours (With Neon Lighting)." },

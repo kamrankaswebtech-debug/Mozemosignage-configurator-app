@@ -720,6 +720,15 @@ type = "number_decimal"
 name = "Sort Order"
 type = "number_integer"
 
+[metaobjects.app.uv_finish.fields.design_key]
+name = "Design Type Key"
+description = "graphic or text = this entry holds the Design Type image of the Graphic configurator (Graphic LED > Design Type Images). Empty on finish entries."
+type = "single_line_text_field"
+
+[metaobjects.app.uv_finish.fields.preview_image]
+name = "Preview Image"
+type = "file_reference"
+
 [metaobjects.app.uv_led_colour]
 name = "UV LED Colour"
 description = "LED backlighting colour options (used only by the LED variant of UV Graphic signs)"

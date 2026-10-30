@@ -5,7 +5,9 @@
   Params: block_id, product_id, start ('led' or 'no_led').
 {%- endcomment -%}
 <div data-moz-cfg="uv" data-block-id="{{ block_id }}" data-product-id="{{ product_id }}">
+{%- assign uv_dg = '' -%}{%- assign uv_dt = '' -%}{%- for o in metaobjects["app--418838118401--uv_finish"].values -%}{%- if o.preview_image.value -%}{%- if o.design_key.value == 'graphic' and uv_dg == '' -%}{%- assign uv_dg = o.preview_image.value | image_url: width: 600 -%}{%- elsif o.design_key.value == 'text' and uv_dt == '' -%}{%- assign uv_dt = o.preview_image.value | image_url: width: 600 -%}{%- endif -%}{%- endif -%}{%- endfor -%}
 <script type="application/json" data-moz-data>{"start":{{ start | default: 'led' | json }},
+"dimgs":{"g":{{ uv_dg | json }},"t":{{ uv_dt | json }}},
 "dicons":{"g":{{ 'moz-design-graphic.png' | asset_url | json }},"t":{{ 'moz-design-text.png' | asset_url | json }}},
 "colours":[{%- for o in metaobjects["app--418838118401--neon_colour"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"n":{{ o.name.value | json }},"h":{{ o.hex_code.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }},"so":{{ o.show_on.value | default: "" | json }}}{%- endfor -%}],
 "effects":[{%- for o in metaobjects["app--418838118401--neon_effect_mode"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ o.label.value | json }},"k":{{ o.mode_key.value | json }},"p":{{ o.extra_price_decimal.value | default: 0 }},"s":{{ o.sort_order.value | default: 999999 }},"so":{{ o.show_on.value | default: "" | json }}}{%- endfor -%}],

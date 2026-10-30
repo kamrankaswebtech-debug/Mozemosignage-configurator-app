@@ -1138,6 +1138,8 @@
         g.beginPath();
         if (g.roundRect) g.roundRect(6, 6, 348, 228, 22); else g.rect(6, 6, 348, 228);
         g.fill();
+        g.beginPath();
+        if (g.roundRect) g.roundRect(18, 18, 324, 204, 12); else g.rect(18, 18, 324, 204);
         g.setLineDash([12, 9]);
         g.lineWidth = 4;
         g.strokeStyle = 'rgba(110,110,130,0.8)';
@@ -1315,37 +1317,46 @@
         return a;
     }
     const mozRamp = (a, lo, hi) => { for (let i = 0; i < a.length; i++) a[i] = a[i] <= lo ? 0 : (a[i] >= hi ? 1 : (a[i] - lo) / (hi - lo)); return a; };
-    // Distance (chamfer, 1 / 1.414) from every pixel to the nearest pixel inside (or outside) the
-    // shape. Used for exact grow / shrink: even hairline strokes (thin script text) count fully.
+    // Exact (Euclidean) distance from every pixel to the nearest pixel inside (or outside) the
+    // shape, so grown outlines stay smooth and even. Used for exact grow / shrink: even hairline
+    // strokes (thin script text) count fully.
     function mozDistance(m, w, h, toInside) {
-        const INF = 1e9;
-        const D2 = 1.4142;
+        const INF = 1e12;
+        const f = new Float64Array(w * h);
+        for (let i = 0; i < f.length; i++) f[i] = (toInside ? m[i] >= 0.35 : m[i] < 0.35) ? 0 : INF;
+        const n = Math.max(w, h);
+        const v = new Int32Array(n);
+        const z = new Float64Array(n + 1);
+        const out = new Float64Array(n);
+        // One line of the squared distance transform (lower envelope of parabolas)
+        const line = (off, step, len) => {
+            let k = -1;
+            for (let q = 0; q < len; q++) {
+                const fq = f[off + q * step];
+                if (fq >= INF) continue;
+                let s = -Infinity;
+                while (k >= 0) {
+                    const p = v[k];
+                    s = (fq + q * q - f[off + p * step] - p * p) / (2 * (q - p));
+                    if (s <= z[k]) { k--; s = -Infinity; } else break;
+                }
+                k++;
+                v[k] = q;
+                z[k] = s;
+            }
+            if (k < 0) return;
+            let j = 0;
+            for (let q = 0; q < len; q++) {
+                while (j < k && z[j + 1] < q) j++;
+                const dq = q - v[j];
+                out[q] = dq * dq + f[off + v[j] * step];
+            }
+            for (let q = 0; q < len; q++) f[off + q * step] = out[q];
+        };
+        for (let x = 0; x < w; x++) line(x, w, h);
+        for (let y = 0; y < h; y++) line(y * w, 1, w);
         const d = new Float32Array(w * h);
-        for (let i = 0; i < d.length; i++) d[i] = (toInside ? m[i] >= 0.35 : m[i] < 0.35) ? 0 : INF;
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-            const i = y * w + x;
-            let v = d[i];
-            if (!v) continue;
-            if (x > 0 && d[i - 1] + 1 < v) v = d[i - 1] + 1;
-            if (y > 0) {
-                if (d[i - w] + 1 < v) v = d[i - w] + 1;
-                if (x > 0 && d[i - w - 1] + D2 < v) v = d[i - w - 1] + D2;
-                if (x < w - 1 && d[i - w + 1] + D2 < v) v = d[i - w + 1] + D2;
-            }
-            d[i] = v;
-        }
-        for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
-            const i = y * w + x;
-            let v = d[i];
-            if (!v) continue;
-            if (x < w - 1 && d[i + 1] + 1 < v) v = d[i + 1] + 1;
-            if (y < h - 1) {
-                if (d[i + w] + 1 < v) v = d[i + w] + 1;
-                if (x < w - 1 && d[i + w + 1] + D2 < v) v = d[i + w + 1] + D2;
-                if (x > 0 && d[i + w - 1] + D2 < v) v = d[i + w - 1] + D2;
-            }
-            d[i] = v;
-        }
+        for (let i = 0; i < d.length; i++) d[i] = f[i] >= INF ? 1e9 : Math.sqrt(f[i]);
         return d;
     }
     const mozGrow = (m, w, h, r) => {                                                    // dilate by r (exact)
@@ -1360,8 +1371,29 @@
         for (let i = 0; i < d.length; i++) o[i] = Math.max(0, Math.min(1, d[i] - r + 0.5));
         return o;
     };
+    // Grow then shrink on a larger buffer, so a big grow is never cut off by the canvas edge
+    // (a cut grow leaves square tabs on the outline).
+    const mozGrowShrink = (m, w, h, grow, shrink) => {
+        const e = Math.ceil(grow) + 2;
+        const W2 = w + e * 2;
+        const H2 = h + e * 2;
+        const big = new Float32Array(W2 * H2);
+        for (let y = 0; y < h; y++) big.set(m.subarray(y * w, y * w + w), (y + e) * W2 + e);
+        const done = mozShrink(mozGrow(big, W2, H2, grow), W2, H2, shrink);
+        const o = new Float32Array(w * h);
+        for (let y = 0; y < h; y++) o.set(done.subarray((y + e) * W2 + e, (y + e) * W2 + e + w), y * w);
+        return o;
+    };
     const mozSmooth = (m, w, h, r) => mozRamp(mozBlur(m, w, h, r), 0.38, 0.62);        // clean edge, drop specks
     const mozMax = (a, b) => { const o = new Float32Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] > b[i] ? a[i] : b[i]; return o; };
+    // Bounding box of a mask + how many pixels are filled (null when empty).
+    const mozMaskBox = (m, w, h) => {
+        let x0 = w, y0 = h, x1 = -1, y1 = -1, filled = 0;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            if (m[y * w + x] > 0.5) { filled++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        return x1 < 0 ? null : { x0, y0, x1, y1, filled };
+    };
     const mozMinus = (a, b) => { const o = new Float32Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.max(0, a[i] - b[i]); return o; };
 
     // Acrylic finish of a backboard colour (same rules as the Neon configurator).
@@ -1447,14 +1479,21 @@
         // The GRAPHIC keeps the same size with or without text (it follows the chosen size);
         // text / symbols are added around it, and everything only shrinks when it would not fit
         // the preview area.
-        const maxW = o.maxW || o.targetW;
-        const fitScale = (l) => Math.min(maxW / l.bw, o.maxH / l.bh);
-        let s = Math.min(o.targetW / gW, o.maxH / R, fitScale(cur));
+        // sizeScale (0-1) comes from the chosen size: the largest size fills the preview, so every
+        // size looks different for any graphic shape. With text the top end is eased down instead
+        // of cut off, so the sign still grows with each size.
+        const fitScale = (l) => Math.min(o.maxW / l.bw, o.maxH / l.bh);
+        const fillG = Math.min(o.maxW / gW, o.maxH / R);
+        let fillT = fillG;
         if (text) {
             ['left', 'top', 'right', 'bottom'].forEach((tp) => {
-                (syms.length ? ['left', 'top', 'right', 'bottom'] : [o.symPos]).forEach((sp) => { s = Math.min(s, fitScale(layout(tp, sp))); });
+                (syms.length ? ['left', 'top', 'right', 'bottom'] : [o.symPos]).forEach((sp) => { fillT = Math.min(fillT, fitScale(layout(tp, sp))); });
             });
         }
+        const room = fillT / fillG;
+        const knee = room * 0.8;
+        const ss = o.sizeScale;
+        const s = fillG * (ss <= knee ? ss : knee + (ss - knee) * (room - knee) / (1 - knee));
         const W = Math.round(bw * s);
         const H = Math.round(bh * s);
 
@@ -1517,7 +1556,7 @@
                 const mg = mozSmooth(mozMaskOf(print), CW, CH, D(1.5));
                 const closed = mozShrink(mozGrow(mg, CW, CH, D(7)), CW, CH, D(7));
                 const shape = mozMax(mg, closed);
-                const lw = Math.max(1.6, Math.min(3.2, W / 170));
+                const lw = Math.max(2.4, Math.min(4.8, W / 120));
                 const tubeIn = mozGrow(shape, CW, CH, D(2.5));
                 const tubeOut = mozGrow(shape, CW, CH, D(2.5 + lw));
                 const tube = mozMinus(tubeOut, tubeIn);
@@ -1529,7 +1568,20 @@
                 // bridge gaps between graphic and text (grows with the sign), then fill every
                 // enclosed hole so the cut-around board is one solid piece
                 const bridgeR = D(28) + L(R * 0.08);
-                const board = mozSmooth(mozFillHoles(mozShrink(mozGrow(union, CW, CH, bridgeR), CW, CH, bridgeR - D(10)), CW, CH), CW, CH, D(6));
+                let board = mozSmooth(mozFillHoles(mozGrowShrink(union, CW, CH, bridgeR, bridgeR - D(10)), CW, CH), CW, CH, D(6));
+                // Rectangular artwork (the "Your Graphic" placeholder, full-bleed photos): a clean rectangular board.
+                const artBox = mozMaskBox(mg, CW, CH);
+                if (artBox && artBox.filled / ((artBox.x1 - artBox.x0 + 1) * (artBox.y1 - artBox.y0 + 1)) >= 0.9) {
+                    const b = mozMaskBox(union, CW, CH);
+                    const rc = make();
+                    const rg = rc.getContext('2d');
+                    const m0 = D(10);
+                    rg.fillStyle = '#000';
+                    rg.beginPath();
+                    if (rg.roundRect) rg.roundRect(b.x0 - m0, b.y0 - m0, b.x1 - b.x0 + 1 + m0 * 2, b.y1 - b.y0 + 1 + m0 * 2, D(12)); else rg.rect(b.x0 - m0, b.y0 - m0, b.x1 - b.x0 + 1 + m0 * 2, b.y1 - b.y0 + 1 + m0 * 2);
+                    rg.fill();
+                    board = mozMaskOf(rc);
+                }
                 const inner = mozShrink(board, CW, CH, D(1.6));
                 geo = {
                     print,
@@ -1621,7 +1673,10 @@
         if (o.glow) {
             g.save();
             g.shadowColor = o.glow;
-            // soft halo kept close to the tube (the backboard itself is not lit)
+            // soft halo kept close to the tube, with a small spill on the wall (the backboard itself is not lit)
+            g.globalAlpha = 0.45;
+            g.shadowBlur = D(26);
+            if (tube) g.drawImage(tube, 0, 0);
             g.globalAlpha = 0.9;
             g.shadowBlur = D(14);
             if (tube) g.drawImage(tube, 0, 0);
@@ -1693,11 +1748,21 @@
                     ? '<g transform="translate(44 6) scale(0.8)">' + ICON + '</g><rect x="30" y="40" width="60" height="4" rx="2" fill="#ffffff"/><rect x="40" y="50" width="40" height="4" rx="2" fill="#ffffff" opacity="0.6"/>'
                     : '<g transform="translate(37 10) scale(1.15)">' + ICON + '</g>')
                 + '</svg>';
+            // Admin image (Graphic LED > Design Type Images) when set, otherwise the simple icon.
+            const dimgs = d.dimgs || {};
+            const designVisual = (v, url, withText) => {
+                if (!url) { v.innerHTML = designSvg(withText); return; }
+                const im = el('img', 'moz-cfg__design-img');
+                im.src = url;
+                im.alt = '';
+                v.appendChild(im);
+            };
             const designCtl = ctx.cards('design', [
-                { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => { v.innerHTML = designSvg(false); } },
-                { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => { v.innerHTML = designSvg(true); } }
+                { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => designVisual(v, dimgs.g, false) },
+                { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => designVisual(v, dimgs.t, true) }
             ], { price: 'none', cols: 2, compact: true, onChange: () => { textSteps.forEach((s) => { s.hidden = !hasText(); }); syncTextColour(); } });
             designCtl.el.classList.add('moz-cfg__cards--design');
+            designCtl.el.classList.toggle('has-images', !!(dimgs.g || dimgs.t));
             ctx.step('Design Type').appendChild(designCtl.el);
 
             const posItems = [{ key: 'left', label: 'Left' }, { key: 'top', label: 'Top' }, { key: 'right', label: 'Right' }, { key: 'bottom', label: 'Bottom' }].map((p) => Object.assign({ price: 0 }, p));
@@ -1949,14 +2014,14 @@
             const rgb = lit && ctx.v.effect && ctx.v.effect.key === 'rgb';
             wrap.classList.toggle('is-lit', lit);
             wrap.classList.toggle('is-rgb', rgb);
-            // Same realistic sizing as the Neon configurator: width grows with the square root of
-            // the size (40 cm small, 300 cm large) and shrinks on narrow screens.
+            // Same curve as the Neon configurator (sqrt of the width): the largest size in the list
+            // fills the preview, the smallest is about half of it, whatever the graphic's shape.
             const f = ctx.free();
-            const fit = Math.min(1, Math.max(0.5, f.w / 640));
-            const wCm = size ? num(size.w) : 60;
             const boardPad = (kind === 'rect' || kind === 'openbox') ? 1.25 : (kind === 'stand' ? 1.2 : 1);
-            // Same curve as the Neon configurator (sqrt of the width, with a readable minimum)
-            const targetW = Math.min(f.w * 0.92 / boardPad, Math.max(230 * fit, 36 * Math.sqrt(Math.max(10, wCm)) * fit));
+            const widths = (ctx.sizes || []).map((x) => num(x.w)).filter((x) => x > 0);
+            const wLo = Math.sqrt(widths.length ? Math.min.apply(null, widths) : 1);
+            const wHi = Math.sqrt(widths.length ? Math.max.apply(null, widths) : 1);
+            const sizeScale = size && wHi > wLo ? 0.45 + 0.55 * Math.max(0, Math.min(1, (Math.sqrt(num(size.w)) - wLo) / (wHi - wLo))) : 0.7;
             const textMode = ctx.hasText();
             const symbols = textMode ? (ctx.v.symbols || []).map((sym) => uvSymbolImg(ctx, sym.u)).filter(Boolean) : [];
             const fontFamily = ctx.v.font ? ctx.v.font.family : 'Arial, sans-serif';
@@ -1982,7 +2047,7 @@
                 light: lit ? uvMixWhite(c, 0.06) : '',
                 unlitText: led ? unlitTint : uvTextColour(ctx, boardIsLight || bc.clear),
                 glow: lit ? c : '',
-                targetW,
+                sizeScale,
                 maxW: f.w * 0.92 / boardPad,
                 maxH: f.h * 0.92 / boardPad
             });
@@ -2104,6 +2169,9 @@
         const board = make();
         const bg = board.getContext('2d');
         const tabW = Math.max(16, W * 0.12);
+        // Top hook: a block with a C-shaped slot cut in from the right, to hang on a screw.
+        const hookW = Math.max(18, Math.min(tabH * 1.05, W * 0.3));
+        let hookDeep = oy;
         // Where the hook / tab meet the shape (top-most / bottom-most edge around the centre line)
         let topY = oy;
         let botY = oy + H;
@@ -2115,8 +2183,7 @@
             // Grow around the design, bridge the gaps between separate parts, fill every inner
             // gap, then smooth: the frosted acrylic is one solid piece behind the complete design.
             const bridge = S(Math.max(14, Math.min(40, W * 0.06)));
-            const grown = mozGrow(m, cw, cv.height, S(10) + bridge);
-            const outline = mozSmooth(mozFillHoles(mozShrink(grown, cw, cv.height, bridge + S(3)), cw, cv.height), cw, cv.height, S(2.5));
+            const outline = mozSmooth(mozFillHoles(mozGrowShrink(m, cw, cv.height, S(10) + bridge, bridge + S(3)), cw, cv.height), cw, cv.height, S(2.5));
             bg.drawImage(mozMaskCanvas(outline, cw, cv.height), 0, 0);
             const x0 = Math.round(S(ox + W / 2 - tabW / 2));
             const x1 = Math.round(S(ox + W / 2 + tabW / 2));
@@ -2124,15 +2191,35 @@
             let bot = -1;
             for (let y = 0; y < cv.height && top < 0; y++) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { top = y; break; }
             for (let y = cv.height - 1; y >= 0 && bot < 0; y--) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { bot = y; break; }
-            if (top > -1 && bot > top) { topY = top / dpr; botY = bot / dpr; }
+            // Hook: its own top edge across its full width, so the block always meets the shape
+            const hx0 = Math.round(S(ox + W / 2 - hookW / 2));
+            const hx1 = Math.round(S(ox + W / 2 + hookW / 2));
+            let hookTop = -1;
+            let deep = -1;
+            for (let x = hx0; x <= hx1; x++) {
+                for (let y = 0; y < cv.height; y++) {
+                    if (outline[y * cw + x] > 0.5) { if (hookTop < 0 || y < hookTop) hookTop = y; if (y > deep) deep = y; break; }
+                }
+            }
+            if (top > -1 && bot > top) { topY = (hookTop > -1 ? hookTop : top) / dpr; botY = bot / dpr; }
+            hookDeep = Math.min(deep / dpr, topY + tabH);
         } catch (err) {
             ring(bg, tint(sil, '#000'), 9);
             ring(bg, tint(sil, '#000'), 5);
         }
         const roundRect = (x, y, w, h, r) => { bg.beginPath(); if (bg.roundRect) bg.roundRect(S(x), S(y), S(w), S(h), S(r)); else bg.rect(S(x), S(y), S(w), S(h)); bg.fill(); };
         bg.fillStyle = '#000';
-        roundRect(ox + W / 2 - tabW / 2, topY - tabH - 2, tabW, tabH + 12, 4);
+        const hookX = ox + W / 2 - hookW / 2;
+        const hookY = topY - tabH - 2;
+        roundRect(hookX, hookY, hookW, Math.max(topY, hookDeep) - hookY + 10, 4);
         roundRect(ox + W / 2 - tabW / 2, botY - 10, tabW, tabH + 12, 4);
+        const slot = hookW * 0.17;
+        const slotX = hookX + hookW * 0.41;
+        const slotY = hookY + hookW * 0.43;
+        bg.globalCompositeOperation = 'destination-out';
+        roundRect(slotX, slotY - hookW * 0.24, slot, hookW * 0.48, slot / 2);
+        bg.fillRect(S(slotX + slot / 2), S(slotY - slot / 2), S(hookX + hookW - slotX), S(slot));
+        bg.globalCompositeOperation = 'source-over';
         // Light layer (own canvas so RGB can cycle colours without tinting the print):
         // lit = the whole acrylic panel glows in the LED colour, evenly from behind, no outer glow;
         // off = plain frosted acrylic with a soft wall shadow.
@@ -2162,9 +2249,11 @@
         }
         const g = cv.getContext('2d');
         g.clearRect(0, 0, cv.width, cv.height);
-        // Screw holes in the hook and the tab
+        // Small screw hole in the bottom tab
         g.fillStyle = 'rgba(70,70,80,0.75)';
-        [topY - tabH * 0.55, botY + tabH * 0.45].forEach((y) => { g.beginPath(); g.arc(S(ox + W / 2), S(y), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2); g.fill(); });
+        g.beginPath();
+        g.arc(S(ox + W / 2), S(botY + tabH * 0.45), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2);
+        g.fill();
         // Graphic print on the front of the acrylic, cut to the design outline
         const printed = make();
         const pg = printed.getContext('2d');
