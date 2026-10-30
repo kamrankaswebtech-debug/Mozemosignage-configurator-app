@@ -1100,6 +1100,13 @@
     }
 
     // Hex colour mixed toward another hex colour (t = 0..1).
+    // Text colour without neon lighting: the chosen colour, or Auto = black on light boards, white on dark.
+    function uvTextColour(ctx, lightBoard) {
+        const tc = ctx.v.textColour;
+        ctx.uvAutoTextName = lightBoard ? 'Black' : 'White';
+        if (tc && !tc.auto && /^#[0-9a-f]{3,8}$/i.test(String(tc.hex || '').trim())) return tc.hex;
+        return lightBoard ? '#1d1d22' : '#f2f2f2';
+    }
     function uvMixToward(hex, target, t) {
         const a = String(hex || '').replace('#', '');
         const b = String(target || '').replace('#', '');
@@ -1676,6 +1683,9 @@
 
             // Design type + text options (Neon fonts, text position, quick symbols + their position)
             const textSteps = [];
+            // Text colour when there is no neon lighting (with lighting the neon colour colours the text)
+            let textColourStep = null;
+            const syncTextColour = () => { if (textColourStep) textColourStep.hidden = !(hasText() && !isLed()); };
             // Simple, clean previews (no glow / effects): a graphic, or a graphic with a text line.
             const ICON = '<rect x="1.5" y="1.5" width="37" height="29" rx="4" fill="none" stroke="#ffffff" stroke-width="2.2"/><circle cx="27" cy="10" r="3.4" fill="#ffffff"/><path d="M5 27 15 15l7 8 5-5 9 9z" fill="#ffffff"/>';
             const designSvg = (withText) => '<svg class="moz-cfg__design-svg" viewBox="0 0 120 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
@@ -1686,7 +1696,7 @@
             const designCtl = ctx.cards('design', [
                 { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => { v.innerHTML = designSvg(false); } },
                 { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => { v.innerHTML = designSvg(true); } }
-            ], { price: 'none', cols: 2, compact: true, onChange: () => textSteps.forEach((s) => { s.hidden = !hasText(); }) });
+            ], { price: 'none', cols: 2, compact: true, onChange: () => { textSteps.forEach((s) => { s.hidden = !hasText(); }); syncTextColour(); } });
             designCtl.el.classList.add('moz-cfg__cards--design');
             ctx.step('Design Type').appendChild(designCtl.el);
 
@@ -1763,6 +1773,7 @@
                 price: 'none', cols: 2,
                 onChange: () => {
                     ledSteps.forEach((s) => { s.hidden = !isLed(); });
+                    syncTextColour();
                     if (sizeCtl) sizeCtl.setItems(sizeCards(), true);
                     if (addonCtl) addonCtl.setItems(addonsFor());
                 }
@@ -1781,6 +1792,17 @@
                 }
                 if (colours.length) s.appendChild(ctx.swatches('colour', colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
                 ledSteps.push(s);
+            }
+            {
+                // Auto = black or white text, whichever reads best on the backboard (as before)
+                const seen = {};
+                const tcItems = [{ name: 'Auto (Black / White)', hex: 'linear-gradient(135deg,#1d1d22 50%,#f2f2f2 50%)', price: 0, auto: true },
+                    { name: 'Black', hex: '#1d1d22', price: 0 }, { name: 'White', hex: '#f2f2f2', price: 0 }]
+                    .concat(colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: 0 })))
+                    .filter((c) => { const k = String(c.name).trim().toLowerCase(); if (seen[k]) return false; seen[k] = true; return true; });
+                textColourStep = ctx.step('Text Colour', { note: 'Colour of your printed text.' });
+                textColourStep.appendChild(ctx.swatches('textColour', tcItems).el);
+                textColourStep.hidden = true;
             }
 
             // Where the neon goes — every design is different. Saved with the order (line item
@@ -1868,6 +1890,7 @@
             designCtl.select(0, true);
             textSteps.forEach((s) => { s.hidden = true; });
             lightCtl.select(d.start === 'no_led' ? 1 : 0, true);
+            syncTextColour();
             if (typeCtl) refreshTypes();
             ctx.sizes = sizes;
             ctx.isLed = isLed;
@@ -1957,7 +1980,7 @@
                 wallShadow: kind === 'naked',
                 tube: lit ? lightTint : (led ? unlitTint : ''),
                 light: lit ? uvMixWhite(c, 0.06) : '',
-                unlitText: led ? unlitTint : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
+                unlitText: led ? unlitTint : uvTextColour(ctx, boardIsLight || bc.clear),
                 glow: lit ? c : '',
                 targetW,
                 maxW: f.w * 0.92 / boardPad,
@@ -1988,6 +2011,9 @@
             if (textMode) {
                 p['Custom Text'] = (ctx.text || '').trim() || 'Your Text';
                 p['Text Position'] = ctx.v.textPos ? ctx.v.textPos.label : 'Left';
+                if (!led) {
+                    p['Text Colour'] = ctx.v.textColour && !ctx.v.textColour.auto ? ctx.v.textColour.name : (ctx.uvAutoTextName || 'Black');
+                }
                 if (ctx.v.font) p['Font'] = ctx.v.font.label;
                 if ((ctx.v.symbols || []).length) {
                     p['Quick Symbols'] = ctx.v.symbols.map((x) => x.l).join(', ');

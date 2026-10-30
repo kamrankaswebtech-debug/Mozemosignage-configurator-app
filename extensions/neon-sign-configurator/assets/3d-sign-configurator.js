@@ -638,6 +638,9 @@ function sign3dBuildColourSwatches(root) {
         }
         const preferred = prefer ? keys.map((g) => groups[g]).flat().find((c) => prefer.test(c.name)) : null;
         const defaultColour = preferred || groups[keys[0]][0];
+        // Swatch numbers run 1, 2, 3... in the order shown (lists can leave out black or move
+        // White / Warm White first, so the Admin sort order numbers would skip or jump).
+        let swatchNo = 0;
         keys.forEach((g) => {
             const section = document.createElement('div');
             const title = document.createElement('p');
@@ -664,11 +667,11 @@ function sign3dBuildColourSwatches(root) {
                 name.className = 'sign3d-configurator__swatch-name';
                 name.textContent = c.name;
                 item.appendChild(btn);
-                // Admin sort order number under the swatch, exactly like the Neon configurator.
+                // Number under the swatch, like the Neon configurator (shown when Admin sort orders are set).
                 if (c.sortOrder !== null) {
                     const num = document.createElement('span');
                     num.className = 'sign3d-configurator__swatch-number';
-                    num.textContent = c.sortOrder;
+                    num.textContent = ++swatchNo;
                     item.appendChild(num);
                 }
                 item.appendChild(name);
