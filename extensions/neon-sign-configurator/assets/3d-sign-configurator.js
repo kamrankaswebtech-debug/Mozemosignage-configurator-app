@@ -614,7 +614,29 @@ function sign3dBuildColourSwatches(root) {
             keys = allKeys.filter((g) => groups[g]);
             if (!keys.length) return;
         }
-        const preferred = cfg.prefer ? colours.find((c) => cfg.prefer.test(c.name)) : null;
+        // Event Marquee face / side colours: White first (and the default face colour), Black last.
+        let prefer = cfg.prefer;
+        const isMarqueeColour = root.dataset.sign3dMode === 'marquee' && (cfg.container === '[data-colour-swatches]' || cfg.container === '[data-side-colour-swatches]');
+        if (isMarqueeColour) {
+            const isWhite = (c) => /^\s*white\s*$/i.test(String(c.name || '')) || /^#?(fff|ffffff)$/i.test(String(c.hex || '').trim());
+            const ordered = {};
+            keys.forEach((g) => {
+                const list = groups[g].slice();
+                ordered[g] = list.filter(isWhite).concat(list.filter((c) => !isWhite(c) && !isBlack(c)), list.filter((c) => !isWhite(c) && isBlack(c)));
+            });
+            groups = ordered;
+            const rank = (g) => (groups[g].some(isWhite) ? 0 : (groups[g].every(isBlack) ? 2 : 1));
+            keys = keys.slice().sort((a, b) => rank(a) - rank(b));
+            if (cfg.container === '[data-colour-swatches]') prefer = /^\s*white\s*$/i;
+        }
+        // Marquee bulbs: Warm White first (and default)
+        if (root.dataset.sign3dMode === 'marquee' && cfg.container === '[data-bulb-colour-swatches]' && prefer) {
+            const ordered = {};
+            keys.forEach((g) => { ordered[g] = groups[g].filter((c) => prefer.test(c.name)).concat(groups[g].filter((c) => !prefer.test(c.name))); });
+            groups = ordered;
+            keys = keys.slice().sort((x, y) => (groups[y].some((c) => prefer.test(c.name)) ? 1 : 0) - (groups[x].some((c) => prefer.test(c.name)) ? 1 : 0));
+        }
+        const preferred = prefer ? keys.map((g) => groups[g]).flat().find((c) => prefer.test(c.name)) : null;
         const defaultColour = preferred || groups[keys[0]][0];
         keys.forEach((g) => {
             const section = document.createElement('div');
@@ -787,7 +809,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v5|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|v6|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -797,7 +819,8 @@ function sign3dBulbPoints(ch, fontCss) {
     const hw = sign3dStrokeHalf(fontCss, S);
     const strokeW = hw * 2;
     const dia = Math.max(S * 0.03, Math.min(S * 0.085, strokeW * 0.46));
-    const gap = Math.max(dia * 2.05, strokeW * 0.8);
+    // Spacing like a manufactured marquee: about 2.4 bulbs apart (more for heavy fonts with wide strokes)
+    const gap = Math.max(dia * 2.4, strokeW * 1.05);
     const OFF = [-W - 1, -W, -W + 1, -1, 1, W - 1, W, W + 1];
     const nb = (i) => { const r = []; for (let k = 0; k < 8; k++) if (sk[i + OFF[k]]) r.push(i + OFF[k]); return r; };
     const pix = [];
@@ -1043,7 +1066,7 @@ function sign3dBulbPoints(ch, fontCss) {
 // the tunnel. Returned as a white mask (data URL) — the LED colour comes from CSS — plus its box
 // in em (x from the letter's left edge, y from the baseline).
 function sign3dInfinityMask(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|inf5|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|inf6|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 160;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1051,14 +1074,24 @@ function sign3dInfinityMask(ch, fontCss) {
     const { W, H, ox, base, dist } = f;
     const hw = sign3dStrokeHalf(fontCss, S);
     const rings = [];
-    const q = 0.72;
-    const r0 = Math.max(2.5, hw * 0.2);
-    const AL = [1, 0.86, 0.72, 0.6, 0.49, 0.4, 0.32, 0.25];
-    const WD = [0.12, 0.1, 0.088, 0.078, 0.07, 0.064, 0.058, 0.054];
-    for (let k = 0; k < AL.length; k++) {
-        const r = r0 + (hw * 0.96 - r0) * (1 - Math.pow(q, k));
-        // each deeper reflection is shifted toward the vanishing point (down-right) = depth
-        rings.push({ r, a: AL[k], w: Math.max(0.9, hw * WD[k]), dx: Math.round(k * hw * 0.05), dy: Math.round(k * hw * 0.07) });
+    // Same look on every font: the number of reflections follows the stroke width (a thin script
+    // font shows 2-3 clean reflections, a heavy block font up to 6), spaced in perspective.
+    const n = hw >= 14 ? 6 : (hw >= 10 ? 5 : (hw >= 7 ? 4 : (hw >= 5 ? 3 : 2)));
+    const q = n >= 5 ? 0.7 : 0.62;
+    const r0 = Math.max(1.8, hw * 0.2);
+    const span = 1 - Math.pow(q, n - 1) || 1;
+    for (let k = 0; k < n; k++) {
+        const r = r0 + (hw * 0.92 - r0) * ((1 - Math.pow(q, k)) / span);
+        const depth = n > 1 ? k / (n - 1) : 0;
+        rings.push({
+            r,
+            a: 1 - depth * 0.68,                                   // fainter deeper in the tunnel
+            w: Math.max(0.85, hw * (0.13 - depth * 0.06)),         // thinner deeper in the tunnel
+            bloom: k === 0 ? 0.5 : 0.22 * (1 - depth),             // soft glow, strongest on the front LED
+            // each deeper reflection drifts toward the vanishing point (down-right) = depth
+            dx: Math.round(k * hw * 0.045),
+            dy: Math.round(k * hw * 0.065)
+        });
     }
     const c = document.createElement('canvas');
     c.width = W;
@@ -1078,13 +1111,13 @@ function sign3dInfinityMask(ch, fontCss) {
             const ds = sx > 0 && sy > 0 && sx < W && sy < H ? dist[sy * W + sx] : 0;
             if (!ds) continue;
             const core = Math.max(0, 1 - Math.abs(ds - rk.r) / rk.w);
-            const halo = Math.max(0, 1 - Math.abs(ds - rk.r) / (rk.w * 3.2)) * 0.28;
+            const halo = Math.max(0, 1 - Math.abs(ds - rk.r) / (rk.w * 3.6)) * rk.bloom;
             const v = rk.a * Math.min(1, 1.6 * core + halo);
             if (v > a) a = v;
         }
-        // faint light filling the mirror between the lines (strongest near the front edge)
-        // faint coloured light reflecting in the mirror, strongest near the front edge
-        a = Math.max(a, 0.09 * Math.max(0, 1 - d / hw));
+        // LED light spilling onto the mirror near the walls; the centre stays dark = depth
+        const spill = Math.max(0, 1 - d / hw);
+        a = Math.max(a, 0.03 + 0.14 * spill * spill);
         id.data[i * 4] = 255;
         id.data[i * 4 + 1] = 255;
         id.data[i * 4 + 2] = 255;

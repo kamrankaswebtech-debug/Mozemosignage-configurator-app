@@ -1099,6 +1099,17 @@
         return hit ? hit.key : 'rect';
     }
 
+    // Hex colour mixed toward another hex colour (t = 0..1).
+    function uvMixToward(hex, target, t) {
+        const a = String(hex || '').replace('#', '');
+        const b = String(target || '').replace('#', '');
+        const full = (h) => (h.length === 3 ? h.split('').map((x) => x + x).join('') : h);
+        const A = full(a), B = full(b);
+        if (!/^[0-9a-f]{6}$/i.test(A) || !/^[0-9a-f]{6}$/i.test(B)) return hex;
+        const ch = (i) => Math.round(parseInt(A.slice(i, i + 2), 16) * (1 - t) + parseInt(B.slice(i, i + 2), 16) * t);
+        return 'rgb(' + ch(0) + ',' + ch(2) + ',' + ch(4) + ')';
+    }
+
     // Hex colour mixed toward white (t = 0..1) — the bright core of a neon tube.
     function uvMixWhite(hex, t) {
         let h = String(hex || '').replace('#', '');
@@ -1604,11 +1615,13 @@
             g.save();
             g.shadowColor = o.glow;
             // soft halo kept close to the tube (the backboard itself is not lit)
-            g.globalAlpha = 0.55;
-            g.shadowBlur = D(12);
+            g.globalAlpha = 0.9;
+            g.shadowBlur = D(14);
             if (tube) g.drawImage(tube, 0, 0);
             g.globalAlpha = 1;
-            g.shadowBlur = D(5);
+            g.shadowBlur = D(6);
+            if (tube) g.drawImage(tube, 0, 0);
+            g.shadowBlur = D(2.5);
             if (tube) g.drawImage(tube, 0, 0);
             if (textLayer) {
                 g.shadowBlur = Math.max(3, L(text.fpx) * 0.18);
@@ -1663,10 +1676,16 @@
 
             // Design type + text options (Neon fonts, text position, quick symbols + their position)
             const textSteps = [];
-            const dicons = d.dicons || {};
+            // Simple, clean previews (no glow / effects): a graphic, or a graphic with a text line.
+            const ICON = '<rect x="1.5" y="1.5" width="37" height="29" rx="4" fill="none" stroke="#ffffff" stroke-width="2.2"/><circle cx="27" cy="10" r="3.4" fill="#ffffff"/><path d="M5 27 15 15l7 8 5-5 9 9z" fill="#ffffff"/>';
+            const designSvg = (withText) => '<svg class="moz-cfg__design-svg" viewBox="0 0 120 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+                + (withText
+                    ? '<g transform="translate(44 6) scale(0.8)">' + ICON + '</g><rect x="30" y="40" width="60" height="4" rx="2" fill="#ffffff"/><rect x="40" y="50" width="40" height="4" rx="2" fill="#ffffff" opacity="0.6"/>'
+                    : '<g transform="translate(37 10) scale(1.15)">' + ICON + '</g>')
+                + '</svg>';
             const designCtl = ctx.cards('design', [
-                { key: 'graphic', label: 'Graphic Only', price: 0, img: dicons.g || '', visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-graphic')) },
-                { key: 'text', label: 'Text + Graphic', price: 0, img: dicons.t || '', visual: (v) => v.appendChild(el('span', 'moz-cfg__design-icon is-text')) }
+                { key: 'graphic', label: 'Graphic Only', price: 0, visual: (v) => { v.innerHTML = designSvg(false); } },
+                { key: 'text', label: 'Text + Graphic', price: 0, visual: (v) => { v.innerHTML = designSvg(true); } }
             ], { price: 'none', cols: 2, compact: true, onChange: () => textSteps.forEach((s) => { s.hidden = !hasText(); }) });
             designCtl.el.classList.add('moz-cfg__cards--design');
             ctx.step('Design Type').appendChild(designCtl.el);
@@ -1922,7 +1941,10 @@
             if (text && document.fonts && document.fonts.check && !document.fonts.check('400 30px ' + fontFamily)) {
                 document.fonts.load('400 30px ' + fontFamily).then(() => ctx.update()).catch(() => {});
             }
-            const lightTint = uvMixWhite(c, 0.62);
+            // Full-intensity neon: the tube and text show the real, saturated colour (only a hint of a
+            // white core), unlit they are the same colour, dimmed.
+            const lightTint = uvMixWhite(c, 0.08);
+            const unlitTint = uvMixToward(c, '#8c8c94', 0.45);
             const boardIsLight = !bc.clear && luminance(bc.solid) > 0.55;
             const res = uvCompose(ctx, {
                 graphic,
@@ -1933,9 +1955,9 @@
                 symbols,
                 board: { kind, finish, colour: bc.solid },
                 wallShadow: kind === 'naked',
-                tube: lit ? lightTint : (led ? uvMixWhite(c, 0.12) : ''),
-                light: lit ? uvMixWhite(c, 0.4) : '',
-                unlitText: led ? uvMixWhite(c, 0.12) : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
+                tube: lit ? lightTint : (led ? unlitTint : ''),
+                light: lit ? uvMixWhite(c, 0.06) : '',
+                unlitText: led ? unlitTint : (boardIsLight || bc.clear ? '#1d1d22' : '#f2f2f2'),
                 glow: lit ? c : '',
                 targetW,
                 maxW: f.w * 0.92 / boardPad,

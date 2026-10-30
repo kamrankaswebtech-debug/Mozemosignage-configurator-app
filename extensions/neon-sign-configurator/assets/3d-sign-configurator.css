@@ -2819,7 +2819,7 @@
 .sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on .sign3d-configurator__letter,
 .sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-off .sign3d-configurator__letter {
     color: #07080d;
-    -webkit-text-stroke: 0.06em var(--sign3d-side, #e9e9ee);
+    -webkit-text-stroke: 0.05em var(--sign3d-side, #e9e9ee);
     paint-order: stroke fill;
 }
 
@@ -2970,3 +2970,13 @@
         radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.9) 0 9%, rgba(255, 255, 255, 0) 24%),
         radial-gradient(circle at 50% 55%, #f4f2ec 0 22%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 22%, #d9d5cc) 60%, color-mix(in srgb, var(--sign3d-bulb, #ffd27a) 15%, #8e8a82) 100%);
 }
+
+/* Infinity / Marquee: letters drawn in their standalone form (no contextual alternates /
+   ligatures) so the LED tunnels and bulbs — calculated per letter — line up exactly. */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__text-flex,
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__text-flex {
+    font-variant-ligatures: none;
+    font-feature-settings: "calt" 0, "liga" 0, "clig" 0;
+}
+/* Infinity: no faux bold, so the LED tunnel follows the exact letter shape */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__text-flex { font-synthesis: none; }
