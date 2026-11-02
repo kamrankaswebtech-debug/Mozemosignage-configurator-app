@@ -1773,8 +1773,13 @@ function initSign3dConfigurator(root) {
         let w = Math.max(100, lbRow ? area.w * 0.7 / lightboxScale() : (targetW || area.w * 0.7));
         let h = w / aspect;
         if (h > maxH) { h = maxH; w = h * aspect; }
-        // Lightbox size boxes: the largest size fills the preview, so every size looks different.
-        if (lbRow) { const ls = lightboxSizeScale(lbRow); w *= ls; h *= ls; }
+        // Lightbox size boxes: the box size comes from the chosen size, the design sits inside it.
+        const lbBox = lbRow ? lightboxBoxPx(lbRow) : null;
+        if (lbBox) {
+            w = lbBox.w * lbBox.inner;
+            h = w / aspect;
+            if (h > lbBox.h * lbBox.inner) { h = lbBox.h * lbBox.inner; w = h * aspect; }
+        }
         if (isInfinityLogo()) {
             // Round infinity mirror: the overall width is the diameter; the logo sits inside it.
             const d = Math.round(Math.max(120, Math.min(targetW || area.w * 0.6, area.h * 0.92)));
@@ -1792,6 +1797,8 @@ function initSign3dConfigurator(root) {
         logoImg.style.objectFit = 'contain';
         // Manual placement is off, so always start from a clean scale/offset (zoom is driven by Overall Width now).
         if (!SIGN3D_ALLOW_MANUAL_PLACEMENT) { logoScale = 1; logoOffsetX = 0; logoOffsetY = 0; }
+        // Wall Hanging: box + bracket together stay centred (the bracket is on the left).
+        if (lbBox) logoOffsetX = lbBox.shift;
         applyLogoTransform();
         constrainLogo();
     }
@@ -4519,11 +4526,21 @@ function initSign3dConfigurator(root) {
         .sort((a, b) => (a.sr - b.sr) || (a.w - b.w) || (a.i - b.i));
     let lbSize = lbSizes[0] || null;
     function lightboxRow() { return root.dataset.sign3dMode === 'lightbox' ? lbSize : null; }
-    function lightboxSizeScale(row) {
-        const widths = lbSizes.map((r) => Math.sqrt(r.w));
-        const lo = Math.min.apply(null, widths);
-        const hi = Math.max.apply(null, widths);
-        return hi > lo ? 0.55 + 0.45 * (Math.sqrt(row.w) - lo) / (hi - lo) : 0.8;
+    // Box size in the preview for a size box, for every shape and mounting: the largest size in the
+    // Admin list fills the free preview area, smaller sizes follow the Neon curve (sqrt of the width).
+    const LBX_BRACKET = 0.32; // the bracket reaches this share of the box width to the left (CSS)
+    const LBX_INNER = { circle: 0.66, oval: 0.56, square: 0.76, rectangle: 0.76, star: 0.36, hexagon: 0.6, octagon: 0.68, other: 0.72 };
+    function lightboxBoxPx(row) {
+        const area = previewFreeArea();
+        const hanging = getBackingType() === 'bracket';
+        const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
+        const maxW = Math.max(120, area.w - 70) / (hanging ? 1 + LBX_BRACKET : 1);
+        const maxH = area.h * 0.9;
+        const fullW = Math.min(maxW, maxH * ratio);
+        const largest = lbSizes.reduce((m, r) => Math.max(m, r.w), 0);
+        const w = fullW * Math.max(0.4, Math.sqrt(row.w / largest));
+        const key = lbShape ? lbShape.key : 'rectangle';
+        return { w, h: w / ratio, inner: LBX_INNER[key] || 0.7, shift: hanging ? w * LBX_BRACKET / 2 : 0 };
     }
     function lightboxRowPrice(row) { return lbSides === 'double' && row.d !== null ? row.d : row.s; }
     function lightboxRows() { return lbSides === 'double' ? lbSizes.filter((r) => r.d !== null) : lbSizes; }
@@ -4691,6 +4708,7 @@ function initSign3dConfigurator(root) {
         if (key === 'oval') { w *= 1.18; h *= 1.18; }
         // Rectangle / Oval: always wider than tall, even for a square design (it sits inside the box).
         if (lightboxIsWide()) { h = Math.max(h, w / LBX_WIDE_RATIO); w = h * LBX_WIDE_RATIO; }
+        if (lbSize) { const box = lightboxBoxPx(lbSize); w = box.w; h = box.h; }
         const cx = (contentRect.left + contentRect.right) / 2 - stageRect.left;
         const cy = (contentRect.top + contentRect.bottom) / 2 - stageRect.top;
         lbxEl.style.left = (cx - w / 2) + 'px';
