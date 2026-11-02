@@ -204,7 +204,7 @@
 
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Illumination Type</span></label>
-      <p class="sign3d-configurator__note">{% if s3d_mode == "lightbox" %}White LEDs light your printed design.{% elsif s3d_mode != "3d" %}Included lighting for this sign.{% else %}Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.{% endif %}</p>
+      <p class="sign3d-configurator__note">{% if s3d_mode == "lightbox" %}White LEDs light your coloured graphic design.{% elsif s3d_mode != "3d" %}Included lighting for this sign.{% else %}Lighting options and pricing vary depending on the selected illumination type. Please select the lighting style that best suits your desired sign appearance.{% endif %}</p>
       <select data-illumination-select hidden>
         {% assign s3d_il_count = 0 %}
         {% for item in metaobjects["app--418838118401--illumination_type"].values %}
@@ -225,6 +225,10 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Choose Shape</span></label>
       <div class="sign3d-configurator__card-grid" data-lb-shape-cards></div>
+    </div>
+    <div class="sign3d-configurator__field" data-lb-size-field hidden>
+      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Choose Size</span></label>
+      <div class="sign3d-configurator__card-grid" data-lb-size-cards></div>
     </div>
     {% endif %}
     {% if s3d_units_count > 0 %}
@@ -252,6 +256,8 @@
 
     <div class="sign3d-configurator__field" data-letter-height-field>
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Letter / Element Height</span></label>
+      {% if s3d_mode == "marquee" or s3d_mode == "infinity" %}{% assign s3d_lh_first = true %}<script type="application/json" data-sign3d-lh-boxes>[{% for o in metaobjects["app--418838118401--event_marquee_option"].values %}{% assign s3d_lhc = o.category.value | strip | downcase %}{% if s3d_lhc == "letter_height" %}{% unless s3d_lh_first %},{% endunless %}{% assign s3d_lh_first = false %}{"l":{{ o.label.value | json }},"h":{{ o.height_cm.value | default: 0 }},"p":{{ o.extra_price_decimal.value | default: 0 }},"sr":{{ o.sort_order.value | default: 999999 }},"so":{{ o.show_on.value | default: "" | json }}}{% endif %}{% endfor %}]</script>
+      <div class="sign3d-configurator__card-grid sign3d-lh-boxes" data-lh-boxes></div>{% endif %}
       <div class="sign3d-configurator__measure-row">
         <input type="number" inputmode="decimal" step="any" class="sign3d-configurator__text-input" data-letter-height-input value="25" placeholder="e.g. 25">
         <span class="sign3d-configurator__measure-unit">cm</span>
@@ -259,6 +265,7 @@
       <p class="sign3d-configurator__slider-hint" data-lh-range>Type your letter height. The price and preview update automatically.</p>
     </div>
 
+    {% unless s3d_mode == "lightbox" %}
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Indoor or Outdoor</span></label>
       <div class="sign3d-configurator__io-cards" data-io-cards>
@@ -266,6 +273,7 @@
         <label class="sign3d-configurator__io-card"><input type="radio" name="sign3d-indoor-outdoor-{{ block.id }}" data-indoor-outdoor-radio value="outdoor"><span class="sign3d-configurator__io-icon" data-io-icon="outdoor"></span><span class="sign3d-configurator__io-label">Outdoor Use</span><span class="sign3d-configurator__io-price" data-io-outdoor-price></span></label>
       </div>
     </div>
+    {% endunless %}
 
     <div class="sign3d-configurator__field" hidden>
       <select class="sign3d-configurator__select" data-depth-select></select>
@@ -311,7 +319,9 @@
     {% if s3d_mode == "lightbox" %}
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Front-Facing or Double-Sided</span></label>
-      <div class="sign3d-configurator__card-grid" data-lb-sides></div>
+      {% assign s3d_lb_fi = 'moz-lb-front.png' | asset_url %}{% assign s3d_lb_di = 'moz-lb-double.png' | asset_url %}{% assign s3d_lb_fd = '' %}{% assign s3d_lb_dd = '' %}{% assign s3d_sz_first = true %}
+      <script type="application/json" data-sign3d-lb-sizes>[{% for o in metaobjects["app--418838118401--lightbox_option"].values %}{% assign s3d_sdc = o.category.value | strip | downcase %}{% if s3d_sdc == "price_row" %}{% unless s3d_sz_first %},{% endunless %}{% assign s3d_sz_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.extra_price_decimal.value | default: 0 }},"d":{% if o.price_double_decimal.value != blank %}{{ o.price_double_decimal.value }}{% else %}null{% endif %},"sr":{{ o.sort_order.value | default: 999999 }}}{% elsif s3d_sdc == "mounting" %}{% if o.type_key.value == "side_front" %}{% if o.image.value %}{% assign s3d_lb_fi = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_lb_fd = o.description.value %}{% elsif o.type_key.value == "side_double" %}{% if o.image.value %}{% assign s3d_lb_di = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_lb_dd = o.description.value %}{% endif %}{% endif %}{% endfor %}]</script>
+      <div class="sign3d-configurator__card-grid" data-lb-sides data-front-img="{{ s3d_lb_fi }}" data-double-img="{{ s3d_lb_di }}" data-front-desc="{{ s3d_lb_fd | escape }}" data-double-desc="{{ s3d_lb_dd | escape }}"></div>
     </div>
     {% endif %}
 

@@ -2980,3 +2980,32 @@
 }
 /* Infinity: no faux bold, so the LED tunnel follows the exact letter shape */
 .sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__text-flex { font-synthesis: none; }
+
+/* Lightbox: Rectangle / Oval hold the whole design (a square logo is not cropped) */
+.sign3d-lbx.is-wide.has-art .sign3d-lbx__face,
+.sign3d-lbx.is-wide.has-art.is-lit .sign3d-lbx__face {
+    box-sizing: border-box;
+    padding: 6% 8%;
+    background: #ffffff;
+    background-image: var(--lbx-art);
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-clip: border-box;
+}
+/* Lightbox: size + price boxes, Front-Facing / Double-Sided images */
+.sign3d-lbx-size-card { justify-content: center; padding-top: 10px; padding-bottom: 10px; }
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-lbx-side-img {
+    aspect-ratio: 5 / 4;
+    max-height: 120px;
+    object-fit: contain;
+    background: #ffffff;
+}
+
+/* Marquee / Infinity: letter height boxes (4 in a row, more wrap to the next row) */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-lh-boxes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 480px) {
+    .sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-lh-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.sign3d-configurator .sign3d-lh-boxes:empty { display: none; }

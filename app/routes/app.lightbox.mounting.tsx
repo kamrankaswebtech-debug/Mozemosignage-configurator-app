@@ -10,6 +10,8 @@ import { authenticate } from "../shopify.server";
 const MOUNTS = [
     { key: "wall_mount", label: "Wall Mount", hint: "Attached directly to the wall — front and sides visible, front-facing illumination." },
     { key: "wall_hanging", label: "Wall Hanging", hint: "Projects from the wall on a pole / bracket — front, rear and sides visible. Front-facing or double-sided." },
+    { key: "side_front", label: "Front-Facing", hint: "Your design lit on the front face." },
+    { key: "side_double", label: "Double-Sided", hint: "Your design on both faces." },
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -148,12 +150,12 @@ export default function LightboxMountingPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Lightbox Mounting Images">
-            <s-section heading="Wall Mount / Wall Hanging cards">
+        <s-page heading="Lightbox Mounting & Sides Images">
+            <s-section heading="Wall Mount / Wall Hanging / Front-Facing / Double-Sided cards">
                 <s-link href="/app/lightbox">← Back to 3D LED Lightbox</s-link>
                 <s-paragraph>
-                    Upload an example image (and optional short text) for each mounting card on the 3D LED Lightbox configurator. The mounting
-                    rules (Wall Mount 40–500 cm, Wall Hanging 40–100 cm with pole / bracket) stay the same.
+                    Upload an example image (and optional short text) for each card on the 3D LED Lightbox configurator. Front-Facing and
+                    Double-Sided show a built-in image until you upload your own.
                 </s-paragraph>
                 {items.map((m) => (
                     <fetcher.Form key={m.key} method="post" encType="multipart/form-data" style={{ marginBottom: 18 }}>

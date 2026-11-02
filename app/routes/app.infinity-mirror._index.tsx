@@ -14,6 +14,7 @@ export default function InfinityMirrorHub() {
         { title: "Illumination (price)", desc: "Add ONE illumination type with Effect \"Infinity Mirror\" — upload its example image and set its price.", href: "/app/3d-signs/illumination-type" },
         { title: "Fonts", desc: "Shared with 3D Signs — the same font list.", href: "/app/neon-signs/fonts" },
         { title: "Sizes & Pricing Settings", desc: "Shared with 3D Signs — overall width, letter height, tiers and outdoor surcharge.", href: "/app/3d-signs/pricing-settings" },
+        { title: "Letter Height Boxes", desc: "The letter / element height boxes on the storefront — shared by Event Marquee and Infinity Mirror.", href: "/app/event-marquee/letter-heights" },
         { title: "Colours", desc: "Shared with 3D Signs — the same colour range (black is left out where this product can't use it).", href: "/app/3d-signs/front-colours" },
         { title: "Material / Finish", desc: "Shared with 3D Signs — only Glossy, Matte and Chrome Shine finishes are shown here.", href: "/app/3d-signs/finishes" },
         { title: "Mounting", desc: "Shared with 3D Signs — the same mounting options and conditions.", href: "/app/3d-signs/mounting" },

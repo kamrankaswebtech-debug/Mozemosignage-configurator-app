@@ -1171,7 +1171,7 @@ description = "All configurator options for Event Marquee Letter Signs (Style, S
 
 [metaobjects.app.event_marquee_option.fields.category]
 name = "Category"
-description = "Must be exactly one of: style, size, colour, mounting, addon"
+description = "Must be exactly one of: style, size, colour, mounting, addon, letter_height"
 type = "single_line_text_field"
 required = true
 
@@ -1204,6 +1204,11 @@ type = "boolean"
 [metaobjects.app.event_marquee_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"
+
+[metaobjects.app.event_marquee_option.fields.show_on]
+name = "Show On"
+description = "Used only when category = letter_height. Comma list of: marquee, infinity. Empty = both."
+type = "single_line_text_field"
 
 [metaobjects.app.bundle_option]
 name = "Bundle & Fit-Out Option"
@@ -1301,7 +1306,7 @@ description = "All configurator options for the Lightbox Range (Shape, Size, Sid
 
 [metaobjects.app.lightbox_option.fields.category]
 name = "Category"
-description = "Must be exactly one of: type, shape, size, frame_colour, wallpaper"
+description = "Must be exactly one of: type, shape, size, price_row, mounting, frame_colour, wallpaper"
 type = "single_line_text_field"
 required = true
 
@@ -1346,6 +1351,11 @@ name = "Sort Order"
 type = "number_integer"
 
 
+
+[metaobjects.app.lightbox_option.fields.price_double_decimal]
+name = "Double-Sided Price"
+description = "Used only when category = price_row. Empty = this size is not offered double-sided. Extra Price / Price holds the single-sided price."
+type = "number_decimal"
 
 [metaobjects.app.lightbox_option.fields.image]
 name = "Image"

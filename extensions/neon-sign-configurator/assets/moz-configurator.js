@@ -2120,9 +2120,11 @@
         if (W > o.maxW) { W = o.maxW; H = W / ar; }
         W = Math.round(W);
         H = Math.round(H);
-        const tabH = Math.round(H * 0.16);
+        // Top hook and bottom tab are the same size for any upload: they follow the chosen size,
+        // not the shape of the artwork.
+        const tabH = Math.round(o.targetH * 0.16);
         const pad = 46;
-        const key = [g0.src || 'ph', o.led, o.rgb, o.lit, W, H].join('|');
+        const key = [g0.src || 'ph', o.led, o.rgb, o.lit, W, H, tabH].join('|');
         art.style.width = W + 'px';
         art.style.height = (H + tabH * 2) + 'px';
         cv.hidden = false;
@@ -2168,10 +2170,10 @@
         // Frosted white backboard = smooth design outline + top hook + bottom tab
         const board = make();
         const bg = board.getContext('2d');
-        const tabW = Math.max(16, W * 0.12);
         // Top hook: a block with a C-shaped slot cut in from the right, to hang on a screw.
-        const hookW = Math.max(18, Math.min(tabH * 1.05, W * 0.3));
+        const tabW = Math.max(18, Math.min(tabH * 1.05, W * 0.9));
         let hookDeep = oy;
+        let tabDeep = oy + H;
         // Where the hook / tab meet the shape (top-most / bottom-most edge around the centre line)
         let topY = oy;
         let botY = oy + H;
@@ -2187,38 +2189,40 @@
             bg.drawImage(mozMaskCanvas(outline, cw, cv.height), 0, 0);
             const x0 = Math.round(S(ox + W / 2 - tabW / 2));
             const x1 = Math.round(S(ox + W / 2 + tabW / 2));
+            // Top-most / bottom-most edge across the block's full width, and how far each block
+            // must reach in so that it always meets the shape.
             let top = -1;
             let bot = -1;
-            for (let y = 0; y < cv.height && top < 0; y++) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { top = y; break; }
-            for (let y = cv.height - 1; y >= 0 && bot < 0; y--) for (let x = x0; x <= x1; x++) if (outline[y * cw + x] > 0.5) { bot = y; break; }
-            // Hook: its own top edge across its full width, so the block always meets the shape
-            const hx0 = Math.round(S(ox + W / 2 - hookW / 2));
-            const hx1 = Math.round(S(ox + W / 2 + hookW / 2));
-            let hookTop = -1;
             let deep = -1;
-            for (let x = hx0; x <= hx1; x++) {
+            let shallow = -1;
+            for (let x = x0; x <= x1; x++) {
                 for (let y = 0; y < cv.height; y++) {
-                    if (outline[y * cw + x] > 0.5) { if (hookTop < 0 || y < hookTop) hookTop = y; if (y > deep) deep = y; break; }
+                    if (outline[y * cw + x] > 0.5) { if (top < 0 || y < top) top = y; if (y > deep) deep = y; break; }
+                }
+                for (let y = cv.height - 1; y >= 0; y--) {
+                    if (outline[y * cw + x] > 0.5) { if (y > bot) bot = y; if (shallow < 0 || y < shallow) shallow = y; break; }
                 }
             }
-            if (top > -1 && bot > top) { topY = (hookTop > -1 ? hookTop : top) / dpr; botY = bot / dpr; }
+            if (top > -1 && bot > top) { topY = top / dpr; botY = bot / dpr; }
             hookDeep = Math.min(deep / dpr, topY + tabH);
+            tabDeep = Math.max(shallow / dpr, botY - tabH);
         } catch (err) {
             ring(bg, tint(sil, '#000'), 9);
             ring(bg, tint(sil, '#000'), 5);
         }
         const roundRect = (x, y, w, h, r) => { bg.beginPath(); if (bg.roundRect) bg.roundRect(S(x), S(y), S(w), S(h), S(r)); else bg.rect(S(x), S(y), S(w), S(h)); bg.fill(); };
         bg.fillStyle = '#000';
-        const hookX = ox + W / 2 - hookW / 2;
+        const hookX = ox + W / 2 - tabW / 2;
         const hookY = topY - tabH - 2;
-        roundRect(hookX, hookY, hookW, Math.max(topY, hookDeep) - hookY + 10, 4);
-        roundRect(ox + W / 2 - tabW / 2, botY - 10, tabW, tabH + 12, 4);
-        const slot = hookW * 0.17;
-        const slotX = hookX + hookW * 0.41;
-        const slotY = hookY + hookW * 0.43;
+        roundRect(hookX, hookY, tabW, Math.max(topY, hookDeep) - hookY + 10, 4);
+        const tabTop = Math.min(botY, tabDeep) - 10;
+        roundRect(hookX, tabTop, tabW, botY + tabH + 2 - tabTop, 4);
+        const slot = tabW * 0.17;
+        const slotX = hookX + tabW * 0.41;
+        const slotY = hookY + tabW * 0.43;
         bg.globalCompositeOperation = 'destination-out';
-        roundRect(slotX, slotY - hookW * 0.24, slot, hookW * 0.48, slot / 2);
-        bg.fillRect(S(slotX + slot / 2), S(slotY - slot / 2), S(hookX + hookW - slotX), S(slot));
+        roundRect(slotX, slotY - tabW * 0.24, slot, tabW * 0.48, slot / 2);
+        bg.fillRect(S(slotX + slot / 2), S(slotY - slot / 2), S(hookX + tabW - slotX), S(slot));
         bg.globalCompositeOperation = 'source-over';
         // Light layer (own canvas so RGB can cycle colours without tinting the print):
         // lit = the whole acrylic panel glows in the LED colour, evenly from behind, no outer glow;
