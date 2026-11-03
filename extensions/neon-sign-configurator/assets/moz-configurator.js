@@ -1723,10 +1723,13 @@
             const findOverride = (w) => overrides.find((o) => Math.abs(num(o.w) - num(w)) < 0.51);
             const isLed = () => !!(ctx.v.lighting && ctx.v.lighting.key === 'led');
             const hasText = () => !!(ctx.v.design && ctx.v.design.key === 'text');
+            // UV Size Prices row with the same width wins; a row without a real price (empty / 0)
+            // never turns a card into $0.00 — it falls back to Neon price + surcharge.
+            // Same rules as the Admin preview in app/routes/app.uv-graphic-led.sizes.tsx.
             const sizePrice = (s) => {
                 const o = findOverride(s.w);
-                if (!isLed() && o && o.pn !== null && o.pn !== undefined) return num(o.pn);
-                if (o && o.p !== null && o.p !== undefined) return num(o.p);
+                if (!isLed() && o && num(o.pn) > 0) return num(o.pn);
+                if (o && num(o.p) > 0) return num(o.p);
                 return num(s.p) + surcharge;
             };
             const sizeCards = () => sizes.map((s) => ({

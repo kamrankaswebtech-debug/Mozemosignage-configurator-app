@@ -10,7 +10,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 const SECTIONS = [
     { title: "Design Type Images", path: "/app/uv-graphic-led/design-type", description: "Images on the Graphic Only and Text + Graphic cards. Without an image a simple icon is shown." },
-    { title: "Size Prices (UV)", path: "/app/uv-graphic-led/sizes", description: "Optional UV prices per Neon size width — With and Without Neon Lighting. Sizes not listed use the Neon price." },
+    { title: "Size Prices (UV)", path: "/app/uv-graphic-led/sizes", description: "UV prices per Neon size width — With and Without Neon Lighting. Sizes not listed use the Neon price + the Default Graphic Surcharge. Includes a live price preview." },
     { title: "UV Add-ons", path: "/app/uv-graphic-led/addons", description: "Extra UV-only add-ons, shown With Neon, Without Neon, or both (Neon add-ons are included automatically)." },
     { title: "Neon Colours", path: "/app/neon-signs/colours", description: "Shared with Neon Signs — neon colours (With Neon Lighting)." },
     { title: "Sizes", path: "/app/neon-signs/sizes", description: "Shared with Neon Signs — the size list shown on UV Graphic." },
