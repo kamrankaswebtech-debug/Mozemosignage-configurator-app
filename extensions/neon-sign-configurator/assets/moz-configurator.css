@@ -1169,9 +1169,13 @@
 
 .moz-uvb.is-stand .moz-uvb__stand { display: block; }
 
-.moz-uvb.is-lit.is-rgb .moz-uvb__canvas,
-.moz-uvb.is-lit.is-rgb .moz-uvb__placeholder {
+/* RGB: only the neon light layer cycles colour — the printed design and backboard keep theirs. */
+.moz-uvb.is-lit.is-rgb .moz-uvb__light {
     animation: moz-hue 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .moz-uvb.is-lit.is-rgb .moz-uvb__light { animation: none; }
 }
 
 /* ---- Lightbox (shape clip-path, type: slim / fully illuminated / metal-sided) ---- */

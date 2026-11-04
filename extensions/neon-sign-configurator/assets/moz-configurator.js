@@ -1395,6 +1395,69 @@
         return x1 < 0 ? null : { x0, y0, x1, y1, filled };
     };
     const mozMinus = (a, b) => { const o = new Float32Array(a.length); for (let i = 0; i < a.length; i++) o[i] = Math.max(0, a[i] - b[i]); return o; };
+    // Square dilate by r (same as the SVG feMorphology "dilate" the Neon configurator uses for its
+    // Cut Around board): two 1-D passes, each the distance to the nearest inked pixel in the line.
+    function mozDilateBox(m, w, h, r) {
+        const pass = (src, horizontal, threshold) => {
+            const out = new Float32Array(w * h);
+            const lines = horizontal ? h : w;
+            const len = horizontal ? w : h;
+            const step = horizontal ? 1 : w;
+            const dist = new Float32Array(len);
+            for (let l = 0; l < lines; l++) {
+                const o = horizontal ? l * w : l;
+                let last = -1e9;
+                for (let i = 0; i < len; i++) { if (src[o + i * step] >= threshold) last = i; dist[i] = i - last; }
+                last = 1e9;
+                for (let i = len - 1; i >= 0; i--) {
+                    if (src[o + i * step] >= threshold) last = i;
+                    const d = Math.min(dist[i], last - i);
+                    out[o + i * step] = Math.max(0, Math.min(1, r + 0.5 - d));
+                }
+            }
+            return out;
+        };
+        return pass(pass(m, true, 0.35), false, 0.5);
+    }
+    // Graphic sign, Text + Graphic: the graphic's cut-around board + a board that follows every
+    // letter / symbol (Neon Cut Around look), joined by a short bridge across the gap on the text
+    // side, so the acrylic stays one piece. Small concave corners are filleted, holes filled.
+    function uvTextBoard(artBoard, textMask, w, h, opts) {
+        const textBoard = mozDilateBox(textMask, w, h, opts.grow);
+        const tb = mozMaskBox(textBoard, w, h);
+        const bridge = new Float32Array(w * h);
+        let bridged = false;
+        if (tb && mozMaskBox(artBoard, w, h)) {
+            const horizontal = opts.pos === 'left' || opts.pos === 'right';
+            // The graphic lies after the text (larger x / y) when the text is on the left / top.
+            const graphicAfter = opts.pos === 'left' || opts.pos === 'top';
+            const len = horizontal ? w : h;
+            const lines = horizontal ? h : w;
+            const lo = horizontal ? tb.y0 : tb.x0;
+            const hi = horizontal ? tb.y1 : tb.x1;
+            const mid = (lo + hi) / 2;
+            const half = Math.max(1, (hi - lo) * 0.3);
+            for (let l = Math.max(0, Math.round(mid - half)); l <= Math.min(lines - 1, Math.round(mid + half)); l++) {
+                const at = (i) => (horizontal ? l * w + i : i * w + l);
+                // Edge of the text board facing the graphic, then the first graphic-board pixel past it.
+                let t = -1;
+                if (graphicAfter) { for (let i = len - 1; i >= 0; i--) if (textBoard[at(i)] > 0.5) { t = i; break; } }
+                else { for (let i = 0; i < len; i++) if (textBoard[at(i)] > 0.5) { t = i; break; } }
+                if (t < 0) continue;
+                let a = -1;
+                if (graphicAfter) { for (let i = t + 1; i < len; i++) if (artBoard[at(i)] > 0.5) { a = i; break; } }
+                else { for (let i = t - 1; i >= 0; i--) if (artBoard[at(i)] > 0.5) { a = i; break; } }
+                if (a < 0) continue;
+                for (let i = Math.min(t, a); i <= Math.max(t, a); i++) bridge[at(i)] = 1;
+                bridged = true;
+            }
+        }
+        const joined = mozMax(mozMax(artBoard, textBoard), bridge);
+        // No straight path to the graphic in the text's band (unusual artwork shape): close the gap
+        // with a wider fillet instead, so the board is never left in two pieces.
+        const fillet = bridged ? opts.fillet : Math.max(opts.fillet, opts.grow * 2);
+        return mozSmooth(mozFillHoles(mozGrowShrink(joined, w, h, fillet, fillet), w, h), w, h, opts.edge);
+    }
 
     // Acrylic finish of a backboard colour (same rules as the Neon configurator).
     function uvBoardFinish(c) {
@@ -1502,18 +1565,25 @@
         let fontReady = true;
         try { fontReady = !o.text || !document.fonts || document.fonts.check('400 30px ' + o.font); } catch (err) { fontReady = true; }
         const geoKey = [graphic.src || 'ph', fontReady, o.text, o.font, o.textPos, o.symPos, o.symbols.map((x) => x.src).join(','), W, H, dpr].join('|');
-        const key = [geoKey, o.board.kind, o.board.finish, o.board.colour, o.tube, o.light, o.glow, o.unlitText, o.wallShadow].join('|');
+        const key = [geoKey, o.board.kind, o.board.finish, o.board.colour, o.tube, o.light, o.glow, o.unlitText, o.wallShadow, !!o.rgb].join('|');
+        // RGB: the neon light (glow, tube, neon text) is drawn on its own canvas on top, and only
+        // that canvas cycles colour (CSS), so the printed design and the backboard keep their colours.
+        let lightCv = ctx._uv.light;
+        if (o.rgb && !lightCv) { lightCv = ctx._uv.light = el('canvas', 'moz-uvb__canvas moz-uvb__light'); art.appendChild(lightCv); }
+        if (lightCv) lightCv.style.display = o.rgb ? '' : 'none';
         cv.hidden = false;
         art.style.width = W + 'px';
         art.style.height = H + 'px';
         if (cv._key === key) return { W, H };
         cv._key = key;
-        cv.width = Math.round((W + pad * 2) * dpr);
-        cv.height = Math.round((H + pad * 2) * dpr);
-        cv.style.width = (W + pad * 2) + 'px';
-        cv.style.height = (H + pad * 2) + 'px';
-        cv.style.left = -pad + 'px';
-        cv.style.top = -pad + 'px';
+        [cv].concat(o.rgb ? [lightCv] : []).forEach((c) => {
+            c.width = Math.round((W + pad * 2) * dpr);
+            c.height = Math.round((H + pad * 2) * dpr);
+            c.style.width = (W + pad * 2) + 'px';
+            c.style.height = (H + pad * 2) + 'px';
+            c.style.left = -pad + 'px';
+            c.style.top = -pad + 'px';
+        });
         const CW = cv.width;
         const CH = cv.height;
         const X = (v) => (pad + (v - minX) * s) * dpr;
@@ -1560,13 +1630,11 @@
                 const tubeIn = mozGrow(shape, CW, CH, D(2.5));
                 const tubeOut = mozGrow(shape, CW, CH, D(2.5 + lw));
                 const tube = mozMinus(tubeOut, tubeIn);
-                const mt = TG ? mozMaskOf(tSil) : new Float32Array(CW * CH);
                 const faint = mozMaskOf(print);
-                for (let i = 0; i < faint.length; i++) { faint[i] = faint[i] > 0.06 ? 1 : 0; if (faint[i] > mt[i]) mt[i] = faint[i]; }
-                // Cut-around board: one connected piece around the neon + text, bridging gaps
-                const union = mozMax(tubeOut, mt);
-                // bridge gaps between graphic and text (grows with the sign), then fill every
-                // enclosed hole so the cut-around board is one solid piece
+                for (let i = 0; i < faint.length; i++) faint[i] = faint[i] > 0.06 ? 1 : 0;
+                // Cut-around board around the GRAPHIC (neon tube + artwork): bridge gaps (grows with
+                // the sign), then fill every enclosed hole so it is one solid piece.
+                const union = mozMax(tubeOut, faint);
                 const bridgeR = D(28) + L(R * 0.08);
                 let board = mozSmooth(mozFillHoles(mozGrowShrink(union, CW, CH, bridgeR, bridgeR - D(10)), CW, CH), CW, CH, D(6));
                 // Rectangular artwork (the "Your Graphic" placeholder, full-bleed photos): a clean rectangular board.
@@ -1582,6 +1650,15 @@
                     rg.fill();
                     board = mozMaskOf(rc);
                 }
+                // Text + symbols: the board follows every letter like the Neon "Cut Around" (square
+                // dilate of the letters by ~0.38 of the font size), joined to the graphic's board by
+                // a short bridge so the acrylic is still one connected piece.
+                if (TG) board = uvTextBoard(board, mozMaskOf(tSil), CW, CH, {
+                    pos: o.textPos,
+                    grow: Math.max(D(6), L(text.fpx) * 0.38),
+                    fillet: D(5),
+                    edge: D(2)
+                });
                 const inner = mozShrink(board, CW, CH, D(1.6));
                 geo = {
                     print,
@@ -1670,6 +1747,48 @@
         // 2) Light layer: one neon tube following the outline of the graphic + the neon text
         const tube = o.tube ? tint(geo.tube, o.tube) : null;
         const textLayer = TG ? tint(geo.tSil, o.light || o.unlitText) : null;
+        if (o.rgb) {
+            // Printed artwork on the base canvas; glow, tube and neon text on the light canvas.
+            // The glow is cut out where the artwork is, exactly as if it were behind it (as below).
+            g.drawImage(geo.print, 0, 0);
+            const lg = lightCv.getContext('2d');
+            lg.clearRect(0, 0, CW, CH);
+            lg.save();
+            lg.shadowColor = o.glow;
+            lg.globalAlpha = 0.45;
+            lg.shadowBlur = D(26);
+            if (tube) lg.drawImage(tube, 0, 0);
+            lg.globalAlpha = 0.9;
+            lg.shadowBlur = D(14);
+            if (tube) lg.drawImage(tube, 0, 0);
+            lg.globalAlpha = 1;
+            lg.shadowBlur = D(6);
+            if (tube) lg.drawImage(tube, 0, 0);
+            lg.shadowBlur = D(2.5);
+            if (tube) lg.drawImage(tube, 0, 0);
+            if (textLayer) {
+                lg.shadowBlur = Math.max(3, L(text.fpx) * 0.18);
+                lg.drawImage(textLayer, 0, 0);
+                lg.shadowBlur = Math.max(6, L(text.fpx) * 0.45);
+                lg.drawImage(textLayer, 0, 0);
+            }
+            lg.restore();
+            lg.save();
+            lg.globalCompositeOperation = 'destination-out';
+            lg.drawImage(geo.print, 0, 0);
+            lg.restore();
+            [tube, textLayer].forEach((layer) => {
+                if (!layer) return;
+                lg.save();
+                lg.shadowColor = 'rgba(0,0,0,0.2)';
+                lg.shadowBlur = D(2.5);
+                lg.shadowOffsetX = D(0.8);
+                lg.shadowOffsetY = D(1.4);
+                lg.drawImage(layer, 0, 0);
+                lg.restore();
+            });
+            return { W, H };
+        }
         if (o.glow) {
             g.save();
             g.shadowColor = o.glow;
@@ -1722,6 +1841,8 @@
             ctx.surcharge = surcharge;
             const findOverride = (w) => overrides.find((o) => Math.abs(num(o.w) - num(w)) < 0.51);
             const isLed = () => !!(ctx.v.lighting && ctx.v.lighting.key === 'led');
+            // RGB colour changing is chosen (only counts With Neon Lighting).
+            ctx.isRgb = () => isLed() && !!(ctx.v.effect && ctx.v.effect.key === 'rgb');
             const hasText = () => !!(ctx.v.design && ctx.v.design.key === 'text');
             // UV Size Prices row with the same width wins; a row without a real price (empty / 0)
             // never turns a card into $0.00 — it falls back to Neon price + surcharge.
@@ -1852,13 +1973,22 @@
             const colours = bySort(d.colours);
             if (effects.length || colours.length) {
                 const s = ctx.step('Neon Colour / Effect');
+                // RGB (colour changing) has no single colour, so the colour swatches are hidden.
+                let colourCtl = null;
+                const syncColourSwatches = () => { if (colourCtl) colourCtl.el.hidden = ctx.isRgb(); };
                 if (effects.length) {
                     const start = Math.max(0, effects.findIndex((e) => String(e.k).toLowerCase() === 'single'));
-                    const ctl = ctx.cards('effect', effects.map((e) => ({ key: String(e.k || '').toLowerCase(), label: e.l, price: e.p })), { cols: Math.min(3, effects.length), compact: true, showIncluded: true });
+                    const ctl = ctx.cards('effect', effects.map((e) => ({ key: String(e.k || '').toLowerCase(), label: e.l, price: e.p })), { cols: Math.min(3, effects.length), compact: true, showIncluded: true, onChange: syncColourSwatches });
                     ctl.select(start, true);
                     s.appendChild(ctl.el);
                 }
-                if (colours.length) s.appendChild(ctx.swatches('colour', colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: c.p }))).el);
+                // Every single neon colour is included on the Graphic sign (client rule): RGB is the
+                // only colour option with a price (its effect price). Neon Signs keeps its own colour prices.
+                if (colours.length) {
+                    colourCtl = ctx.swatches('colour', colours.map((c) => ({ name: c.n, hex: c.h || '#ffffff', price: 0 })));
+                    s.appendChild(colourCtl.el);
+                    syncColourSwatches();
+                }
                 ledSteps.push(s);
             }
             {
@@ -1971,7 +2101,7 @@
             const size = ctx.v.size;
             if (size) lines.push({ label: 'Size: ' + size.label + ' with graphic' + (led ? '' : ' (Without Neon)'), value: ctx.sizePrice(size.src), full: true });
             if (led && ctx.v.effect) lines.push({ label: 'Effect: ' + ctx.v.effect.label, value: ctx.v.effect.price });
-            if (led && ctx.v.colour) lines.push({ label: 'Neon colour: ' + ctx.v.colour.name, value: ctx.v.colour.price });
+            if (led && ctx.v.colour && !ctx.isRgb()) lines.push({ label: 'Neon colour: ' + ctx.v.colour.name, value: ctx.v.colour.price });
             if (ctx.v.style) lines.push({ label: 'Backboard: ' + ctx.v.style.label, value: ctx.v.style.price });
             if (ctx.v.board && ctx.v.style && ctx.v.style.board !== 'naked') lines.push({ label: 'Backboard colour: ' + ctx.v.board.name, value: ctx.v.board.price });
             if (led && ctx.v.neonType) lines.push({ label: ctx.v.neonType.label, value: ctx.v.neonType.price });
@@ -2013,8 +2143,10 @@
             wrap.className = 'moz-uvb is-' + kind + ' is-fin-' + finish + (finish === 'clear' ? ' is-clear' : '');
             const led = ctx.isLed();
             const lit = led && ctx.ledOn;
-            const c = glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ff2ec4');
-            const rgb = lit && ctx.v.effect && ctx.v.effect.key === 'rgb';
+            const rgb = lit && ctx.isRgb();
+            // RGB has no single colour: a saturated red the CSS hue cycle turns into every colour
+            // (a white / pale neon colour would not visibly change).
+            const c = rgb ? '#ff2d55' : glowColour(ctx.v.colour ? ctx.v.colour.hex : '#ff2ec4');
             wrap.classList.toggle('is-lit', lit);
             wrap.classList.toggle('is-rgb', rgb);
             // Same curve as the Neon configurator (sqrt of the width): the largest size in the list
@@ -2050,6 +2182,7 @@
                 light: lit ? uvMixWhite(c, 0.06) : '',
                 unlitText: led ? unlitTint : uvTextColour(ctx, boardIsLight || bc.clear),
                 glow: lit ? c : '',
+                rgb,
                 sizeScale,
                 maxW: f.w * 0.92 / boardPad,
                 maxH: f.h * 0.92 / boardPad
@@ -2090,7 +2223,7 @@
             }
             if (led) {
                 if (ctx.v.effect) p['Colour Effect'] = ctx.v.effect.label;
-                if (ctx.v.colour) p['Neon Colour'] = ctx.v.colour.name;
+                if (ctx.v.colour && !ctx.isRgb()) p['Neon Colour'] = ctx.v.colour.name;
                 if (ctx.v.neonType) p['Neon Type'] = ctx.v.neonType.label;
                 if (ctx.v.power) p['Power Adapter'] = ctx.v.power.label;
                 const notes = String(ctx.lightNotes || '').trim();
