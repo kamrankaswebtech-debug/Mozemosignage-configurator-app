@@ -11,11 +11,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 const SECTIONS = [
     { title: "Illumination (image & price)", path: "/app/3d-signs/illumination-type", description: "Add ONE illumination type with Effect \"Lightbox\" — upload its example image and set its price." },
     { title: "Material / Finish", path: "/app/3d-signs/finishes", description: "Shared with 3D Signs — Glossy, Matte and Chrome Shine side finishes (with example images)." },
-    { title: "Mounting & Sides Images", path: "/app/lightbox/mounting", description: "Example image + short text for the Wall Mount, Wall Hanging, Front-Facing and Double-Sided cards." },
+    { title: "Mounting & Sides Images", path: "/app/lightbox/mounting", description: "Example image + short text for the Wall Mount, Wall Hanging, Mounting Bracket (Single Circular / Double Rectangular), Front-Facing and Double-Sided cards." },
     { title: "Shapes", path: "/app/lightbox/shapes", description: "Circle/Round, Square, Rectangle, Star, Oval, Hexagon, Octagon and Other — with optional extra price." },
     { title: "Sizes & Prices", path: "/app/lightbox/sizes", description: "The size boxes on the storefront — single-sided and double-sided price for each size." },
     { title: "Side & Pole / Bracket Colours", path: "/app/3d-signs/front-colours", description: "Shared with 3D Signs colours; finishes Glossy, Shiny (Chrome) and Matte from Material / Finish." },
-    { title: "Wallpaper", path: "/app/settings/wallpapers", description: "One consistent background — upload it and tick Lightbox." },
+    { title: "Wallpaper", path: "/app/settings/wallpapers", description: "Lightbox uses the built-in storefront wall photo, matched to the mounting preview. Ticking Lightbox on a wallpaper here replaces it (the box is then centred instead of mounted on the wall)." },
 ];
 
 export default function LightboxHub() {

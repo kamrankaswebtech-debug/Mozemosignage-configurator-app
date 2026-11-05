@@ -1583,8 +1583,8 @@ function initSign3dConfigurator(root) {
         .filter((o) => o.h > 0)
         .sort((a, b) => (a.sr - b.sr) || (a.h - b.h) || (a.i - b.i));
     let lhBox = lhBoxes[0] || null;
-    // Marquee / Infinity have no Colour Intensity option (always the exact colour).
-    const hasIntensity = ['marquee', 'infinity'].indexOf(root.dataset.sign3dMode) === -1;
+    // Marquee / Infinity / Lightbox have no Colour Intensity option (always the exact colour).
+    const hasIntensity = ['marquee', 'infinity', 'lightbox'].indexOf(root.dataset.sign3dMode) === -1;
     const depthSelect = root.querySelector('[data-depth-select]');
     const indoorOutdoorRadios = root.querySelectorAll('[data-indoor-outdoor-radio]');
     const breakdownRows = root.querySelector('[data-breakdown-rows]');
@@ -2081,6 +2081,7 @@ function initSign3dConfigurator(root) {
         rows.push(['Material', d.materialLabel]);
 
         rows.push(['Mounting', d.mountingLabel]);
+        if (root.dataset.sign3dMode === 'lightbox' && getBackingType() === 'bracket') rows.push(['Mounting Bracket', (LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round).label]);
         if (d.backingColourName) rows.push(['Backing Colour', d.backingColourName]);
         if (d.powerSupply) rows.push(['Power Supply', escapeHtml(d.powerSupply)]);
         rows.push(['Installation', d.installNote]);
@@ -2730,7 +2731,8 @@ function initSign3dConfigurator(root) {
         updateBackingPanel(contentRect, stageRect);
         if (!contentRect || !contentRect.width || !contentRect.height) return;
         // Lightbox: the measurements are of the box, not of the design inside it.
-        if (root.dataset.sign3dMode === 'lightbox' && lbxEl && !lbxEl.hidden) contentRect = lbxEl.getBoundingClientRect();
+        // (The angled box's on-screen outline, not counting the bracket.)
+        if (root.dataset.sign3dMode === 'lightbox' && lbxEl && !lbxEl.hidden) contentRect = (lbxBody || lbxEl).getBoundingClientRect();
 
         if (widthDimLine) {
             widthDimLine.style.left = (contentRect.left - stageRect.left) + 'px';
@@ -3065,6 +3067,8 @@ function initSign3dConfigurator(root) {
         }
         // No wallpaper (Off / none uploaded): original grid look + dark strip behind the panel.
         root.classList.toggle('moz-no-wallpaper', !(selectedBgUrl && !wallpaperHidden));
+        // Lightbox: its size / position follow the wall photo, so redraw it for the new wallpaper.
+        if (root.dataset.sign3dMode === 'lightbox') updateDimensionLines();
     }
 
     bgThumbs.forEach((thumb) => {
@@ -3533,6 +3537,7 @@ function initSign3dConfigurator(root) {
                     properties['Shape'] = lbShape ? lbShape.l : 'Standard';
                     properties['Lighting'] = lbSides === 'double' ? 'Double-Sided' : 'Front-Facing';
                     properties['LED'] = 'White LEDs';
+                    if (getBackingType() === 'bracket') properties['Mounting Bracket'] = (LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round).label;
                     renameProp('Colour Intensity', getBackingType() === 'bracket' ? 'Pole / Bracket Colour Intensity' : '');
                     if (getBackingType() !== 'bracket') delete properties['Colour Intensity'];
                     renameProp('Backing Colour', 'Pole / Bracket Colour');
@@ -4514,6 +4519,17 @@ function initSign3dConfigurator(root) {
         });
     let lbShape = lbShapes[0] || null;
     let lbSides = 'front';
+    // Wall Hanging bracket style. Card image / text can be replaced in Admin (Lightbox > Mounting &
+    // Sides Images); the live-preview bracket is the client's transparent bracket render.
+    // tipX / tipY: where the arm ends in the cutout image (share of its width / height) — the box
+    // hangs there. aspect = cutout width / height.
+    const LBX_BRACKETS = {
+        round: { label: 'Single Circular Mount', desc: 'One round pole bracket — our main, most popular mount.', aspect: 389 / 365, tipX: 0.97, tipY: 0.577 },
+        rect: { label: 'Double Rectangular Mount', desc: 'Two square arms — extra support for larger lightboxes.', aspect: 410 / 366, tipX: 0.97, tipY: 0.576 }
+    };
+    let lbBracket = 'round';
+    const lbBracketGrid = root.querySelector('[data-lb-bracket-cards]');
+    const lbBracketTitle = root.querySelector('[data-lb-bracket-title]');
     const lbDoublePrice = Number(root.dataset.lbDouble) || 0;
     const lbShapeGrid = root.querySelector('[data-lb-shape-cards]');
     const lbSidesGrid = root.querySelector('[data-lb-sides]');
@@ -4634,6 +4650,39 @@ function initSign3dConfigurator(root) {
                 lbSidesGrid.appendChild(b);
             });
         }
+        if (lbBracketGrid && lbSidesGrid) {
+            // Bracket style: only with Wall Hanging. The selected style changes the live preview.
+            const hanging = getBackingType() === 'bracket';
+            lbBracketGrid.hidden = !hanging;
+            if (lbBracketTitle) lbBracketTitle.hidden = !hanging;
+            lbBracketGrid.innerHTML = '';
+            const data = lbSidesGrid.dataset;
+            Object.keys(LBX_BRACKETS).forEach((key) => {
+                const def = LBX_BRACKETS[key];
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'sign3d-configurator__pick-card sign3d-lbx-bracket-card' + (lbBracket === key ? ' is-selected' : '');
+                b.innerHTML = '<span class="sign3d-configurator__pick-card-label"></span><span class="sign3d-configurator__pick-card-desc"></span><span class="sign3d-configurator__pick-card-price">Included</span>';
+                const img = key === 'round' ? data.brRoundImg : data.brRectImg;
+                if (img) {
+                    const im = document.createElement('img');
+                    im.className = 'sign3d-configurator__pick-card-img';
+                    im.src = img;
+                    im.alt = def.label;
+                    im.loading = 'lazy';
+                    b.insertBefore(im, b.firstChild);
+                }
+                const spans = b.querySelectorAll('span');
+                spans[0].textContent = def.label;
+                spans[1].textContent = (key === 'round' ? data.brRoundDesc : data.brRectDesc) || def.desc;
+                b.addEventListener('click', () => {
+                    lbBracket = key;
+                    renderLbCards();
+                    updateDimensionLines();
+                });
+                lbBracketGrid.appendChild(b);
+            });
+        }
         if (lbSizeGrid && lbSize) {
             lbSizeGrid.innerHTML = '';
             lightboxRows().forEach((r) => {
@@ -4686,36 +4735,124 @@ function initSign3dConfigurator(root) {
         return box * (getBackingType() === 'bracket' ? 1.3 : 1) * 1.35;
     }
 
+    // ---- Realistic wall preview (client's storefront wall photo, moz-lb-wall.jpg) ----
+    // Points below are pixels of that 1536 x 1024 photo: where the bracket is fixed on the wood
+    // panel (same place as in the client's mounted-bracket photos) and where a Wall Mount box hangs.
+    // They are only used while that built-in photo is the wallpaper; any other wallpaper (Admin) or
+    // Wallpaper Off keeps the box centred in the preview as before.
+    const LBX_WALL = { w: 1536, h: 1024, bracketLeft: 506, bracketTop: 336, bracketH: 252, mountX: 572, mountY: 470 };
+    // Box width in photo pixels for a size in cm (eased so large sizes stay on the wall).
+    const lbxWallPx = (cm) => 300 * Math.pow(Math.max(10, cm) / 30, 0.6);
+    // Viewing angle of the photo: a hanging box sticks out from the wall towards the viewer, a
+    // Wall Mount box lies flat against the wall (degrees, CSS rotateY).
+    const LBX_ANGLE = { hanging: -22, wall: 12 };
+    const LBX_SIDE_SLICES = 10;
+
+    // Maps photo pixels to preview-stage pixels (the wallpaper is painted "cover", centred, in the
+    // preview area only — see .moz-split::before). Null when the built-in wall photo isn't shown.
+    function lightboxWallMap(stageRect) {
+        if (!previewBox || wallpaperHidden || !root.dataset.lbWall || selectedBgUrl !== root.dataset.lbWall) return null;
+        const box = previewBox.getBoundingClientRect();
+        let paintW = box.width;
+        try {
+            const pw = parseFloat(getComputedStyle(previewBox, '::before').width);
+            if (pw > 0 && pw <= box.width + 1) paintW = pw;
+        } catch (err) { /* keep the full width */ }
+        const paintH = box.height;
+        if (!paintW || !paintH) return null;
+        const s = Math.max(paintW / LBX_WALL.w, paintH / LBX_WALL.h);
+        const ox = box.left + (paintW - LBX_WALL.w * s) / 2 - stageRect.left;
+        const oy = box.top + (paintH - LBX_WALL.h * s) / 2 - stageRect.top;
+        return {
+            s,
+            x: (px) => ox + px * s,
+            y: (py) => oy + py * s,
+            visL: box.left - stageRect.left,
+            visR: box.left + paintW - stageRect.left,
+            visT: box.top - stageRect.top,
+            visB: box.bottom - stageRect.top
+        };
+    }
+
     let lbxEl = null;
+    let lbxBody = null;
     function drawLightbox(contentRect, stageRect) {
         if (backingEl) backingEl.hidden = true;
         if (!previewStage) return;
         if (!lbxEl) {
             lbxEl = document.createElement('div');
             lbxEl.className = 'sign3d-lbx';
-            lbxEl.innerHTML = '<span class="sign3d-lbx__plate"></span><span class="sign3d-lbx__arm is-top"></span><span class="sign3d-lbx__arm is-bottom"></span>'
-                + '<span class="sign3d-lbx__rear"></span><span class="sign3d-lbx__side"></span><span class="sign3d-lbx__face"></span><span class="sign3d-lbx__tag"></span>';
+            let slices = '';
+            for (let i = 0; i < LBX_SIDE_SLICES; i++) slices += '<span class="sign3d-lbx__side"></span>';
+            lbxEl.innerHTML = '<span class="sign3d-lbx__bracket"><span class="sign3d-lbx__bracket-tint"></span><img class="sign3d-lbx__bracket-img" alt=""></span>'
+                + '<span class="sign3d-lbx__body"><span class="sign3d-lbx__rear"></span>' + slices + '<span class="sign3d-lbx__face"></span></span>'
+                + '<span class="sign3d-lbx__tag"></span>';
+            lbxBody = lbxEl.querySelector('.sign3d-lbx__body');
             previewStage.insertBefore(lbxEl, previewStage.firstChild);
         }
         if (!contentRect || !contentRect.width || !contentRect.height) { lbxEl.hidden = true; return; }
         lbxEl.hidden = false;
         const key = lbShape ? lbShape.key : 'rectangle';
-        const pad = Math.max(contentRect.width, contentRect.height) * 0.13;
-        let w = contentRect.width + pad * 2;
-        let h = contentRect.height + pad * 2;
-        if (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1) { w = h = Math.max(w, h) * (key === 'circle' ? 1.12 : 1.02); }
-        if (key === 'star') { w = h = Math.max(w, h) * 1.75; }
-        if (key === 'oval') { w *= 1.18; h *= 1.18; }
-        // Rectangle / Oval: always wider than tall, even for a square design (it sits inside the box).
-        if (lightboxIsWide()) { h = Math.max(h, w / LBX_WIDE_RATIO); w = h * LBX_WIDE_RATIO; }
-        if (lbSize) { const box = lightboxBoxPx(lbSize); w = box.w; h = box.h; }
-        const cx = (contentRect.left + contentRect.right) / 2 - stageRect.left;
-        const cy = (contentRect.top + contentRect.bottom) / 2 - stageRect.top;
-        lbxEl.style.left = (cx - w / 2) + 'px';
-        lbxEl.style.top = (cy - h / 2) + 'px';
+        const hanging = getBackingType() === 'bracket';
+        const bracket = LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round;
+        const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
+        const wall = lightboxWallMap(stageRect);
+        let w, h, left, top, bracketBox = null;
+
+        if (wall) {
+            // Built-in wall photo: true-to-photo size and position.
+            const cm = lbSize ? lbSize.w : getWidthCm();
+            w = lbxWallPx(cm) * wall.s;
+            h = w / ratio;
+            const m = 14;
+            if (hanging) {
+                const bh = LBX_WALL.bracketH * wall.s;
+                const bw = bh * bracket.aspect;
+                const bl = wall.x(LBX_WALL.bracketLeft);
+                const bt = wall.y(LBX_WALL.bracketTop);
+                const tipX = bl + bw * bracket.tipX;
+                const tipY = bt + bh * bracket.tipY;
+                // Keep the whole box inside the visible wall (small screens show less of the photo).
+                const k = Math.min(1, (wall.visR - m - tipX) / w, (2 * Math.min(tipY - wall.visT, wall.visB - tipY) - m * 2) / h);
+                if (k > 0) { w *= k; h *= k; }
+                left = tipX - w * 0.01;
+                top = tipY - h / 2;
+                bracketBox = { left: bl - left, top: bt - top, w: bw, h: bh };
+            } else {
+                const k = Math.min(1, (wall.visR - wall.visL - m * 2) / w, (wall.visB - wall.visT - m * 2) / h);
+                if (k > 0) { w *= k; h *= k; }
+                const cx = Math.min(Math.max(wall.x(LBX_WALL.mountX), wall.visL + m + w / 2), wall.visR - m - w / 2);
+                const cy = Math.min(Math.max(wall.y(LBX_WALL.mountY), wall.visT + m + h / 2), wall.visB - m - h / 2);
+                left = cx - w / 2;
+                top = cy - h / 2;
+            }
+        } else {
+            // Any other wallpaper / no wallpaper: centred on the design, as before.
+            const pad = Math.max(contentRect.width, contentRect.height) * 0.13;
+            w = contentRect.width + pad * 2;
+            h = contentRect.height + pad * 2;
+            if (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1) { w = h = Math.max(w, h) * (key === 'circle' ? 1.12 : 1.02); }
+            if (key === 'star') { w = h = Math.max(w, h) * 1.75; }
+            if (key === 'oval') { w *= 1.18; h *= 1.18; }
+            // Rectangle / Oval: always wider than tall, even for a square design (it sits inside the box).
+            if (lightboxIsWide()) { h = Math.max(h, w / LBX_WIDE_RATIO); w = h * LBX_WIDE_RATIO; }
+            if (lbSize) { const box = lightboxBoxPx(lbSize); w = box.w; h = box.h; }
+            const cx = (contentRect.left + contentRect.right) / 2 - stageRect.left;
+            const cy = (contentRect.top + contentRect.bottom) / 2 - stageRect.top;
+            left = cx - w / 2;
+            top = cy - h / 2;
+            if (hanging) {
+                // Bracket to the left of the box, its arm ending at the middle of the box's side.
+                const bh = Math.min(h * 0.6, (w * 0.3) / bracket.aspect);
+                const bw = bh * bracket.aspect;
+                bracketBox = { left: w * 0.01 - bw * bracket.tipX, top: h / 2 - bh * bracket.tipY, w: bw, h: bh };
+            }
+        }
+
+        lbxEl.style.left = left + 'px';
+        lbxEl.style.top = top + 'px';
         lbxEl.style.width = w + 'px';
         lbxEl.style.height = h + 'px';
-        const hanging = getBackingType() === 'bracket';
         const sideF = activeFinish('side');
         const bracketF = activeFinish('backing');
         lbxEl.className = 'sign3d-lbx is-' + key + (lightboxIsWide() ? ' is-wide' : '') + (hanging ? ' is-hanging' : ' is-wall') + (lbSides === 'double' ? ' is-double' : '')
@@ -4723,12 +4860,42 @@ function initSign3dConfigurator(root) {
         lbxEl.style.setProperty('--lbx-clip', LBX_CLIP[key]);
         lbxEl.style.setProperty('--lbx-side', selectedSideHex || '#1a1a1a');
         lbxEl.style.setProperty('--lbx-bracket', selectedBackHex || '#1a1a1a');
-        lbxEl.style.setProperty('--lbx-depth', Math.max(5, Math.min(18, Math.min(w, h) * 0.05)) + 'px');
-        // A real upload (not the placeholder) is printed edge to edge on the face.
-        const art = logoPreviewSrc && String(logoPreviewSrc).indexOf('data:') !== 0 ? logoPreviewSrc : '';
-        lbxEl.classList.toggle('has-art', !!art);
-        if (art) lbxEl.style.setProperty('--lbx-art', 'url("' + String(art).replace(/"/g, '\\"') + '")'); else lbxEl.style.removeProperty('--lbx-art');
-        if (previewInner) previewInner.classList.toggle('lbx-art-fill', !!art);
+
+        // 3D box: the face at the front, the side return as thin slices behind it (so it shows as a
+        // solid edge at the angle), and for Double-Sided the rear face just inside the surround.
+        const depth = Math.max(6, Math.min(22, Math.min(w, h) * 0.06));
+        lbxEl.style.setProperty('--lbx-depth', depth + 'px');
+        lbxEl.style.setProperty('--lbx-angle', (hanging ? LBX_ANGLE.hanging : LBX_ANGLE.wall) + 'deg');
+        lbxEl.style.setProperty('--lbx-persp', Math.round(Math.max(w, h) * 4) + 'px');
+        lbxBody.querySelectorAll('.sign3d-lbx__side').forEach((slice, i) => {
+            slice.style.transform = 'translateZ(' + (-depth * (i + 1) / LBX_SIDE_SLICES).toFixed(2) + 'px)';
+        });
+
+        // Bracket (Wall Hanging): the client's bracket render; a light colour is tinted over its shape.
+        const bracketEl = lbxEl.querySelector('.sign3d-lbx__bracket');
+        if (bracketBox && lbSidesGrid) {
+            const cut = lbBracket === 'rect' ? lbSidesGrid.dataset.brRectCut : lbSidesGrid.dataset.brRoundCut;
+            const img = bracketEl.querySelector('img');
+            if (cut && img.getAttribute('src') !== cut) img.src = cut;
+            bracketEl.hidden = !cut;
+            bracketEl.style.left = bracketBox.left + 'px';
+            bracketEl.style.top = bracketBox.top + 'px';
+            bracketEl.style.width = bracketBox.w + 'px';
+            bracketEl.style.height = bracketBox.h + 'px';
+            bracketEl.style.setProperty('--lbx-bracket-img', 'url("' + cut + '")');
+            const c = sign3dParseHex(selectedBackHex || '#1a1a1a');
+            bracketEl.classList.toggle('is-tinted', (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255 > 0.22);
+        } else {
+            bracketEl.hidden = true;
+        }
+
+        // The design (or the "Your Logo / Design" placeholder) is printed on the face, so it follows
+        // the box's angle. The flat design layer underneath is hidden in Lightbox mode (CSS).
+        const art = logoPreviewSrc ? String(logoPreviewSrc) : '';
+        const placeholder = art.indexOf('data:') === 0;
+        lbxEl.classList.toggle('has-art', !!art && !placeholder);
+        lbxEl.classList.toggle('has-placeholder', placeholder);
+        if (art) lbxEl.style.setProperty('--lbx-art', 'url("' + art.replace(/"/g, '\\"') + '")'); else lbxEl.style.removeProperty('--lbx-art');
         const tag = lbxEl.querySelector('.sign3d-lbx__tag');
         tag.textContent = lbSides === 'double' ? 'Double-Sided' : '';
         tag.hidden = !tag.textContent;

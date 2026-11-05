@@ -12,6 +12,8 @@ const MOUNTS = [
     { key: "wall_hanging", label: "Wall Hanging", hint: "Projects from the wall on a pole / bracket — front, rear and sides visible. Front-facing or double-sided." },
     { key: "side_front", label: "Front-Facing", hint: "Your design lit on the front face." },
     { key: "side_double", label: "Double-Sided", hint: "Your design on both faces." },
+    { key: "bracket_round", label: "Single Circular Mount", hint: "One round pole bracket — our main, most popular mount." },
+    { key: "bracket_rect", label: "Double Rectangular Mount", hint: "Two square arms — extra support for larger lightboxes." },
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -195,11 +197,12 @@ export default function LightboxMountingPage() {
 
     return (
         <s-page heading="Lightbox Mounting & Sides Images">
-            <s-section heading="Wall Mount / Wall Hanging / Front-Facing / Double-Sided cards">
+            <s-section heading="Mounting, Bracket and Front-Facing / Double-Sided cards">
                 <s-link href="/app/lightbox">← Back to 3D LED Lightbox</s-link>
                 <s-paragraph>
-                    Upload an example image (and optional short text) for each card on the 3D LED Lightbox configurator. Front-Facing and
-                    Double-Sided show a built-in image until you upload your own.
+                    Upload an example image (and optional short text) for each card on the 3D LED Lightbox configurator. Front-Facing,
+                    Double-Sided and the two Mounting Bracket cards (shown with Wall Hanging) show a built-in image until you upload your own.
+                    The bracket in the live preview always uses the built-in bracket render.
                 </s-paragraph>
                 {items.map((m) => (
                     <fetcher.Form key={m.key + formKey} method="post" encType="multipart/form-data" style={{ marginBottom: 18 }}>
