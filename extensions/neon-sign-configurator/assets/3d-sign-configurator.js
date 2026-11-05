@@ -1396,7 +1396,10 @@ function sign3dHydrateOptions(root) {
             btn.appendChild(img);
             thumbs.appendChild(btn);
         });
-        thumbs.style.display = walls.length ? '' : 'none';
+        // Lightbox: one wall photo (client) = nothing to choose, so no thumbnail strip (it also sat
+        // over the width measurement). More than one wallpaper ticked in Admin = the strip shows.
+        const minWalls = root.dataset.sign3dMode === 'lightbox' ? 2 : 1;
+        thumbs.style.display = walls.length >= minWalls ? '' : 'none';
     }
 
     // Add-ons as visual cards (tick box + icon + label), in Admin "Sort Order".
@@ -4784,7 +4787,7 @@ function initSign3dConfigurator(root) {
             lbxEl.className = 'sign3d-lbx';
             let slices = '';
             for (let i = 0; i < LBX_SIDE_SLICES; i++) slices += '<span class="sign3d-lbx__side"></span>';
-            lbxEl.innerHTML = '<span class="sign3d-lbx__bracket"><span class="sign3d-lbx__bracket-tint"></span><img class="sign3d-lbx__bracket-img" alt=""></span>'
+            lbxEl.innerHTML = '<span class="sign3d-lbx__bracket"><span class="sign3d-lbx__bracket-tint"></span><img class="sign3d-lbx__bracket-img" alt=""><span class="sign3d-lbx__bracket-sheen"></span></span>'
                 + '<span class="sign3d-lbx__body"><span class="sign3d-lbx__rear"></span>' + slices + '<span class="sign3d-lbx__face"></span></span>'
                 + '<span class="sign3d-lbx__tag"></span>';
             lbxBody = lbxEl.querySelector('.sign3d-lbx__body');
@@ -4871,7 +4874,8 @@ function initSign3dConfigurator(root) {
             slice.style.transform = 'translateZ(' + (-depth * (i + 1) / LBX_SIDE_SLICES).toFixed(2) + 'px)';
         });
 
-        // Bracket (Wall Hanging): the client's bracket render; a light colour is tinted over its shape.
+        // Bracket (Wall Hanging): the client's bracket render (black). Any other Pole / Bracket colour
+        // is painted over its shape, keeping its shading; the finish (CSS bracket-*) adds the sheen.
         const bracketEl = lbxEl.querySelector('.sign3d-lbx__bracket');
         if (bracketBox && lbSidesGrid) {
             const cut = lbBracket === 'rect' ? lbSidesGrid.dataset.brRectCut : lbSidesGrid.dataset.brRoundCut;
@@ -4883,8 +4887,10 @@ function initSign3dConfigurator(root) {
             bracketEl.style.width = bracketBox.w + 'px';
             bracketEl.style.height = bracketBox.h + 'px';
             bracketEl.style.setProperty('--lbx-bracket-img', 'url("' + cut + '")');
+            // Near-black (e.g. Black #000000 / #1a1a1a) = the render as photographed; every other
+            // colour, dark ones like Deep Blue included, is tinted.
             const c = sign3dParseHex(selectedBackHex || '#1a1a1a');
-            bracketEl.classList.toggle('is-tinted', (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255 > 0.22);
+            bracketEl.classList.toggle('is-tinted', Math.max(c.r, c.g, c.b) > 48);
         } else {
             bracketEl.hidden = true;
         }

@@ -83,7 +83,7 @@
       <button type="button" class="sign3d-configurator__toolbar-btn" data-undo-btn title="Undo" disabled>Undo</button>
       <button type="button" class="sign3d-configurator__toolbar-btn" data-redo-btn title="Redo" disabled>Redo</button>
       <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-colour-btn title="Reset Colour">Reset Colour</button>
-      <button type="button" class="sign3d-configurator__toolbar-btn" data-reset-font-btn title="Reset Font">Reset Font</button>
+      {% unless s3d_mode == "lightbox" %}<button type="button" class="sign3d-configurator__toolbar-btn" data-reset-font-btn title="Reset Font">Reset Font</button>{% endunless %}
     </div>
 
     <div class="sign3d-configurator__preview-footer">
