@@ -2812,6 +2812,8 @@ function initSign3dConfigurator(root) {
             ledOn = ledToggle.checked;
             updateLedState();
             if (ledLabel) ledLabel.textContent = ledOn ? 'LED On' : 'LED Off';
+            // Lightbox: the lit / unlit look lives on the box (is-lit), so redraw it.
+            if (root.dataset.sign3dMode === 'lightbox') updateDimensionLines();
         });
     }
 
