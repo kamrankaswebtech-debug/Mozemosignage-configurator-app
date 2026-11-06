@@ -3281,3 +3281,16 @@
     transform: scale(1.09);
     clip-path: inset(4.13% round 6px);
 }
+
+/* Event Marquee: clear-glass note + a divider between the bulb options and the letter face colours */
+.sign3d-configurator .sign3d-mq-glass-note[hidden] {
+    display: none;
+}
+.sign3d-configurator .sign3d-mq-divider {
+    height: 1px;
+    margin: 14px 0 4px;
+    background: rgba(216, 140, 255, 0.25);
+}
+.sign3d-configurator .sign3d-mq-face-note {
+    margin-top: -2px;
+}

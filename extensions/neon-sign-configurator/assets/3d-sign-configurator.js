@@ -1158,21 +1158,26 @@ function sign3dEdt(B, W, H) {
     return d;
 }
 
-function sign3dInfinityMask(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|inf7|' + sign3dFontReady(fontCss);
-    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
+function sign3dInfinityMask(ch, fontCss, fsPx) {
     const S = 240;
+    const hw = sign3dStrokeHalf(fontCss, S);
+    // A real infinity mirror letter: one bright LED line just inside the wall, then its
+    // reflections — concentric copies of the letter's outline stepping into the depth, closer
+    // together and quickly dimmer each time (perspective), the centre of the stroke stays dark.
+    // How many fit follows the stroke width (2 for a thin script font, up to 6 for a heavy block
+    // font) AND the size on screen: rings are never closer than ~3.5px, so small letters show
+    // fewer, clean reflections instead of dense stripes.
+    let n = hw >= 22 ? 6 : (hw >= 15 ? 5 : (hw >= 10 ? 4 : (hw >= 7 ? 3 : 2)));
+    const hwScreen = fsPx > 0 ? hw / S * fsPx : 999;
+    n = Math.max(2, Math.min(n, Math.floor((hwScreen * 0.7) / 3.5) + 1));
+    // Lines at least ~0.85px wide on screen (mask px -> screen px = fsPx / S)
+    const wMin = fsPx > 0 ? Math.max(1.1, 0.85 * S / fsPx) : 1.1;
+    const key = fontCss + '|' + ch + '|inf8|' + n + '|' + Math.round(wMin * 4) + '|' + sign3dFontReady(fontCss);
+    if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const f = sign3dGlyphField(ch, fontCss, S);
     if (!f) return null;
     const { W, H, ox, base } = f;
     const dist = sign3dEdt(f.B, W, H);
-    const hw = sign3dStrokeHalf(fontCss, S);
-    // A real infinity mirror letter: one bright LED line just inside the wall, then its
-    // reflections — concentric copies of the letter's outline stepping into the depth, closer
-    // together and dimmer each time (perspective), the centre of the stroke stays dark. Every
-    // ring is a clean, even line; how many fit follows the stroke width (2 for a thin script
-    // font, up to 6 for a heavy block font), so every font looks neat.
-    const n = hw >= 22 ? 6 : (hw >= 15 ? 5 : (hw >= 10 ? 4 : (hw >= 7 ? 3 : 2)));
     const r0 = Math.max(1.8, hw * 0.15);
     const rEnd = hw * 0.86;
     const q = 0.66;
@@ -1182,8 +1187,8 @@ function sign3dInfinityMask(ch, fontCss) {
         const depth = n > 1 ? k / (n - 1) : 0;
         rings.push({
             r: r0 + (rEnd - r0) * ((1 - Math.pow(q, k)) / span),
-            a: k === 0 ? 1 : 0.9 - depth * 0.55,                     // front LED brightest, reflections fade
-            w: Math.max(1.1, hw * (k === 0 ? 0.12 : 0.095 - depth * 0.035)),
+            a: k === 0 ? 1 : 0.68 * Math.pow(0.66, k - 1),            // front LED brightest, each reflection dimmer
+            w: Math.max(wMin, hw * (k === 0 ? 0.12 : 0.095 - depth * 0.035)),
             bloom: k === 0 ? 0.5 : 0.2 * (1 - depth * 0.6)
         });
     }
@@ -4581,8 +4586,11 @@ function initSign3dConfigurator(root) {
     function setBulbType(type, silent) {
         bulbType = MQ_BULB_TYPES[type] ? type : 'led';
         renderBulbTypes();
-        // Colour swatches + colour instructions only apply to the plastic LED bulbs.
+        // Colour swatches + colour instructions only apply to the plastic LED bulbs; clear glass
+        // shows a note instead, so the Letter Face Colour list below is never taken for bulb colours.
         if (bulbLedOptions) bulbLedOptions.hidden = bulbType === 'glass';
+        const glassNote = root.querySelector('[data-bulb-glass-note]');
+        if (glassNote) glassNote.hidden = bulbType !== 'glass';
         applyBulbLook();
         if (!silent) calculateTotal();
     }
@@ -4655,7 +4663,7 @@ function initSign3dConfigurator(root) {
             span.querySelectorAll('.sign3d-configurator__tunnel, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
             const ch = span.dataset.char;
             if (!ch || ch === '\u00A0' || !fs) return;
-            const m = sign3dInfinityMask(ch, fontCss);
+            const m = sign3dInfinityMask(ch, fontCss, fs);
             if (!m) return;
             const probe = document.createElement('i');
             probe.className = 'sign3d-configurator__bulb-probe';

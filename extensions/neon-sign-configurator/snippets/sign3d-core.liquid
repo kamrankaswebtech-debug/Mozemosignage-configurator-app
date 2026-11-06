@@ -293,8 +293,11 @@
       <p class="sign3d-configurator__selected-label">Selected: <span data-bulb-colour-name-label></span></p>
       <p class="sign3d-configurator__subheading">Custom Bulb Colours (optional)</p>
       <textarea class="sign3d-configurator__text-input sign3d-mq-bulb-notes" data-bulb-notes rows="3" maxlength="500" placeholder="Tell us how you want your bulbs coloured — e.g. every bulb a different colour, or red and white alternating. No extra charge."></textarea>
-      </div>{% endif %}
-      <p class="sign3d-configurator__subheading">{% if s3d_mode == "infinity" %}Lighting Colour{% elsif s3d_mode == "marquee" %}Front / Face Colour{% else %}Front Colour{% endif %}</p>
+      </div>
+      <p class="sign3d-configurator__note sign3d-mq-glass-note" data-bulb-glass-note hidden>Traditional Clear Glass bulbs always glow warm white — there is no bulb colour to choose.</p>
+      <div class="sign3d-mq-divider"></div>{% endif %}
+      <p class="sign3d-configurator__subheading">{% if s3d_mode == "infinity" %}Lighting Colour{% elsif s3d_mode == "marquee" %}Letter Face Colour{% else %}Front Colour{% endif %}</p>{% if s3d_mode == "marquee" %}
+      <p class="sign3d-configurator__note sign3d-mq-face-note">The colour of the letters themselves (not the bulbs).</p>{% endif %}
       <div class="sign3d-configurator__swatch-groups" data-colour-swatches{% if s3d_mode == "infinity" %} data-no-black{% endif %}></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-colour-name-label></span></p>
       <div data-finish-wrap="front" hidden{% if s3d_mode == "infinity" or s3d_mode == "lightbox" %} data-finish-off{% endif %}><p class="sign3d-configurator__subheading">{% if s3d_mode == "marquee" %}Front / Face Surface Finish{% else %}Front Material / Finish{% endif %}</p><div class="sign3d-configurator__finish-cards" data-finish-cards="front"></div></div>
