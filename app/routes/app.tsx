@@ -29,7 +29,7 @@ export default function App() {
         <s-link href="/app/settings">Settings</s-link>
         <s-link href="/app/orders">Production Orders</s-link>
         <s-link href="/app/neon-signs">Neon Signs</s-link>
-        <s-link href="/app/acrylic-bonnet">Acrylic Neon Bonnet</s-link>
+        <s-link href="/app/acrylic-bonnet">Acrylic LED Neon Car Stand</s-link>
         <s-link href="/app/3d-signs">3D Illuminated Signs</s-link>
         <s-link href="/app/lightbox">Lightbox Range</s-link>
         <s-link href="/app/uv-graphic-led">Graphic LED &amp; Non-LED Neon Signs</s-link>

@@ -2079,3 +2079,51 @@
 /* Design Type cards with Admin images */
 .moz-cfg__cards--design.has-images .moz-cfg__card-visual { height: 110px; overflow: hidden; background: transparent; }
 .moz-cfg__design-img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* Car stand — Top / Bottom Mounting cards (Hook / Small Hole): large photo filling the box */
+.moz-cfg .moz-cfg__cards--mount .moz-cfg__card-visual--img {
+    height: 112px;
+    background: #b9b9be;
+}
+.moz-cfg .moz-cfg__cards--mount .moz-cfg__card-visual--img img {
+    object-fit: cover;
+}
+.moz-cfg__mount-notes {
+    margin-top: 8px;
+}
+.moz-cfg__mount-notes .moz-cfg__note {
+    margin: 0 0 6px;
+}
+
+/* Measurement units (CM / MM / INCH) above the size / height cards — same look as Neon */
+.moz-cfg__unit-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 5px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+}
+.moz-cfg__unit-tabs[hidden] {
+    display: none;
+}
+.moz-cfg__unit-tab {
+    min-width: 52px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid #2c2c38;
+    background: #16161f;
+    color: #b8b8c4;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.moz-cfg__unit-tab.is-selected {
+    background: linear-gradient(90deg, #ff00c8, #7a00ff);
+    border-color: transparent;
+    color: #ffffff;
+}

@@ -16,6 +16,12 @@
     {%- endif -%}
   {%- endfor -%}
 {%- endif -%}
+{%- if moz_first and lib == 'bonnet' -%}
+  {%- comment -%} Car stand: the client's two photos (none ticked in Admin). "k":"car" = the stand is aligned to the bonnet latches in JS. {%- endcomment -%}
+  {%- assign moz_first = false -%}
+  {"l":"Car Bonnet Open","s":1,"k":"car","th":{{ 'moz-bn-car.jpg' | asset_url | json }},"w":{{ 'moz-bn-car.jpg' | asset_url | json }}},
+  {"l":"Garage","s":2,"k":"garage","th":{{ 'moz-bn-garage.jpg' | asset_url | json }},"w":{{ 'moz-bn-garage.jpg' | asset_url | json }}}
+{%- endif -%}
 {%- if moz_first and walls == '3d' -%}
   {%- for o in metaobjects["app--418838118401--sign3d_option"].values -%}
     {%- assign moz_c = o.category.value | strip | downcase -%}
@@ -43,6 +49,7 @@
 {%- endfor -%}
 ]</script>
 {%- endif -%}
+<script type="application/json" data-moz-units>[{%- assign moz_uf = true -%}{%- for u in metaobjects["app--418838118401--neon_size_settings"].values -%}{%- if u.visibility.value == "3d_only" or u.unit.value == blank -%}{%- continue -%}{%- endif -%}{%- unless moz_uf -%},{%- endunless -%}{%- assign moz_uf = false -%}{"u":{{ u.unit.value | json }},"s":{{ u.sort_order.value | default: 999999 }}}{%- endfor -%}]</script>
 {%- if power -%}
 <script type="application/json" data-moz-power>[{%- for pa in metaobjects["app--418838118401--power_adapter"].values -%}{%- unless forloop.first -%},{%- endunless -%}{"l":{{ pa.label.value | json }},"s":{{ pa.sort_order.value | default: 999999 }},"so":{{ pa.show_on.value | default: "" | json }}}{%- endfor -%}]</script>
 {%- endif -%}

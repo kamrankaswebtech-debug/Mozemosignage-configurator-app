@@ -394,6 +394,45 @@
             total: 0
         };
 
+        // ---- Measurement units (CM / MM / INCH — Admin "Size Units", same list as Neon) ----
+        // Sizes are stored and priced in cm; only what the customer reads changes.
+        const UNIT_CM = { cm: 1, mm: 0.1, inch: 2.54, in: 2.54 };
+        const UNIT_SUFFIX = { cm: 'cm', mm: 'mm', inch: 'in', in: 'in' };
+        const seenUnits = {};
+        let units = bySort(readJson(root, '[data-moz-units]', []))
+            .map((u) => String(u.u || '').trim().toLowerCase())
+            .filter((u) => UNIT_CM[u] && !seenUnits[u] && (seenUnits[u] = true));
+        if (!units.length) units = ['cm', 'mm', 'inch'];
+        ctx.unit = units.indexOf('cm') > -1 ? 'cm' : units[0];
+        ctx.lenText = function (cm) {
+            if (ctx.unit === 'cm') return cmText(cm);
+            const v = num(cm) / UNIT_CM[ctx.unit];
+            return (ctx.unit === 'mm' ? Math.round(v) : Math.round(v * 10) / 10) + ' ' + UNIT_SUFFIX[ctx.unit];
+        };
+        // "Medium - 60cm" -> "Medium - 600 mm" (rest of the Admin text untouched)
+        ctx.unitLabel = function (label) {
+            if (ctx.unit === 'cm') return String(label || '');
+            return String(label || '').replace(/(\d+(?:\.\d+)?)\s*cm\b/gi, (_m, n) => ctx.lenText(parseFloat(n)));
+        };
+        ctx.unitTabs = function (onChange) {
+            const wrap = el('div', 'moz-cfg__unit-tabs');
+            const control = { el: wrap };
+            if (units.length < 2) { wrap.hidden = true; return control; }
+            units.forEach((u) => {
+                const b = el('button', 'moz-cfg__unit-tab' + (u === ctx.unit ? ' is-selected' : ''), u === 'inch' || u === 'in' ? 'INCH' : u.toUpperCase());
+                b.type = 'button';
+                b.addEventListener('click', () => {
+                    if (ctx.unit === u) return;
+                    ctx.unit = u;
+                    Array.from(wrap.children).forEach((c) => c.classList.toggle('is-selected', c === b));
+                    if (onChange) onChange(u);
+                    ctx.update();
+                });
+                wrap.appendChild(b);
+            });
+            return control;
+        };
+
         // ---- Steps (auto-numbered) ----
         ctx.step = function (title, opts) {
             const wrap = el('div', 'moz-cfg__step');
@@ -465,7 +504,8 @@
                 });
                 let next = 0;
                 if (keepLabel && prev) {
-                    const same = list.findIndex((x) => x.label === prev.label);
+                    // Same item by its data (labels change with the measurement unit), else by label.
+                    const same = list.findIndex((x) => (x.src && prev.src && x.src === prev.src) || x.label === prev.label);
                     if (same > -1) next = same;
                 }
                 control.select(list.length ? next : -1, true);
@@ -768,7 +808,14 @@
             const on = wallpaperOn && w && w.w;
             preview.classList.toggle('has-wallpaper', !!on);
             preview.style.backgroundImage = on ? 'url("' + w.w + '")' : '';
+            // A product can fit a wallpaper to its sign (e.g. the car stand on the bonnet photo).
+            if (typeof ctx.afterWall === 'function') ctx.afterWall();
         }
+        // The wallpaper shown right now ({ l, k, w, ... }), or null when Wallpaper is off.
+        ctx.currentWall = function () {
+            const w = walls[wallIndex];
+            return wallpaperOn && w && w.w ? w : null;
+        };
         walls.forEach((w, idx) => {
             const b = el('button', 'moz-cfg__thumb' + (idx === 0 ? ' is-selected' : ''));
             b.type = 'button';
@@ -1854,8 +1901,8 @@
                 return num(s.p) + surcharge;
             };
             const sizeCards = () => sizes.map((s) => ({
-                label: s.l, price: sizePrice(s), badge: s.b || '',
-                meta: num(s.h) ? cmText(s.w) + ' x ' + cmText(s.h) : 'Width: ' + cmText(s.w), src: s
+                label: ctx.unitLabel(s.l), price: sizePrice(s), badge: s.b || '', cmLabel: s.l,
+                meta: num(s.h) ? ctx.lenText(s.w) + ' x ' + ctx.lenText(s.h) : 'Width: ' + ctx.lenText(s.w), src: s
             }));
 
             ctx.step('Upload Your Graphic / Logo', { note: 'Printed in full colour and lit with neon.' }).appendChild(ctx.upload().el);
@@ -2015,6 +2062,8 @@
             ledSteps.push(nStep);
 
             const sizeStep = ctx.step('Choose Size');
+            // CM / MM / INCH above the size cards (same as the Neon configurator)
+            sizeStep.appendChild(ctx.unitTabs(() => { if (sizeCtl) sizeCtl.setItems(sizeCards(), true); }).el);
             sizeCtl = ctx.cards('size', sizeCards(), { price: 'full', cols: 2, onChange: () => { if (typeCtl) refreshTypes(); } });
             sizeStep.appendChild(sizeCtl.el);
 
@@ -2192,7 +2241,7 @@
             const shelfUrl = ctx.v.style && ctx.v.style.shelf ? ctx.v.style.shelf : '';
             if (shelfUrl) wrap.style.setProperty('--moz-shelf-photo', "url('" + shelfUrl + "')"); else wrap.style.removeProperty('--moz-shelf-photo');
             const h = size && res.W ? Math.round(num(size.w) * (res.H / res.W) * 10) / 10 : 0;
-            ctx.setDims(size ? cmText(size.w) : '', h ? cmText(h) : '');
+            ctx.setDims(size ? ctx.lenText(size.w) : '', h ? ctx.lenText(h) : '');
             ctx.dims = { w: size ? num(size.w) : 0, h };
         },
         properties(ctx) {
@@ -2202,13 +2251,15 @@
                 'Design Type': textMode ? 'Text + Graphic' : 'Graphic Only',
                 'Uploaded Graphic': designUrl(ctx),
                 'Lighting': led ? 'With Neon Lighting' : 'Without Neon Lighting',
-                'Size': ctx.v.size ? ctx.v.size.label : '',
+                'Size': ctx.v.size ? (ctx.v.size.cmLabel || ctx.v.size.label) : '',
                 'Backboard Style': ctx.v.style ? ctx.v.style.label : 'Standard',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',
                 '_blueprint_height_cm': ctx.dims.h || ''
             };
             if (ctx.v.style && ctx.v.style.board !== 'naked' && ctx.v.board) p['Backboard Colour'] = ctx.v.board.name;
+            // Size also in the customer's chosen unit (price / blueprint stay in cm), like Neon.
+            if (ctx.unit !== 'cm' && ctx.v.size) p['Size (' + ctx.unit + ')'] = ctx.unitLabel(ctx.v.size.cmLabel || ctx.v.size.label);
             if (textMode) {
                 p['Custom Text'] = (ctx.text || '').trim() || 'Your Text';
                 p['Text Position'] = ctx.v.textPos ? ctx.v.textPos.label : 'Left';
@@ -2260,13 +2311,15 @@
         // not the shape of the artwork.
         const tabH = Math.round(o.targetH * 0.16);
         const pad = 46;
-        const key = [g0.src || 'ph', o.led, o.rgb, o.lit, W, H, tabH].join('|');
+        const topMount = o.topMount === 'hole' ? 'hole' : 'hook';
+        const botMount = o.botMount === 'hook' ? 'hook' : 'hole';
+        const key = [g0.src || 'ph', o.led, o.rgb, o.lit, W, H, tabH, topMount, botMount].join('|');
         art.style.width = W + 'px';
         art.style.height = (H + tabH * 2) + 'px';
         cv.hidden = false;
         let lc = ctx._bn.light;
         if (!lc) { lc = ctx._bn.light = el('canvas', 'moz-bnc__canvas moz-bnc__light'); art.insertBefore(lc, cv); }
-        if (cv._key === key) return { W, H };
+        if (cv._key === key) return cv._res || { W, H };
         cv._key = key;
         const dpr = Math.min(2, window.devicePixelRatio || 1);
         const CW = W + pad * 2;
@@ -2352,13 +2405,27 @@
         const hookY = topY - tabH - 2;
         roundRect(hookX, hookY, tabW, Math.max(topY, hookDeep) - hookY + 10, 4);
         const tabTop = Math.min(botY, tabDeep) - 10;
-        roundRect(hookX, tabTop, tabW, botY + tabH + 2 - tabTop, 4);
+        const tabBottom = botY + tabH + 2;
+        roundRect(hookX, tabTop, tabW, tabBottom - tabTop, 4);
+        // Top / Bottom Mounting (chosen independently): a Hook = C-shaped slot cut in from the right
+        // (hangs on the bonnet / boot latch), a Small Hole = round hole for zip ties. Both are cut
+        // right through the acrylic, so the background shows through.
         const slot = tabW * 0.17;
         const slotX = hookX + tabW * 0.41;
-        const slotY = hookY + tabW * 0.43;
+        const cutHook = (cy) => {
+            roundRect(slotX, cy - tabW * 0.24, slot, tabW * 0.48, slot / 2);
+            bg.fillRect(S(slotX + slot / 2), S(cy - slot / 2), S(hookX + tabW - slotX), S(slot));
+        };
+        const cutHole = (cy) => {
+            bg.beginPath();
+            bg.arc(S(ox + W / 2), S(cy), S(Math.max(2.2, tabW * 0.085)), 0, Math.PI * 2);
+            bg.fill();
+        };
+        const topCy = topMount === 'hook' ? hookY + tabW * 0.43 : hookY + tabH * 0.45;
+        const botCy = botMount === 'hook' ? tabBottom - tabW * 0.43 : botY + tabH * 0.45;
         bg.globalCompositeOperation = 'destination-out';
-        roundRect(slotX, slotY - tabW * 0.24, slot, tabW * 0.48, slot / 2);
-        bg.fillRect(S(slotX + slot / 2), S(slotY - slot / 2), S(hookX + tabW - slotX), S(slot));
+        if (topMount === 'hook') cutHook(topCy); else cutHole(topCy);
+        if (botMount === 'hook') cutHook(botCy); else cutHole(botCy);
         bg.globalCompositeOperation = 'source-over';
         // Light layer (own canvas so RGB can cycle colours without tinting the print):
         // lit = the whole acrylic panel glows in the LED colour, evenly from behind, no outer glow;
@@ -2389,11 +2456,6 @@
         }
         const g = cv.getContext('2d');
         g.clearRect(0, 0, cv.width, cv.height);
-        // Small screw hole in the bottom tab
-        g.fillStyle = 'rgba(70,70,80,0.75)';
-        g.beginPath();
-        g.arc(S(ox + W / 2), S(botY + tabH * 0.45), S(Math.max(2, tabW * 0.07)), 0, Math.PI * 2);
-        g.fill();
         // Graphic print on the front of the acrylic, cut to the design outline
         const printed = make();
         const pg = printed.getContext('2d');
@@ -2401,19 +2463,65 @@
         pg.globalCompositeOperation = 'destination-in';
         pg.drawImage(sil, 0, 0);
         g.drawImage(printed, 0, 0);
-        return { W, H };
+        // Where the stand is fixed (hook / hole centres), in px from the art box's top-left — used to
+        // line the car photo's bonnet latches up with the stand.
+        cv._res = { W, H, attach: { x: W / 2, top: topCy - pad, bot: botCy - pad } };
+        return cv._res;
+    }
+
+    // Car Bonnet Open photo (moz-bn-car.jpg, 1536 x 1024): the bonnet latch (top) and the engine
+    // bay latch (bottom), in photo pixels. The photo is zoomed / moved so these meet the stand's
+    // top and bottom mounting points at every size; dark studio edges fill any uncovered area.
+    const BONNET_CAR = { w: 1536, h: 1024, x: 768, top: 60, bot: 603, fill: '#0b0b0d' };
+    function bonnetAlignWall(ctx) {
+        const preview = ctx.preview;
+        const wall = ctx.currentWall ? ctx.currentWall() : null;
+        const res = ctx._bn && ctx._bn.canvas ? ctx._bn.canvas._res : null;
+        const reset = () => {
+            // Back to the plain wallpaper (CSS "cover") — the Garage photo is never zoomed.
+            if (preview.style.backgroundImage.indexOf('linear-gradient') > -1) preview.style.backgroundImage = wall && wall.w ? 'url("' + wall.w + '")' : '';
+            preview.style.removeProperty('background-size');
+            preview.style.removeProperty('background-position');
+            preview.style.removeProperty('background-repeat');
+            preview.style.removeProperty('background-color');
+        };
+        if (!wall || wall.k !== 'car' || !res || !res.attach) { reset(); return; }
+        const p = preview.getBoundingClientRect();
+        const a = ctx._bn.art.getBoundingClientRect();
+        if (!p.width || !a.height) { reset(); return; }
+        const yTop = a.top - p.top + res.attach.top;
+        const yBot = a.top - p.top + res.attach.bot;
+        const x = a.left - p.left + res.attach.x;
+        const s = (yBot - yTop) / (BONNET_CAR.bot - BONNET_CAR.top);
+        if (!(s > 0)) { reset(); return; }
+        // When a small size zooms the photo out, its edges fade into the studio's dark fill (two
+        // gradient layers sized / placed exactly like the photo) instead of showing a hard border.
+        const f = BONNET_CAR.fill;
+        const layers = 'linear-gradient(to bottom, ' + f + ' 0%, rgba(11,11,13,0) 6%, rgba(11,11,13,0) 78%, ' + f + ' 100%), '
+            + 'linear-gradient(to right, ' + f + ' 0%, rgba(11,11,13,0) 8%, rgba(11,11,13,0) 92%, ' + f + ' 100%), '
+            + 'url("' + wall.w + '")';
+        if (preview.style.backgroundImage.indexOf('linear-gradient') < 0 || preview.style.backgroundImage.indexOf(wall.w) < 0) preview.style.backgroundImage = layers;
+        const size = Math.round(BONNET_CAR.w * s) + 'px ' + Math.round(BONNET_CAR.h * s) + 'px';
+        const pos = Math.round(x - BONNET_CAR.x * s) + 'px ' + Math.round(yTop - BONNET_CAR.top * s) + 'px';
+        preview.style.backgroundSize = [size, size, size].join(', ');
+        preview.style.backgroundPosition = [pos, pos, pos].join(', ');
+        preview.style.backgroundRepeat = 'no-repeat';
+        preview.style.backgroundColor = f;
     }
 
     M.register('bonnet', {
         layout: 'neon',
-        hero: 'Design Your Bonnet / Hood Stand + Wall Sign',
+        hero: 'Acrylic LED Neon Car Stand / Wall Sign Combo (For Both Bonnet/Hood and Boot/Trunk)',
         build(ctx, d) {
             const opts = d.opts || [];
             const cat = (c) => bySort(opts.filter((o) => String(o.c || '').trim().toLowerCase() === c));
 
-            ctx.step('Upload Your Design', { note: 'Your image sets the shape and print. Bonnet stand + wall sign in one.' }).appendChild(ctx.upload().el);
+            ctx.step('Upload Your Design', { note: 'Your image sets the shape and print. Car stand + wall sign in one.' }).appendChild(ctx.upload().el);
 
-            // Engine Bay / Garage Wall — same product, only the background changes
+            // Car Bonnet Open photo: lined up with the stand's top / bottom mounting at every size.
+            ctx.afterWall = () => bonnetAlignWall(ctx);
+
+            // Car Bonnet Open / Garage — same product, only the background changes
             if (ctx.walls && ctx.walls.length) {
                 const findWall = (re, fallback) => { const i = ctx.walls.findIndex((w) => re.test(String(w.l || ''))); return i > -1 ? i : fallback; };
                 const engine = findWall(/engine|bonnet|hood|car/i, 0);
@@ -2440,7 +2548,33 @@
 
             const sizes = cat('size');
             ctx.sizes = sizes;
-            ctx.step('Choose Height').appendChild(ctx.cards('size', sizes.map((s) => ({ label: s.l, price: s.p, meta: (num(s.h) || cmFromLabel(s.l)) ? 'Height: ' + cmText(num(s.h) || cmFromLabel(s.l)) : '', src: s })), { price: 'full', cols: 2 }).el);
+            const heightItems = () => sizes.map((s) => ({ label: ctx.unitLabel(s.l), cmLabel: s.l, price: s.p, meta: (num(s.h) || cmFromLabel(s.l)) ? 'Height: ' + ctx.lenText(num(s.h) || cmFromLabel(s.l)) : '', src: s }));
+            const heightStep = ctx.step('Choose Height');
+            let heightCtl = null;
+            // CM / MM / INCH above the height cards (same as the Neon configurator)
+            heightStep.appendChild(ctx.unitTabs(() => { if (heightCtl) heightCtl.setItems(heightItems(), true); }).el);
+            heightCtl = ctx.cards('size', heightItems(), { price: 'full', cols: 2 });
+            heightStep.appendChild(heightCtl.el);
+
+            // Top / Bottom Mounting — chosen independently, shown live on the stand, no extra cost.
+            const mimg = d.mimg || {};
+            const mountItems = () => [
+                { key: 'hook', label: 'Hook', desc: 'Hooks onto the bonnet / boot latch.', price: 0, img: mimg.hook || '' },
+                { key: 'hole', label: 'Small Hole', desc: 'For zip ties — universal fit.', price: 0, img: mimg.hole || '' }
+            ];
+            const topCtl = ctx.cards('topMount', mountItems(), { cols: 2, showIncluded: true });
+            topCtl.el.classList.add('moz-cfg__cards--mount');
+            topCtl.select(0, true);
+            ctx.step('Top Mounting').appendChild(topCtl.el);
+            const botCtl = ctx.cards('botMount', mountItems(), { cols: 2, showIncluded: true });
+            botCtl.el.classList.add('moz-cfg__cards--mount');
+            botCtl.select(1, true);
+            const botStep = ctx.step('Bottom Mounting');
+            botStep.appendChild(botCtl.el);
+            const notes = el('div', 'moz-cfg__mount-notes');
+            notes.appendChild(el('p', 'moz-cfg__note', 'Hooks are used to attach the stand to the bonnet or boot latch. They are easier to install but may not suit every vehicle.'));
+            notes.appendChild(el('p', 'moz-cfg__note', 'Small holes are used for zip ties. They are more universal but require customers to secure the stand with zip ties.'));
+            botStep.appendChild(notes);
 
             const addons = cat('addon').map((a) => ({ label: a.l, price: a.p, free: !!a.f }));
             if (addons.length) ctx.step('Power & Controls', { note: 'Cable and plug come connected to the sign.' }).appendChild(ctx.addons('addons', addons).el);
@@ -2497,20 +2631,27 @@
                 lit,
                 // 1 m fills the preview height (hook + tab included); smaller heights scale down from it.
                 targetH: (f.h * 0.98 / 1.32) * Math.sqrt(Math.max(10, Math.min(100, hCm)) / 100) * Math.max(0.75, fit),
-                maxW: f.w * 0.85
+                maxW: f.w * 0.85,
+                topMount: ctx.v.topMount ? ctx.v.topMount.key : 'hook',
+                botMount: ctx.v.botMount ? ctx.v.botMount.key : 'hole'
             });
             ctx._bn.wrap.classList.toggle('is-rgb', lit && rgb);
+            bonnetAlignWall(ctx);
             const wCm = res.H ? Math.round(hCm * (res.W / res.H) * 10) / 10 : 0;
-            ctx.setDims(wCm ? cmText(wCm) : '', cmText(hCm));
+            ctx.setDims(wCm ? ctx.lenText(wCm) : '', ctx.lenText(hCm));
             ctx.dims = { w: wCm, h: hCm };
         },
         properties(ctx) {
             const p = {
                 'Design Type': 'Graphic Printed (fully backlit)',
                 'Uploaded Design': designUrl(ctx),
-                'Height': ctx.v.size ? ctx.v.size.label : '',
+                'Height': ctx.v.size ? (ctx.v.size.cmLabel || ctx.v.size.label) : '',
+                // Height also in the customer's chosen unit (price / blueprint stay in cm)
+                ...(ctx.unit !== 'cm' && ctx.v.size ? { ['Height (' + ctx.unit + ')']: ctx.unitLabel(ctx.v.size.cmLabel || ctx.v.size.label) } : {}),
                 'Backboard': 'Frosted white acrylic',
-                'Use': 'Bonnet stand + wall sign (dual-purpose)',
+                'Use': 'Car stand (bonnet / hood or boot / trunk) + wall sign (dual-purpose)',
+                'Top Mounting': ctx.v.topMount && ctx.v.topMount.key === 'hole' ? 'Small Hole (zip ties - universal)' : 'Hook',
+                'Bottom Mounting': ctx.v.botMount && ctx.v.botMount.key === 'hook' ? 'Hook' : 'Small Hole (zip ties - universal)',
                 'Environment': 'Indoor only',
                 'Add-ons': addonText(ctx, 'addons'),
                 '_blueprint_width_cm': ctx.dims.w || '',

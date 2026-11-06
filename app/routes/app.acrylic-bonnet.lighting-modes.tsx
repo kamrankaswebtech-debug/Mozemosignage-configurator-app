@@ -78,9 +78,9 @@ export default function BonnetLightingModesPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Acrylic Neon Bonnet — Lighting Modes">
+        <s-page heading="Acrylic LED Neon Car Stand — Lighting Modes">
             <s-section heading="Add New Lighting Mode">
-                <s-link href="/app/acrylic-bonnet">← Back to Acrylic Neon Bonnet</s-link>
+                <s-link href="/app/acrylic-bonnet">← Back to Acrylic LED Neon Car Stand</s-link>
                 <s-paragraph>Per the client's PDF: Single Colour, Multiple Colours, RGB.</s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />

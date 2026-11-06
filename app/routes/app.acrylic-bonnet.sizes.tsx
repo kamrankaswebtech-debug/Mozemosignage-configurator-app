@@ -78,9 +78,9 @@ export default function BonnetSizesPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Acrylic Neon Bonnet — Sizes">
+        <s-page heading="Acrylic LED Neon Car Stand — Sizes">
             <s-section heading="Add New Size">
-                <s-link href="/app/acrylic-bonnet">← Back to Acrylic Neon Bonnet</s-link>
+                <s-link href="/app/acrylic-bonnet">← Back to Acrylic LED Neon Car Stand</s-link>
                 <s-paragraph>Per the client's PDF: 30cm=$299, 40cm=$349, 50cm=$399, 60cm=$449, 70cm=$549, 80cm=$649, 90cm=$749, 100cm=$899, 110cm=$999, 120cm=$1149, 130cm=$1299, 140cm=$1449, 150cm=$1599.</s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />

@@ -78,9 +78,9 @@ export default function BonnetAddonsPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Acrylic Neon Bonnet — Add-ons">
+        <s-page heading="Acrylic LED Neon Car Stand — Add-ons">
             <s-section heading="Add New Add-on">
-                <s-link href="/app/acrylic-bonnet">← Back to Acrylic Neon Bonnet</s-link>
+                <s-link href="/app/acrylic-bonnet">← Back to Acrylic LED Neon Car Stand</s-link>
                 <s-paragraph>Optional — the client's "What's Included" list already covers remote, power supply, bonnet stand, wall mounting as standard. Use this only for anything truly optional/extra.</s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />

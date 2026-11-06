@@ -2658,23 +2658,12 @@
     display: none;
 }
 
-/* The box itself is a small 3D object, angled like the wall photo (--lbx-angle, set in JS):
-   Wall Hanging sticks out from the wall towards the viewer (turns on its wall side), Wall Mount
-   lies flat on the wall. Face at the front, side return as thin slices behind it (translateZ in JS). */
-.sign3d-lbx {
-    perspective: var(--lbx-persp, 1600px);
-}
-
+/* The box is a solid 3D object: the face at the front (never rotated, so the graphic fills it to
+   the edge), the metal side return as slices stepping back behind it (translate set in JS), the
+   Double-Sided rear light as a thin line at the back of the side return. */
 .sign3d-lbx__body {
     position: absolute;
     inset: 0;
-    transform-style: preserve-3d;
-    transform: rotateY(var(--lbx-angle, 0deg));
-    transform-origin: 50% 50%;
-}
-
-.sign3d-lbx.is-hanging .sign3d-lbx__body {
-    transform-origin: 0 50%;
 }
 
 .sign3d-lbx__face,
@@ -2686,7 +2675,7 @@
 }
 
 .sign3d-lbx__face {
-    transform: translateZ(0.5px);
+    z-index: 1;
 }
 
 /* Side return in the Side Colour */
@@ -2702,11 +2691,10 @@
     background: color-mix(in srgb, var(--lbx-side, #1a1a1a) 92%, #000000);
 }
 
-/* Rear face (double-sided): the second graphic panel sits INSIDE the metal surround, so only a
-   thin lit edge of it shows just behind the side return */
+/* Rear light (double-sided): the second graphic panel sits inside the metal surround, so only a
+   thin lit line of it shows just behind the side return (offset in JS) */
 .sign3d-lbx__rear {
     display: none;
-    transform: translateZ(calc(var(--lbx-depth, 8px) * -1 - 3px)) scale(0.97);
     background: #f3f3ee;
 }
 
@@ -2718,10 +2706,9 @@
     background: #ffffff;
 }
 
-/* Glossy acrylic face with white LEDs behind it */
+/* Glossy acrylic face with white LEDs behind it (no rim: the graphic fills the face 100%) */
 .sign3d-lbx__face {
     background: radial-gradient(ellipse at 50% 45%, #f1f1ee 0%, #d9d9d4 100%);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lbx-side, #1a1a1a) 80%, #000000);
 }
 
 .sign3d-lbx__face::after {
@@ -2741,8 +2728,8 @@
     background: var(--lbx-art) center / cover no-repeat, #ffffff;
 }
 /* LED On / Off — clearly different on any wall photo, for every face (design, placeholder, empty):
-   Off = the acrylic face unlit (dull, greyer, colours muted); On = bright white face and a glow
-   around the box that follows its shape (the glow is on .sign3d-lbx.is-lit). */
+   Off = the acrylic face unlit (dull, greyer, colours muted); On = the graphic lit up. The light
+   stays inside the face's shape — no glow on the box, its sides or the bracket. */
 .sign3d-lbx:not(.is-lit) .sign3d-lbx__face { filter: brightness(0.72) saturate(0.8) contrast(0.92); }
 .sign3d-lbx.is-lit .sign3d-lbx__face { filter: brightness(1.06) saturate(1.06); }
 .sign3d-lbx:not(.is-lit) .sign3d-lbx__rear { filter: brightness(0.72); }
@@ -2755,21 +2742,44 @@
     background-repeat: no-repeat;
 }
 
-/* Shadow on the wall: Wall Mount sits flush (tight shadow), Wall Hanging stands off the wall */
-.sign3d-lbx {
+/* Shadow on the wall only (no glow, lit or not): Wall Mount sits flush (tight shadow), Wall
+   Hanging stands off the wall (softer, further shadow). */
+.sign3d-lbx,
+.sign3d-lbx.is-lit {
     filter: drop-shadow(3px 5px 6px rgba(0, 0, 0, 0.38));
 }
 
-.sign3d-lbx.is-lit {
-    filter: drop-shadow(0 0 10px rgba(255, 255, 248, 0.95)) drop-shadow(0 0 30px rgba(255, 255, 240, 0.6)) drop-shadow(3px 5px 6px rgba(0, 0, 0, 0.32));
-}
-
-.sign3d-lbx.is-hanging {
-    filter: drop-shadow(14px 22px 20px rgba(0, 0, 0, 0.3));
-}
-
+.sign3d-lbx.is-hanging,
 .sign3d-lbx.is-hanging.is-lit {
-    filter: drop-shadow(0 0 10px rgba(255, 255, 248, 0.95)) drop-shadow(0 0 30px rgba(255, 255, 240, 0.6)) drop-shadow(14px 22px 20px rgba(0, 0, 0, 0.26));
+    filter: drop-shadow(12px 18px 16px rgba(0, 0, 0, 0.3));
+}
+
+/* Lit face: the light is inside the box — a soft brighter centre within the face's own shape */
+.sign3d-lbx.is-lit .sign3d-lbx__face::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 250, 0.16) 0%, rgba(255, 255, 250, 0) 70%);
+    pointer-events: none;
+}
+
+/* Wall bolts in the bracket plate holes (placed / sized in JS): hex head on a washer, dark steel,
+   seen at the same angle as the plate */
+.sign3d-lbx__bolt {
+    position: absolute;
+    z-index: 3;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scaleX(0.86);
+    background: radial-gradient(circle at 38% 32%, #8d9096 0 10%, #44464b 34%, #1d1e22 72%);
+    box-shadow: 0 0 0 1px rgba(20, 20, 24, 0.9), 1px 2px 2px rgba(0, 0, 0, 0.55);
+}
+
+.sign3d-lbx__bolt::after {
+    content: '';
+    position: absolute;
+    inset: 20%;
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    background: linear-gradient(135deg, #a3a6ac 0%, #4a4c52 48%, #1f2024 100%);
 }
 
 /* Wall Hanging bracket: the client's bracket render (Single Circular / Double Rectangular),
@@ -3135,4 +3145,139 @@
     .sign3d-configurator.sign3d-mode-lightbox .sign3d-configurator__panel .sign3d-configurator__card-grid .sign3d-configurator__pick-card-placeholder {
         height: 104px;
     }
+}
+
+/* =====================================================================
+   Event Marquee bulbs by Bulb Type (class on the preview: bulb-led / bulb-glass).
+   Every bulb has one size (JS). Plastic LED: an opaque glossy globe in the bulb colour with
+   a small specular highlight; Clear Glass: a clear globe showing the letter behind it, a
+   bright glass rim and a warm glowing filament (client's reference photos).
+   ===================================================================== */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-led .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 66% 28%, rgba(255, 255, 255, 0.95) 0 7%, rgba(255, 255, 255, 0) 13%),
+        radial-gradient(circle at 40% 36%, color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 55%, #ffffff) 0%, var(--sign3d-bulb, #ffd9a0) 48%, color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 62%, #000000) 100%);
+    box-shadow:
+        0 0 0 max(1px, 0.06em) color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 45%, #2a2530),
+        0 max(1px, 0.08em) max(1.5px, 0.12em) rgba(0, 0, 0, 0.4);
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-led.led-on .sign3d-configurator__bulb {
+    box-shadow:
+        0 0 0 max(1px, 0.06em) color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 55%, #2a2530),
+        0 0 0.35em 0.08em color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 85%, #ffffff),
+        0 0 1.1em 0.3em color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 50%, transparent);
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-led.led-off .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 66% 28%, rgba(255, 255, 255, 0.9) 0 7%, rgba(255, 255, 255, 0) 13%),
+        radial-gradient(circle at 40% 36%, color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 30%, #f1efe9) 0%, color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 45%, #b9b5ad) 55%, color-mix(in srgb, var(--sign3d-bulb, #ffd9a0) 35%, #5f5b55) 100%);
+}
+
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-glass .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.95) 0 6%, rgba(255, 255, 255, 0) 14%),
+        linear-gradient(90deg, transparent 40%, rgba(255, 176, 64, 0.95) 41% 45%, transparent 46% 54%, rgba(255, 176, 64, 0.95) 55% 59%, transparent 60%) center / 100% 40% no-repeat,
+        radial-gradient(circle at 50% 54%, rgba(255, 240, 205, 0.95) 0 16%, rgba(255, 206, 128, 0.6) 36%, rgba(255, 238, 210, 0.22) 60%, rgba(255, 255, 255, 0.12) 72%);
+    box-shadow:
+        inset 0 0 0 max(1px, 0.06em) rgba(255, 255, 255, 0.75),
+        0 0 0 max(1px, 0.06em) rgba(150, 140, 125, 0.55),
+        0 max(1px, 0.08em) max(1.5px, 0.12em) rgba(0, 0, 0, 0.3);
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-glass.led-on .sign3d-configurator__bulb {
+    box-shadow:
+        inset 0 0 0 max(1px, 0.06em) rgba(255, 255, 255, 0.8),
+        0 0 0 max(1px, 0.06em) rgba(170, 150, 120, 0.5),
+        0 0 0.4em 0.1em rgba(255, 205, 120, 0.9),
+        0 0 1.2em 0.35em rgba(255, 190, 95, 0.45);
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.bulb-glass.led-off .sign3d-configurator__bulb {
+    background:
+        radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.9) 0 6%, rgba(255, 255, 255, 0) 14%),
+        linear-gradient(90deg, transparent 40%, rgba(120, 110, 95, 0.75) 41% 44%, transparent 45% 55%, rgba(120, 110, 95, 0.75) 56% 59%, transparent 60%) center / 100% 40% no-repeat,
+        radial-gradient(circle at 50% 54%, rgba(255, 255, 255, 0.35) 0 30%, rgba(225, 222, 215, 0.3) 60%, rgba(200, 196, 188, 0.35) 72%);
+}
+
+/* Event Marquee option cards (Bulb Type, Illumination, Mounting): larger, 2 per row, every image
+   fills its box at its own shape (no dark bars). Light behind images with transparent edges. */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__panel [data-bulb-types],
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__panel [data-illumination-cards],
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__panel [data-mounting-cards] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__panel .sign3d-configurator__card-grid .sign3d-configurator__pick-card-img {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    object-position: center;
+    background: #eeeeee;
+    border-radius: 6px;
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__panel [data-bulb-types] .sign3d-configurator__pick-card-img {
+    aspect-ratio: 4 / 3;
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-mq-bulb-spec {
+    color: #ff7be0;
+    font-weight: 700;
+}
+.sign3d-configurator.sign3d-mode-marquee [data-bulb-led-options][hidden] {
+    display: none;
+}
+.sign3d-configurator .sign3d-mq-bulb-notes {
+    width: 100%;
+    min-height: 66px;
+    resize: vertical;
+    box-sizing: border-box;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Font cards with no Admin preview image: "Your Text" in the font, white on dark (Neon look) */
+.sign3d-configurator:not(.sign3d-mode-3d) .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-font-sample {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #ffffff;
+    background: #0a0a0f;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1;
+}
+
+/* Infinity Mirror option cards (Illumination, Mounting): larger, 2 per row, every image fills its
+   box at its own shape (no dark bars), light behind images with transparent edges. */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel [data-illumination-cards],
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel [data-mounting-cards] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel .sign3d-configurator__card-grid .sign3d-configurator__pick-card-img {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    object-position: center;
+    background: #eeeeee;
+    border-radius: 6px;
+}
+/* Illumination: a single option gets the full width so the mirror example is clearly visible.
+   The image is zoomed ~9% and clipped back to its box, which trims light corners / edges an
+   uploaded example image may have, without changing the box size. */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel [data-illumination-cards] .sign3d-configurator__pick-card:only-child {
+    grid-column: 1 / -1;
+}
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel [data-illumination-cards] .sign3d-configurator__pick-card-img {
+    aspect-ratio: 16 / 9;
+    background: #000000;
+    transform: scale(1.09);
+    clip-path: inset(4.13% round 6px);
 }

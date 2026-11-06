@@ -4,23 +4,65 @@ import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-const CATEGORY = "colour";
-type Entry = { id: string; label: string; hexCode: string; extraPrice: string; sortOrder: string };
+// Event Marquee — Plastic LED bulb colours shown under "Bulb Type" on the storefront
+// (event_marquee_option, category "bulb_colour"). Every colour is included in the price, so
+// there is no price field. No rows = the storefront uses the client's 7 colours below.
+const CATEGORY = "bulb_colour";
+const CLIENT_BULB_COLOURS = [
+    { label: "Cool White", hex: "#eef4ff" },
+    { label: "Warm White", hex: "#ffd9a0" },
+    { label: "Yellow", hex: "#ffd60a" },
+    { label: "Red", hex: "#e8202e" },
+    { label: "Blue", hex: "#1f5bff" },
+    { label: "Green", hex: "#1fbf4a" },
+    { label: "Purple", hex: "#9b30ff" },
+];
+type Entry = { id: string; label: string; hexCode: string; sortOrder: string };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { admin } = await authenticate.admin(request);
+async function listBulbColours(admin: any): Promise<Entry[]> {
     const response = await admin.graphql(
         `#graphql
-    query List { metaobjects(type: "$app:event_marquee_option", first: 100) { edges { node { id fields { key value } } } } }`
+    query List { metaobjects(type: "$app:event_marquee_option", first: 250) { edges { node { id fields { key value } } } } }`
     );
     const data = await response.json();
-    const items: Entry[] = data.data.metaobjects.edges
+    return data.data.metaobjects.edges
         .map((edge: any) => {
             const f: Record<string, string> = {};
             edge.node.fields.forEach((x: any) => { f[x.key] = x.value; });
-            return { id: edge.node.id, category: f.category, label: f.label || "", hexCode: f.hex_code || "#ffffff", extraPrice: f.extra_price_decimal || "0", sortOrder: f.sort_order || "0" };
+            return { id: edge.node.id, category: String(f.category || "").trim().toLowerCase(), label: f.label || "", hexCode: f.hex_code || "#ffffff", sortOrder: f.sort_order || "0" };
         })
         .filter((item: any) => item.category === CATEGORY);
+}
+
+async function createColour(admin: any, label: string, hexCode: string, sortOrder: string) {
+    const response = await admin.graphql(
+        `#graphql
+      mutation Create($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) { metaobject { id } userErrors { field message } }
+      }`,
+        {
+            variables: {
+                metaobject: {
+                    type: "$app:event_marquee_option",
+                    fields: [
+                        { key: "category", value: CATEGORY },
+                        { key: "label", value: label },
+                        { key: "hex_code", value: hexCode },
+                        { key: "extra_price_decimal", value: "0" },
+                        { key: "sort_order", value: sortOrder },
+                    ],
+                },
+            },
+        }
+    );
+    const data = await response.json();
+    const errors = data.data?.metaobjectCreate?.userErrors;
+    return errors?.length ? (errors[0].message as string) : null;
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+    const { admin } = await authenticate.admin(request);
+    const items = await listBulbColours(admin);
     items.sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder));
     return { items };
 };
@@ -29,26 +71,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { admin } = await authenticate.admin(request);
     const formData = await request.formData();
     const intent = formData.get("intent");
-    const fields = [
-        { key: "category", value: CATEGORY },
-        { key: "label", value: String(formData.get("label") || "") },
-        { key: "hex_code", value: String(formData.get("hexCode") || "#ffffff") },
-        { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
-        { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
-    ];
+
+    if (intent === "load-list") {
+        // Adds only the client colours that are not in the list yet (matched by name).
+        const have = new Set((await listBulbColours(admin)).map((c) => c.label.trim().toLowerCase()));
+        for (let i = 0; i < CLIENT_BULB_COLOURS.length; i++) {
+            const c = CLIENT_BULB_COLOURS[i];
+            if (have.has(c.label.toLowerCase())) continue;
+            const error = await createColour(admin, c.label, c.hex, String(i + 1));
+            if (error) return { error };
+        }
+        return { success: true };
+    }
 
     if (intent === "create") {
-        const response = await admin.graphql(
-            `#graphql
-      mutation Create($metaobject: MetaobjectCreateInput!) {
-        metaobjectCreate(metaobject: $metaobject) { metaobject { id } userErrors { field message } }
-      }`,
-            { variables: { metaobject: { type: "$app:event_marquee_option", fields } } }
-        );
-        const data = await response.json();
-        const errors = data.data?.metaobjectCreate?.userErrors;
-        if (errors?.length) return { error: errors[0].message };
-        return { success: true };
+        const error = await createColour(admin, String(formData.get("label") || ""), String(formData.get("hexCode") || "#ffffff"), String(formData.get("sortOrder") || "0"));
+        return error ? { error } : { success: true };
     }
 
     if (intent === "update") {
@@ -58,7 +96,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
         metaobjectUpdate(id: $id, metaobject: $metaobject) { metaobject { id } userErrors { field message } }
       }`,
-            { variables: { id, metaobject: { fields } } }
+            {
+                variables: {
+                    id,
+                    metaobject: {
+                        fields: [
+                            { key: "label", value: String(formData.get("label") || "") },
+                            { key: "hex_code", value: String(formData.get("hexCode") || "#ffffff") },
+                            { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
+                        ],
+                    },
+                },
+            }
         );
         const data = await response.json();
         const errors = data.data?.metaobjectUpdate?.userErrors;
@@ -81,7 +130,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { error: "Unknown action" };
 };
 
-export default function ColoursPage() {
+export default function BulbColoursPage() {
     const { items } = useLoaderData<typeof loader>();
     const fetcher = useFetcher<typeof action>();
     const shopify = useAppBridge();
@@ -99,15 +148,26 @@ export default function ColoursPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Bulb Colours">
-            <s-section heading="Add New Bulb Colour">
+        <s-page heading="Plastic LED Bulb Colours">
+            <s-section heading="Bulb colours on the storefront">
                 <s-link href="/app/event-marquee">← Back to Event Marquee</s-link>
+                <s-paragraph>
+                    Colours customers can pick for the Plastic LED Bulbs (2W per bulb). Every colour, the Traditional Clear Glass
+                    Bulbs (warm white) and the customer&apos;s own colour combinations are all included in the price.
+                    {items.length === 0 ? " No colours saved yet — the storefront shows the client's 7 colours: " + CLIENT_BULB_COLOURS.map((c) => c.label).join(", ") + "." : ""}
+                </s-paragraph>
+                <fetcher.Form method="post">
+                    <input type="hidden" name="intent" value="load-list" />
+                    <s-button type="submit" variant="secondary" {...(isSubmitting ? { loading: true } : {})}>Load the client&apos;s 7 colours</s-button>
+                </fetcher.Form>
+            </s-section>
+
+            <s-section heading="Add New Bulb Colour">
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
                         <input type="text" name="label" placeholder="Name (e.g. Warm White)" required />
-                        <input type="text" name="hexCode" placeholder="#ffe9c4" defaultValue="#ffffff" required />
-                        <input type="number" step="0.01" name="extraPrice" placeholder="Extra Price" defaultValue="0" />
+                        <input type="color" name="hexCode" defaultValue="#ffd9a0" />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
@@ -119,8 +179,7 @@ export default function ColoursPage() {
                     <thead>
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
                             <th style={{ padding: "8px" }}>Name</th>
-                            <th style={{ padding: "8px" }}>Hex Code</th>
-                            <th style={{ padding: "8px" }}>Extra Price</th>
+                            <th style={{ padding: "8px" }}>Colour</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
@@ -129,14 +188,13 @@ export default function ColoursPage() {
                         {items.map((item) => (
                             <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === item.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={4} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={item.id} />
                                             <s-stack direction="inline" gap="base">
                                                 <input type="text" name="label" defaultValue={item.label} required />
-                                                <input type="text" name="hexCode" defaultValue={item.hexCode} required />
-                                                <input type="number" step="0.01" name="extraPrice" defaultValue={item.extraPrice} />
+                                                <input type="color" name="hexCode" defaultValue={/^#[0-9a-f]{6}$/i.test(item.hexCode) ? item.hexCode : "#ffffff"} />
                                                 <input type="number" name="sortOrder" defaultValue={item.sortOrder} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
@@ -147,10 +205,9 @@ export default function ColoursPage() {
                                     <>
                                         <td style={{ padding: "8px" }}>{item.label}</td>
                                         <td style={{ padding: "8px" }}>
-                                            <span style={{ display: "inline-block", width: "14px", height: "14px", borderRadius: "50%", background: item.hexCode, marginRight: "6px", verticalAlign: "middle" }}></span>
+                                            <span style={{ display: "inline-block", width: "14px", height: "14px", borderRadius: "50%", background: item.hexCode, border: "1px solid #ccc", marginRight: "6px", verticalAlign: "middle" }}></span>
                                             {item.hexCode}
                                         </td>
-                                        <td style={{ padding: "8px" }}>${item.extraPrice}</td>
                                         <td style={{ padding: "8px" }}>{item.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">

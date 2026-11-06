@@ -128,7 +128,7 @@
         {% if font.visibility.value == "neon_only" %}{% continue %}{% endif %}
         {% if font.font_file.value.url %}{% assign font_value = "moz-font-" | append: font.system.handle %}{% else %}{% assign font_value = font.css_font_family.value %}{% endif %}
         {% if s3d_f_i > 0 %},{% endif %}
-        { "name": {{ font.name.value | json }}, "family": {{ font_value | json }}, "preview": {{ font.preview_image.value | image_url: width: 480 | json }}, "isNew": {% if font.is_new.value %}true{% else %}false{% endif %}, "sort": {{ font.sort_order.value | default: 999999 }},"so":{{ font.show_on.value | default: "" | json }} }
+        { "name": {{ font.name.value | json }}, "family": {{ font_value | json }}, "preview": {% if font.preview_image.value %}{{ font.preview_image.value | image_url: width: 480 | json }}{% else %}""{% endif %}, "isNew": {% if font.is_new.value %}true{% else %}false{% endif %}, "sort": {{ font.sort_order.value | default: 999999 }},"so":{{ font.show_on.value | default: "" | json }} }
         {% assign s3d_f_i = s3d_f_i | plus: 1 %}
       {% endfor %}
     ]
@@ -284,9 +284,16 @@
     <div class="sign3d-configurator__field">
       <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Colours</span></label>
       {% if s3d_mode == "lightbox" %}<p class="sign3d-configurator__note">Front: your design printed on glossy acrylic.</p><div hidden>{% endif %}
-      {% if s3d_mode == "marquee" %}<p class="sign3d-configurator__subheading">Bulb Colour</p>
+      {% if s3d_mode == "marquee" %}<p class="sign3d-configurator__subheading">Bulb Type</p>
+      <div class="sign3d-configurator__card-grid sign3d-mq-bulb-types" data-bulb-types data-led-img="{{ 'moz-mq-bulb-led.jpg' | asset_url }}" data-glass-img="{{ 'moz-mq-bulb-glass.jpg' | asset_url }}"></div>
+      <script type="application/json" data-sign3d-bulbs>[{% assign s3d_bc_first = true %}{% for o in metaobjects["app--418838118401--event_marquee_option"].values %}{% assign s3d_bcc = o.category.value | strip | downcase %}{% if s3d_bcc == "bulb_colour" and o.label.value != blank %}{% unless s3d_bc_first %},{% endunless %}{% assign s3d_bc_first = false %}{"n":{{ o.label.value | json }},"h":{{ o.hex_code.value | default: '#ffffff' | json }},"s":{{ o.sort_order.value | default: 999999 }}}{% endif %}{% endfor %}]</script>
+      <div data-bulb-led-options>
+      <p class="sign3d-configurator__subheading">Bulb Colour</p>
       <div class="sign3d-configurator__swatch-groups" data-bulb-colour-swatches data-no-black></div>
-      <p class="sign3d-configurator__selected-label">Selected: <span data-bulb-colour-name-label></span></p>{% endif %}
+      <p class="sign3d-configurator__selected-label">Selected: <span data-bulb-colour-name-label></span></p>
+      <p class="sign3d-configurator__subheading">Custom Bulb Colours (optional)</p>
+      <textarea class="sign3d-configurator__text-input sign3d-mq-bulb-notes" data-bulb-notes rows="3" maxlength="500" placeholder="Tell us how you want your bulbs coloured — e.g. every bulb a different colour, or red and white alternating. No extra charge."></textarea>
+      </div>{% endif %}
       <p class="sign3d-configurator__subheading">{% if s3d_mode == "infinity" %}Lighting Colour{% elsif s3d_mode == "marquee" %}Front / Face Colour{% else %}Front Colour{% endif %}</p>
       <div class="sign3d-configurator__swatch-groups" data-colour-swatches{% if s3d_mode == "infinity" %} data-no-black{% endif %}></div>
       <p class="sign3d-configurator__selected-label">Selected: <span data-colour-name-label></span></p>
@@ -321,7 +328,7 @@
     </div>
     {% if s3d_mode == "lightbox" %}
     <div class="sign3d-configurator__field">
-      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Front-Facing or Double-Sided</span></label>
+      <label class="sign3d-configurator__label" data-step><span data-step-num></span><span data-step-text>Front Side Only or Double-Sided Design Display</span></label>
       {% assign s3d_lb_fi = 'moz-lb-front.png' | asset_url %}{% assign s3d_lb_di = 'moz-lb-double.png' | asset_url %}{% assign s3d_lb_fd = '' %}{% assign s3d_lb_dd = '' %}{% assign s3d_sz_first = true %}{% assign s3d_br_ri = 'moz-lb-mount-round.jpg' | asset_url %}{% assign s3d_br_xi = 'moz-lb-mount-rect.jpg' | asset_url %}{% assign s3d_br_rd = '' %}{% assign s3d_br_xd = '' %}
       <script type="application/json" data-sign3d-lb-sizes>[{% for o in metaobjects["app--418838118401--lightbox_option"].values %}{% assign s3d_sdc = o.category.value | strip | downcase %}{% if s3d_sdc == "price_row" %}{% unless s3d_sz_first %},{% endunless %}{% assign s3d_sz_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.extra_price_decimal.value | default: 0 }},"d":{% if o.price_double_decimal.value != blank %}{{ o.price_double_decimal.value }}{% else %}null{% endif %},"sr":{{ o.sort_order.value | default: 999999 }}}{% elsif s3d_sdc == "mounting" %}{% if o.type_key.value == "side_front" %}{% if o.image.value %}{% assign s3d_lb_fi = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_lb_fd = o.description.value %}{% elsif o.type_key.value == "side_double" %}{% if o.image.value %}{% assign s3d_lb_di = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_lb_dd = o.description.value %}{% elsif o.type_key.value == "bracket_round" %}{% if o.image.value %}{% assign s3d_br_ri = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_br_rd = o.description.value %}{% elsif o.type_key.value == "bracket_rect" %}{% if o.image.value %}{% assign s3d_br_xi = o.image.value | image_url: width: 480 %}{% endif %}{% assign s3d_br_xd = o.description.value %}{% endif %}{% endif %}{% endfor %}]</script>
       <div class="sign3d-configurator__card-grid" data-lb-sides data-front-img="{{ s3d_lb_fi }}" data-double-img="{{ s3d_lb_di }}" data-front-desc="{{ s3d_lb_fd | escape }}" data-double-desc="{{ s3d_lb_dd | escape }}" data-br-round-img="{{ s3d_br_ri }}" data-br-rect-img="{{ s3d_br_xi }}" data-br-round-desc="{{ s3d_br_rd | escape }}" data-br-rect-desc="{{ s3d_br_xd | escape }}" data-br-round-cut="{{ 'moz-lb-bracket-round.png' | asset_url }}" data-br-rect-cut="{{ 'moz-lb-bracket-rect.png' | asset_url }}"></div>

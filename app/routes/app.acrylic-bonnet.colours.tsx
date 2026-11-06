@@ -78,9 +78,9 @@ export default function BonnetColoursPage() {
     }, [fetcher.data, shopify]);
 
     return (
-        <s-page heading="Acrylic Neon Bonnet — Face Colours">
+        <s-page heading="Acrylic LED Neon Car Stand — Face Colours">
             <s-section heading="Add New Face Colour">
-                <s-link href="/app/acrylic-bonnet">← Back to Acrylic Neon Bonnet</s-link>
+                <s-link href="/app/acrylic-bonnet">← Back to Acrylic LED Neon Car Stand</s-link>
                 <s-paragraph>Per the client's PDF: Black, White, Light Grey, Dark Grey, Silver, Red, Orange, Yellow, Light Blue, Dark Blue/Navy, Green, Dark Green, Purple, Pink, Maroon, Custom Colour.</s-paragraph>
                 <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="create" />
