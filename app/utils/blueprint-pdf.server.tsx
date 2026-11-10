@@ -8,6 +8,7 @@ import {
     Line,
     Rect,
     Image,
+    Link,
     renderToBuffer,
 } from "@react-pdf/renderer";
 import React from "react";
@@ -81,6 +82,7 @@ const styles = StyleSheet.create({
     },
     propLabel: { width: "38%", fontSize: 8.5, color: "#555555" },
     propValue: { width: "62%", fontSize: 8.5, fontWeight: 700 },
+    propLink: { fontSize: 8.5, fontWeight: 700, color: "#1a56db", textDecoration: "underline" },
     noteItem: { fontSize: 8, marginBottom: 4, color: "#333333" },
     footerBar: {
         position: "absolute",
@@ -205,7 +207,18 @@ function BlueprintDocument({ data }: { data: BlueprintData }) {
                     visibleProperties.map((p, i) => (
                         <View style={styles.propRow} key={i}>
                             <Text style={styles.propLabel}>{p.name}</Text>
-                            <Text style={styles.propValue}>{p.value}</Text>
+                            {/^https?:\/\/\S+$/i.test(p.value) ? (
+                                // A long URL printed as text gets a hyphen inserted where the line wraps
+                                // ("design-pre-view"), so PDF viewers open a broken link. Use a real link
+                                // annotation with a short label instead of printing the raw URL.
+                                <View style={{ width: "62%" }}>
+                                    <Link src={p.value} style={styles.propLink}>
+                                        {/\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(p.value) ? "Open image (click here)" : "Open file (click here)"}
+                                    </Link>
+                                </View>
+                            ) : (
+                                <Text style={styles.propValue}>{p.value}</Text>
+                            )}
                         </View>
                     ))
                 )}
