@@ -400,6 +400,26 @@ async function handleFileUpload(request: Request, admin: any) {
             return Response.json({ error: "File registration failed" }, { status: 500 });
         }
 
+        // Live-preview photo for the order: it must be a permanent Shopify CDN URL (the staged
+        // resourceUrl expires), so wait briefly for Shopify to finish processing the image.
+        // Returns fileUrl null when it isn't ready in time — the order is then placed without it.
+        if (formData.get("purpose") === "preview") {
+            let url: string | null = createdFile.image?.url || createdFile.url || null;
+            for (let i = 0; !url && i < 10; i++) {
+                await new Promise((resolve) => setTimeout(resolve, 700));
+                const statusResponse = await admin.graphql(
+                    `#graphql
+          query PreviewFileUrl($id: ID!) { node(id: $id) { ... on MediaImage { fileStatus image { url } } ... on GenericFile { url } } }`,
+                    { variables: { id: createdFile.id } }
+                );
+                const statusData = await statusResponse.json();
+                const node = statusData.data?.node;
+                if (node?.fileStatus === "FAILED") break;
+                url = node?.image?.url || node?.url || null;
+            }
+            return Response.json({ fileUrl: url });
+        }
+
         // A freshly-created file can briefly report fileStatus "UPLOADED" with no url yet
         // while Shopify finishes processing it. Give the storefront the resourceUrl as a
         // fallback so the customer never sees a broken/empty response.

@@ -983,6 +983,10 @@
 
             addBtn.disabled = true;
             setLoading('Syncing price...');
+            // Photo of the live preview for the order (taken while the price is synced; never blocks).
+            const previewShot = window.MozemoPreviewShot
+                ? window.MozemoPreviewShot.capture(ctx.preview, { background: '#0b0b0d' })
+                : Promise.resolve(null);
             try {
                 const proxyResponse = await mozPricingFetch('/apps/neon-pricing', {
                     method: 'POST',
@@ -1002,6 +1006,8 @@
                 document.querySelectorAll('cart-items-component').forEach((node) => {
                     if (node.dataset && node.dataset.sectionId) sectionIds.push(node.dataset.sectionId);
                 });
+                const previewUrl = await previewShot;
+                if (previewUrl) properties['Preview Image'] = previewUrl;
                 setLoading(isNewVariant ? 'Preparing your price...' : 'Adding...');
                 const addResult = await addConfiguredLine(routesRoot, variantId, properties, sectionIds, isNewVariant, ctx.total);
 

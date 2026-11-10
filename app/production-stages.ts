@@ -68,3 +68,25 @@ export function popularChoices(records: { propertiesJson: string; quantity?: num
         };
     });
 }
+
+// ---- Order extras from the saved line-item properties (Production Orders + Dashboard) ----
+export type InstallInfo = { date: string; time: string; address: string };
+export type OrderExtras = { previewUrl: string | null; install: InstallInfo | null };
+
+// previewUrl: photo of the storefront live preview ("Preview Image", orders placed after this
+// feature). install: set when the customer asked for professional installation (same rule as the
+// orders/create webhook: the "Installation" property starts with "Yes").
+export function orderExtras(propertiesJson: string | null | undefined): OrderExtras {
+    let props: { name: string; value: string }[] = [];
+    try { props = JSON.parse(propertiesJson || "[]"); } catch { props = []; }
+    if (!Array.isArray(props)) props = [];
+    const get = (name: string) => String(props.find((p) => p && p.name === name)?.value ?? "").trim();
+    const preview = get("Preview Image");
+    const wantsInstall = /^yes/i.test(get("Installation"));
+    return {
+        previewUrl: /^https:\/\//i.test(preview) ? preview : null,
+        install: wantsInstall
+            ? { date: get("Installation Date"), time: get("Installation Time"), address: get("Installation Address") }
+            : null,
+    };
+}

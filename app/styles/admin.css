@@ -662,3 +662,70 @@ s-page td img {
 .moz-stage-select select { padding: 4px 8px; border-radius: 8px; border: 1px solid var(--moz-border-strong, #ccc); font-size: 13px; }
 .moz-stage-select small { color: var(--moz-text-subdued); }
 .moz-stage-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* ---- Production Orders: installation alerts + design preview photo ---- */
+.moz-install-alert {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 12px 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #e0313b;
+    background: #fde8e9;
+    color: #8a1219;
+    font-size: 13px;
+}
+.moz-install-alert__icon { font-size: 18px; }
+.moz-install-alert__text { flex: 1; min-width: 200px; }
+.moz-install-alert__link {
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #d72c35;
+    color: #ffffff;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.moz-install-banner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #d72c35;
+    color: #ffffff;
+    font-size: 13px;
+}
+.moz-install-banner strong { letter-spacing: 0.03em; }
+.moz-order-preview {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 132px;
+    height: 88px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #d4d4d8;
+    background: #111111;
+}
+.moz-order-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.moz-order-preview.is-empty {
+    background: #f1f1f2;
+    color: #8a8a93;
+    font-size: 11px;
+    text-align: center;
+    padding: 0 6px;
+}
+.moz-stage-chip--install {
+    background: #d72c35 !important;
+    color: #ffffff !important;
+}

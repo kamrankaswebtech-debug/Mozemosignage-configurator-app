@@ -3294,3 +3294,9 @@
 .sign3d-configurator .sign3d-mq-face-note {
     margin-top: -2px;
 }
+
+/* Lightbox: the built-in wall photo is shifted (JS, --lbx-wall-x) so the part the sign needs stays
+   in view on narrow screens; any other wallpaper keeps the centred crop. */
+.sign3d-configurator.sign3d-mode-lightbox:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split::before {
+    background-position: var(--lbx-wall-x, 50%) 50%;
+}

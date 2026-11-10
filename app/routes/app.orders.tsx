@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, Link } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { PRODUCTION_STAGES, normalizeStage, stageInfo } from "../production-stages";
+import { PRODUCTION_STAGES, normalizeStage, stageInfo, orderExtras } from "../production-stages";
 import { Resend } from "resend";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -11,6 +11,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const url = new URL(request.url);
     const stageParam = url.searchParams.get("stage");
     const stage = stageParam ? normalizeStage(stageParam) : null;
+    // ?install=1 = only orders where the customer asked for installation
+    const installOnly = url.searchParams.get("install") === "1";
 
     // Orders per production stage (for the filter tabs)
     const grouped = await db.productionBlueprint.groupBy({
@@ -43,17 +45,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             shareToken: true,
             productionStatus: true,
             statusUpdatedAt: true,
+            propertiesJson: true,
         },
     });
 
     const appUrl = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
 
-    const recordsWithShareUrl = records.map((record) => ({
+    const recordsWithShareUrl = records.map(({ propertiesJson, ...record }) => ({
         ...record,
+        ...orderExtras(propertiesJson),
         shareUrl: `${appUrl}/blueprint/${record.shareToken}`,
     }));
+    const installCount = recordsWithShareUrl.filter((r) => r.install).length;
+    const shown = installOnly ? recordsWithShareUrl.filter((r) => r.install) : recordsWithShareUrl;
 
-    return { records: recordsWithShareUrl, stage, stageCounts, totalCount };
+    return { records: shown, stage, stageCounts, totalCount, installOnly, installCount };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -122,7 +128,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function ProductionOrders() {
-    const { records, stage, stageCounts, totalCount } = useLoaderData<typeof loader>();
+    const { records, stage, stageCounts, totalCount, installOnly, installCount } = useLoaderData<typeof loader>();
+    const stageQuery = stage ? "stage=" + stage + "&" : "";
     const deleteFetcher = useFetcher();
     const emailFetchers: Record<string, ReturnType<typeof useFetcher>> = {};
 
@@ -143,6 +150,21 @@ export default function ProductionOrders() {
                         </Link>
                     ))}
                 </div>
+
+                {installCount > 0 && (
+                    <div className="moz-install-alert">
+                        <span className="moz-install-alert__icon">🛠</span>
+                        <span className="moz-install-alert__text">
+                            <strong>{installCount} order{installCount === 1 ? "" : "s"} {stage ? "in this stage " : ""}need{installCount === 1 ? "s" : ""} installation</strong>
+                            {" "}— marked in red below.
+                        </span>
+                        {installOnly ? (
+                            <Link to={"/app/orders" + (stage ? "?stage=" + stage : "")} className="moz-install-alert__link">Show all orders</Link>
+                        ) : (
+                            <Link to={"/app/orders?" + stageQuery + "install=1"} className="moz-install-alert__link">Show installation orders only</Link>
+                        )}
+                    </div>
+                )}
 
                 {records.length === 0 && <s-paragraph>{stage ? "No orders in this stage." : "No blueprint has been generated yet."}</s-paragraph>}
 
@@ -204,7 +226,23 @@ function BlueprintRow({ record, deleteFetcher }: { record: any; deleteFetcher: R
 
     return (
         <s-box padding="base" borderWidth="base" borderRadius="base" background="subdued">
+            {record.install && (
+                <div className="moz-install-banner">
+                    <strong>🛠 INSTALLATION REQUIRED</strong>
+                    <span>
+                        {[record.install.date, record.install.time].filter(Boolean).join(", ") || "Date / time not given"}
+                        {record.install.address ? " — " + record.install.address : ""}
+                    </span>
+                </div>
+            )}
             <s-stack direction="inline" gap="base" alignItems="center">
+                {record.previewUrl ? (
+                    <a href={record.previewUrl} target="_blank" rel="noreferrer" className="moz-order-preview" title="Open the full design preview">
+                        <img src={record.previewUrl} alt={"Design preview — " + record.orderName} loading="lazy" />
+                    </a>
+                ) : (
+                    <span className="moz-order-preview is-empty">No preview photo</span>
+                )}
                 <s-stack direction="block" gap="tight" style={{ flex: 1 }}>
                     <s-heading>
                         {record.orderName} — {record.productTitle}

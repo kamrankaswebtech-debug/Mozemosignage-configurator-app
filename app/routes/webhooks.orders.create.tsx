@@ -197,12 +197,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         for (let i = 0; i < configuredItems.length; i++) {
             const item = configuredItems[i];
-            const properties = (item.properties || []).map((p: any) => ({ name: p.name, value: String(p.value ?? "") }));
+            const properties: { name: string; value: string }[] = (item.properties || []).map((p: any) => ({ name: p.name, value: String(p.value ?? "") }));
 
             const widthProp = properties.find((p) => p.name === "_blueprint_width_cm");
             const heightProp = properties.find((p) => p.name === "_blueprint_height_cm");
+            // "Preview Image" = photo of the live preview (all selected options); any other image
+            // URL property = the customer's uploaded artwork.
+            const previewImageProp = properties.find((p) => p.name === "Preview Image" && /^https?:\/\//i.test(p.value));
             const referenceImageProp = properties.find(
-                (p) => /^https?:\/\//i.test(p.value) && /\.(png|jpe?g|webp|gif)(\?|$)/i.test(p.value),
+                (p) => p.name !== "Preview Image" && /^https?:\/\//i.test(p.value) && /\.(png|jpe?g|webp|gif)(\?|$)/i.test(p.value),
             );
 
             const fileName =
@@ -223,6 +226,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 widthCm: widthProp ? parseFloat(widthProp.value) : undefined,
                 heightCm: heightProp ? parseFloat(heightProp.value) : undefined,
                 referenceImageUrl: referenceImageProp?.value,
+                previewImageUrl: previewImageProp?.value,
                 fileName,
             });
 

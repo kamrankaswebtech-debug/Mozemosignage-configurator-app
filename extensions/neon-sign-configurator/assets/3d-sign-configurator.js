@@ -402,10 +402,17 @@ function sign3dBuildFontPicker(root) {
     const panel = root.querySelector('[data-font-panel]');
     if (!select || !toggle || !toggleLabel || !panel) return;
 
-    const fonts = sign3dReadJson(root, '[data-sign3d-fonts]')
+    let fonts = sign3dReadJson(root, '[data-sign3d-fonts]')
         .map((f, i) => ({ f, i }))
         .sort((a, b) => ((a.f.sort ?? 999999) - (b.f.sort ?? 999999)) || (a.i - b.i))
         .map((x) => x.f);
+    // Event Marquee: ONE manufacturer-approved font, no font menu. A font whose Admin "Show On"
+    // explicitly lists Event Marquee (Settings > Configurator Visibility) wins; otherwise the
+    // built-in marquee font (moz-marquee-font.woff2, @font-face in sign3d-core.liquid).
+    if (root.dataset.sign3dMode === 'marquee') {
+        const chosen = fonts.find((f) => String(f.so || '').trim() !== '');
+        fonts = [chosen || { name: 'Marquee Bold', family: '"moz-marquee-font"', preview: '', isNew: false }];
+    }
     if (!fonts.length) return;
 
     select.innerHTML = '';
@@ -2067,7 +2074,8 @@ function initSign3dConfigurator(root) {
         if (uploadLabelEl) {
             // Numbering is handled automatically by renumberSteps().
             const fontFieldEl = root.querySelector('[data-font-field]');
-            if (fontFieldEl) fontFieldEl.hidden = !showText;
+            // Event Marquee has one fixed font, so its font menu stays hidden.
+            if (fontFieldEl) fontFieldEl.hidden = !showText || root.dataset.sign3dMode === 'marquee';
             renumberSteps();
         }
 
@@ -2645,12 +2653,22 @@ function initSign3dConfigurator(root) {
     }
 
     function previewFillShare() {
+        // Event Marquee / Infinity Mirror on phones and tablets: the free width is small, so the
+        // sign fills more of it (up to 85-96% on a phone) — bulbs and mirror reflections need size
+        // to read clearly. Wide screens (free width 760px+) keep the original 55-92%.
+        let minFill = SIZE_MIN_FILL;
+        let maxFill = SIZE_MAX_FILL;
+        if (['marquee', 'infinity'].indexOf(root.dataset.sign3dMode) > -1) {
+            const narrow = Math.min(1, Math.max(0, (760 - previewFreeArea().w) / 400));
+            minFill += 0.3 * narrow;
+            maxFill += 0.04 * narrow;
+        }
         const wr = previewWidthRangeCm();
-        let share = SIZE_MIN_FILL + (SIZE_MAX_FILL - SIZE_MIN_FILL) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
+        let share = minFill + (maxFill - minFill) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
         const lmin = parseFloat(letterHeightInput && letterHeightInput.dataset.minCm);
         const lmax = parseFloat(letterHeightInput && letterHeightInput.dataset.maxCm);
         if (lmin > 0 && lmax > lmin) share *= 1 + 0.12 * rangePos(getHeightCm() || lmin, lmin, lmax);
-        return Math.min(SIZE_MAX_FILL, share);
+        return Math.min(maxFill, share);
     }
 
     // Free area for the sign (px): the inner width, and a height that keeps the sign clear
@@ -3554,6 +3572,12 @@ function initSign3dConfigurator(root) {
             addToCartBtn.disabled = true;
             setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
+            // Photo of the live preview for the order (taken while the price is synced; never blocks).
+            const shotEl = root.querySelector('[data-preview-box]');
+            const previewShot = window.MozemoPreviewShot && shotEl
+                ? window.MozemoPreviewShot.capture(shotEl, { width: window.MozemoPreviewShot.splitWidth(shotEl) })
+                : Promise.resolve(null);
+
             // Defensive: if Material/Finish/Mounting/Illumination have no options saved yet
             // in Admin (data not entered), don't crash the whole click — fall back to
             // "Standard" so Add to Cart still works while the developer finishes adding data.
@@ -3695,6 +3719,8 @@ function initSign3dConfigurator(root) {
                     if (el.dataset && el.dataset.sectionId) sectionIds.push(el.dataset.sectionId);
                 });
 
+                const previewUrl = await previewShot;
+                if (previewUrl) properties['Preview Image'] = previewUrl;
                 if (isNewVariant) setButtonLoadingText(addToCartBtn, 'Preparing your price...');
                 const addResult = await addConfiguredLine(routesRoot, priceMatchedVariantId, properties, sectionIds, isNewVariant, currentTotal);
 
@@ -4945,8 +4971,14 @@ function initSign3dConfigurator(root) {
 
     // Maps photo pixels to preview-stage pixels (the wallpaper is painted "cover", centred, in the
     // preview area only — see .moz-split::before). Null when the built-in wall photo isn't shown.
-    function lightboxWallMap(stageRect) {
-        if (!previewBox || wallpaperHidden || !root.dataset.lbWall || selectedBgUrl !== root.dataset.lbWall) return null;
+    // focusX (photo px): the part of the wall the sign needs. On narrow previews (phones) the photo is
+    // cropped a lot, so it is shifted (CSS var --lbx-wall-x on the ::before wallpaper) to keep that
+    // part in view instead of always cropping around the photo's centre.
+    function lightboxWallMap(stageRect, focusX) {
+        if (!previewBox || wallpaperHidden || !root.dataset.lbWall || selectedBgUrl !== root.dataset.lbWall) {
+            if (previewBox) previewBox.style.removeProperty('--lbx-wall-x');
+            return null;
+        }
         const box = previewBox.getBoundingClientRect();
         let paintW = box.width;
         try {
@@ -4956,7 +4988,10 @@ function initSign3dConfigurator(root) {
         const paintH = box.height;
         if (!paintW || !paintH) return null;
         const s = Math.max(paintW / LBX_WALL.w, paintH / LBX_WALL.h);
-        const ox = box.left + (paintW - LBX_WALL.w * s) / 2 - stageRect.left;
+        const minShift = paintW - LBX_WALL.w * s;
+        const shift = Math.round(Math.min(0, Math.max(minShift, paintW / 2 - (focusX || LBX_WALL.w / 2) * s)));
+        previewBox.style.setProperty('--lbx-wall-x', shift + 'px');
+        const ox = box.left + shift - stageRect.left;
         const oy = box.top + (paintH - LBX_WALL.h * s) / 2 - stageRect.top;
         return {
             s,
@@ -4992,7 +5027,12 @@ function initSign3dConfigurator(root) {
         const hanging = getBackingType() === 'bracket';
         const bracket = LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round;
         const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
-        const wall = lightboxWallMap(stageRect);
+        // Part of the wall photo the sign needs: Wall Mount = its mount point; Wall Hanging = from the
+        // bracket plate to the box's far edge.
+        const boxPhotoW = lbxWallPx(lbSize ? lbSize.w : getWidthCm());
+        const tipPhotoX = LBX_WALL.bracketLeft + LBX_WALL.bracketH * bracket.aspect * bracket.tipX;
+        const focusX = hanging ? (LBX_WALL.bracketLeft + tipPhotoX + boxPhotoW) / 2 : LBX_WALL.mountX;
+        const wall = lightboxWallMap(stageRect, focusX);
         const edgeAt = LBX_EDGE_AT_MIDDLE[key] || 0;
         // Depth of the metal side return on screen (thick, like a real lightbox) for a w x h box.
         const sideLen = (bw, bh) => Math.max(8, Math.min(30, Math.min(bw, bh) * 0.08));
@@ -5021,10 +5061,12 @@ function initSign3dConfigurator(root) {
                 top = tipY - h / 2;
                 bracketBox = { left: bl - left, top: bt - top, w: bw, h: bh };
             } else {
-                const k = Math.min(1, (wall.visR - wall.visL - m * 2) / w, (wall.visB - wall.visT - m * 2) / h);
+                const k = Math.min(1, (wall.visR - wall.visL - m * 2) / (w * 1.1), (wall.visB - wall.visT - m * 2) / (h * 1.05));
                 if (k > 0) { w *= k; h *= k; }
-                const cx = Math.min(Math.max(wall.x(LBX_WALL.mountX), wall.visL + m + w / 2), wall.visR - m - w / 2);
-                const cy = Math.min(Math.max(wall.y(LBX_WALL.mountY), wall.visT + m + h / 2), wall.visB - m - h / 2);
+                // The side band sticks out on the left / top: keep it inside the visible wall too.
+                const sl = sideLen(w, h);
+                const cx = Math.min(Math.max(wall.x(LBX_WALL.mountX), wall.visL + m + w / 2 - sl * LBX_SIDE.x), wall.visR - m - w / 2);
+                const cy = Math.min(Math.max(wall.y(LBX_WALL.mountY), wall.visT + m + h / 2 - sl * LBX_SIDE.y), wall.visB - m - h / 2);
                 left = cx - w / 2;
                 top = cy - h / 2;
             }

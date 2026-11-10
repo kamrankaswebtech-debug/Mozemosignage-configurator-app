@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { AdminIcon } from "../components/admin-ui";
-import { PRODUCTION_STAGES, normalizeStage, stageInfo, popularChoices } from "../production-stages";
+import { PRODUCTION_STAGES, normalizeStage, stageInfo, popularChoices, orderExtras } from "../production-stages";
 
 // Icon names refer to the shared line-icon set in app/components/admin-ui.tsx.
 const CONFIGURATOR_SOURCES = [
@@ -68,7 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { shop: session.shop },
       orderBy: { createdAt: "desc" },
       take: 6,
-      select: { id: true, orderName: true, productTitle: true, customerName: true, destination: true, orderStatus: true, productionStatus: true, createdAt: true },
+      select: { id: true, orderName: true, productTitle: true, customerName: true, destination: true, orderStatus: true, productionStatus: true, createdAt: true, propertiesJson: true },
     }),
     db.productionBlueprint.findMany({
       where: { shop: session.shop, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
@@ -177,7 +177,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     setupChecklist,
     setupCompletePercent,
     newOrdersLast7Days,
-    recentBlueprints,
+    recentBlueprints: recentBlueprints.map(({ propertiesJson, ...b }) => ({ ...b, needsInstall: !!orderExtras(propertiesJson).install })),
     mainThemeName,
     themeEditorUrl,
     themeEditorProductTemplateUrl,
@@ -404,6 +404,7 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <s-stack direction="inline" gap="small-200">
+                  {b.needsInstall && <span className="moz-stage-chip moz-stage-chip--install">🛠 Installation</span>}
                   <span className="moz-stage-chip" style={{ ["--stage" as any]: stageInfo(b.productionStatus).color }}>{stageInfo(b.productionStatus).label}</span>
                   <s-badge>{formatStatus(b.orderStatus)}</s-badge>
                 </s-stack>

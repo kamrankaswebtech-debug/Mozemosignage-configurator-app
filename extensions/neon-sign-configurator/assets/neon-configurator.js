@@ -2306,6 +2306,13 @@ function initConfigurator(root) {
             addToCartBtn.disabled = true;
             setButtonLoadingText(addToCartBtn, 'Syncing price...');
 
+            // Photo of the live preview for the order (taken while the price is synced; never blocks).
+            const previewEl = root.querySelector('[data-preview-box]');
+            const defsSvg = root.querySelector('[data-backboard-defs]');
+            const previewShot = window.MozemoPreviewShot && previewEl
+                ? window.MozemoPreviewShot.capture(previewEl, { defs: defsSvg ? defsSvg.closest('svg') : null, width: window.MozemoPreviewShot.splitWidth(previewEl) })
+                : Promise.resolve(null);
+
             try {
                 const productId = addToCartBtn.dataset.productId;
 
@@ -2347,6 +2354,8 @@ function initConfigurator(root) {
 
                 // A brand-new variant can take a moment to become available to this endpoint —
                 // retry a couple of times automatically before treating it as a real failure.
+                const previewUrl = await previewShot;
+                if (previewUrl) properties['Preview Image'] = previewUrl;
                 if (isNewVariant) setButtonLoadingText(addToCartBtn, 'Preparing your price...');
                 const addResult = await addConfiguredLine(routesRoot, priceMatchedVariantId, properties, sectionIds, isNewVariant, currentTotal);
 

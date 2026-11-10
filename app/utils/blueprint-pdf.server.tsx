@@ -30,6 +30,8 @@ export interface BlueprintData {
     widthCm?: number;
     heightCm?: number;
     referenceImageUrl?: string;
+    // Photo of the storefront live preview with every selected option (line item "Preview Image").
+    previewImageUrl?: string;
     fileName: string;
 }
 
@@ -300,8 +302,17 @@ function BlueprintDocument({ data }: { data: BlueprintData }) {
                     complete production pack.
                 </Text>
 
+                {data.previewImageUrl ? (
+                    <>
+                        <Text style={{ fontSize: 8, fontWeight: 700, marginBottom: 6 }}>FINAL DESIGN PREVIEW (ALL SELECTED OPTIONS, AS SEEN BY THE CUSTOMER)</Text>
+                        <View style={[styles.refBox, { height: 240 }]}>
+                            <Image src={data.previewImageUrl} style={{ maxWidth: "96%", maxHeight: "94%" }} />
+                        </View>
+                    </>
+                ) : null}
+
                 <Text style={{ fontSize: 8, fontWeight: 700, marginBottom: 6 }}>CUSTOMER PHOTO / REFERENCE IMAGE</Text>
-                <View style={styles.refBox}>
+                <View style={data.previewImageUrl ? [styles.refBox, { height: 170 }] : styles.refBox}>
                     {data.referenceImageUrl ? (
                         <Image src={data.referenceImageUrl} style={{ maxWidth: "90%", maxHeight: "90%" }} />
                     ) : (
