@@ -1900,11 +1900,17 @@
             // UV Size Prices row with the same width wins; a row without a real price (empty / 0)
             // never turns a card into $0.00 — it falls back to Neon price + surcharge.
             // Same rules as the Admin preview in app/routes/app.uv-graphic-led.sizes.tsx.
-            const sizePrice = (s) => {
+            // Without Neon Lighting = the With Neon price minus the neon cost (client: neon is an
+            // extra $100 on top of the signage). The amount is the Width 0 row's "Price Without
+            // Neon" field (Admin: Default Graphic Surcharge page); empty = $100. A size row's own
+            // Price Without Neon still wins.
+            const noLedOff = surchargeRow && surchargeRow.pn !== null && surchargeRow.pn !== undefined ? Math.max(0, num(surchargeRow.pn)) : 100;
+            const sizePrice = (s, led) => {
+                const withLed = led === undefined ? isLed() : led;
                 const o = findOverride(s.w);
-                if (!isLed() && o && num(o.pn) > 0) return num(o.pn);
-                if (o && num(o.p) > 0) return num(o.p);
-                return num(s.p) + surcharge;
+                if (!withLed && o && num(o.pn) > 0) return num(o.pn);
+                const full = o && num(o.p) > 0 ? num(o.p) : num(s.p) + surcharge;
+                return withLed ? full : Math.max(0, full - noLedOff);
             };
             const sizeCards = () => sizes.map((s) => ({
                 label: ctx.unitLabel(s.l), price: sizePrice(s), badge: s.b || '', cmLabel: s.l,
@@ -2070,8 +2076,19 @@
             const sizeStep = ctx.step('Choose Size');
             // CM / MM / INCH above the size cards (same as the Neon configurator)
             sizeStep.appendChild(ctx.unitTabs(() => { if (sizeCtl) sizeCtl.setItems(sizeCards(), true); }).el);
-            sizeCtl = ctx.cards('size', sizeCards(), { price: 'full', cols: 2, onChange: () => { if (typeCtl) refreshTypes(); } });
+            // Lighting cards show the chosen size's price With / Without Neon (live, follows the size).
+            const lightPrices = Array.from(lightCtl.el.children).map((card) => card.appendChild(el('span', 'moz-cfg__card-price moz-cfg__light-price')));
+            const refreshLightPrices = () => {
+                const s = ctx.v.size && ctx.v.size.src;
+                lightCtl.items.forEach((item, i) => {
+                    if (!lightPrices[i]) return;
+                    lightPrices[i].hidden = !s;
+                    lightPrices[i].textContent = s ? money(sizePrice(s, item.key === 'led')) : '';
+                });
+            };
+            sizeCtl = ctx.cards('size', sizeCards(), { price: 'full', cols: 2, onChange: () => { if (typeCtl) refreshTypes(); refreshLightPrices(); } });
             sizeStep.appendChild(sizeCtl.el);
+            refreshLightPrices();
 
             // Backboards: Cut Around, Rectangle, Naked (No Backboard), Open Box, Acrylic Stand.
             const allStyles = bySort(d.styles);
@@ -2475,10 +2492,11 @@
         return cv._res;
     }
 
-    // Car Bonnet Open photo (moz-bn-car.jpg, 1536 x 1024): the bonnet latch (top) and the engine
-    // bay latch (bottom), in photo pixels. The photo is zoomed / moved so these meet the stand's
-    // top and bottom mounting points at every size; dark studio edges fill any uncovered area.
-    const BONNET_CAR = { w: 1536, h: 1024, x: 768, top: 60, bot: 603, fill: '#0b0b0d' };
+    // Car Bonnet Open photo (moz-bn-car.jpg, 1630 x 965 — the client's full garage photo with the car
+    // in the centre): the bonnet latch (top) and the engine bay latch / slam panel (bottom), in photo
+    // pixels. The photo is zoomed / moved so these meet the stand's top and bottom mounting points at
+    // every size (same zoom as before); dark studio edges fill any area the photo does not cover.
+    const BONNET_CAR = { w: 1630, h: 965, x: 815, top: 357, bot: 598, fill: '#0b0b0d' };
     function bonnetAlignWall(ctx) {
         const preview = ctx.preview;
         const wall = ctx.currentWall ? ctx.currentWall() : null;

@@ -7,12 +7,16 @@ import { authenticate } from "../shopify.server";
 // UV Graphic size prices (uv_size). The storefront size cards always come from Neon Signs → Sizes
 // (sign_size, shown on "graphic"); this page only decides their UV price:
 //   1. A row here whose Width matches a Neon size (±0.5 cm) overrides that size's price
-//      (With Neon = Price, Without Neon = Price Without Neon, or Price when empty).
+//      (With Neon = Price, Without Neon = Price Without Neon when filled in).
 //   2. Every other size = Neon price + the Default Graphic Surcharge.
-// The surcharge is stored as the uv_size row with Width 0 (default $50 when there is none).
+//   3. Without Neon Lighting (no own Price Without Neon) = the With Neon price minus the
+//      Without Neon Lighting discount (default $100).
+// Both settings are stored on the uv_size row with Width 0: price_decimal = surcharge (default
+// $50), price_no_led_decimal = Without Neon discount (empty = $100).
 // Same rules as sizePrice() in extensions/.../assets/moz-configurator.js — keep both in sync.
 
 const DEFAULT_SURCHARGE = 50;
+const DEFAULT_NO_LED_DISCOUNT = 100;
 const SURCHARGE_LABEL = "Default Graphic Surcharge";
 const WIDTH_TOLERANCE_CM = 0.51;
 
@@ -59,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Rows keep the API (creation) order here — the storefront uses the first matching row.
     const surchargeRow = rows.find((r: Entry) => toNum(r.widthCm) === 0) || null;
     const surcharge = surchargeRow ? toNum(surchargeRow.price) : DEFAULT_SURCHARGE;
+    const noLedDiscount = surchargeRow && String(surchargeRow.priceNoLed).trim() !== "" ? Math.max(0, toNum(surchargeRow.priceNoLed)) : DEFAULT_NO_LED_DISCOUNT;
     const overrides = rows.filter((r: Entry) => toNum(r.widthCm) > 0);
 
     const neonSizes: NeonSize[] = (neonData.data?.metaobjects?.edges || [])
@@ -84,7 +89,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         if (o) (usedBy[o.id] = usedBy[o.id] || []).push(s.label);
         const fallback = s.price + surcharge;
         const withNeon = o && toNum(o.price) > 0 ? toNum(o.price) : fallback;
-        const withoutNeon = o && toNum(o.priceNoLed) > 0 ? toNum(o.priceNoLed) : withNeon;
+        const withoutNeon = o && toNum(o.priceNoLed) > 0 ? toNum(o.priceNoLed) : Math.max(0, withNeon - noLedDiscount);
         const source = !o
             ? "Neon price + surcharge"
             : toNum(o.price) > 0
@@ -110,7 +115,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
 
     const items = overrides.slice().sort((a: Entry, b: Entry) => toNum(a.sortOrder) - toNum(b.sortOrder));
-    return { items, status, preview, surcharge, hasSurchargeRow: !!surchargeRow };
+    return { items, status, preview, surcharge, noLedDiscount, hasSurchargeRow: !!surchargeRow };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -122,10 +127,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const raw = String(formData.get("surcharge") ?? "").trim();
         const value = parseFloat(raw);
         if (raw === "" || !Number.isFinite(value) || value < 0) return { error: "Enter a surcharge of 0 or more" };
+        const offRaw = String(formData.get("noLedDiscount") ?? "").trim();
+        const off = parseFloat(offRaw);
+        if (offRaw === "" || !Number.isFinite(off) || off < 0) return { error: "Enter a Without Neon Lighting discount of 0 or more" };
         const fields = [
             { key: "label", value: SURCHARGE_LABEL },
             { key: "width_cm", value: "0" },
             { key: "price_decimal", value: value.toFixed(2) },
+            { key: "price_no_led_decimal", value: off.toFixed(2) },
             { key: "sort_order", value: "0" },
         ];
 
@@ -184,7 +193,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "price_decimal", value: String(price) },
             { key: "sort_order", value: String(formData.get("sortOrder") || "0") },
         ];
-        // Price Without Neon Lighting: optional (empty = same price as With Neon). Only sent when
+        // Price Without Neon Lighting: optional (empty = With Neon price minus the Without Neon discount). Only sent when
         // filled in, or as "" on update to clear a value that was saved before.
         if (priceNoLedRaw !== "") fields.push({ key: "price_no_led_decimal", value: String(priceNoLed) });
         else if (intent === "update" && formData.get("hadPriceNoLed") === "1") fields.push({ key: "price_no_led_decimal", value: "" });
@@ -235,7 +244,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 const money = (value: number) => "$" + value.toFixed(2);
 
 export default function UvSizesPage() {
-    const { items, status, preview, surcharge, hasSurchargeRow } = useLoaderData<typeof loader>();
+    const { items, status, preview, surcharge, noLedDiscount, hasSurchargeRow } = useLoaderData<typeof loader>();
     const fetcher = useFetcher<typeof action>();
     const shopify = useAppBridge();
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -265,23 +274,28 @@ export default function UvSizesPage() {
                 <s-link href="/app/neon-signs/sizes">Manage Neon Sizes →</s-link>
             </s-section>
 
-            <s-section heading="Default Graphic Surcharge">
+            <s-section heading="Default Graphic Surcharge & Without Neon Lighting Discount">
                 <s-paragraph>
-                    Added to the Neon price of every size that has no UV price row below.
-                    {hasSurchargeRow ? "" : ` Not saved yet — the storefront uses the built-in default of ${money(DEFAULT_SURCHARGE)}.`}
+                    Surcharge: added to the Neon price of every size that has no UV price row below.
+                    Without Neon Lighting discount: taken off the With Neon price when the customer chooses
+                    Without Neon Lighting (e.g. $649.00 with neon → $549.00 without, for $100). A row below with its
+                    own Price (Without Neon) uses that price instead. Both prices are shown live on the storefront
+                    Lighting cards.
+                    {hasSurchargeRow ? "" : ` Not saved yet — the storefront uses the built-in defaults of ${money(DEFAULT_SURCHARGE)} and ${money(DEFAULT_NO_LED_DISCOUNT)}.`}
                 </s-paragraph>
                 <fetcher.Form method="post" key={"surcharge" + formKey}>
                     <input type="hidden" name="intent" value="save-surcharge" />
                     <s-stack direction="inline" gap="base">
-                        <input type="number" step="0.01" min="0" name="surcharge" defaultValue={surcharge} required />
-                        <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save Surcharge</s-button>
+                        <label>Surcharge ($) <input type="number" step="0.01" min="0" name="surcharge" defaultValue={surcharge} required /></label>
+                        <label>Without Neon discount ($) <input type="number" step="0.01" min="0" name="noLedDiscount" defaultValue={noLedDiscount} required /></label>
+                        <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                     </s-stack>
                 </fetcher.Form>
             </s-section>
 
             <s-section heading="Add New UV Price Row">
                 <s-paragraph>
-                    Width must match a Neon size width (cm). Price Without Neon is optional — empty = same as With Neon.
+                    Width must match a Neon size width (cm). Price Without Neon is optional — empty = With Neon price minus the Without Neon discount.
                 </s-paragraph>
                 <fetcher.Form method="post" key={"create" + formKey}>
                     <input type="hidden" name="intent" value="create" />
@@ -334,7 +348,7 @@ export default function UvSizesPage() {
                                         <td style={{ padding: "8px" }}>{item.label}</td>
                                         <td style={{ padding: "8px" }}>{item.widthCm}</td>
                                         <td style={{ padding: "8px" }}>${item.price}</td>
-                                        <td style={{ padding: "8px" }}>{item.priceNoLed ? `$${item.priceNoLed}` : "Same as With Neon"}</td>
+                                        <td style={{ padding: "8px" }}>{item.priceNoLed ? `$${item.priceNoLed}` :`With Neon − ${money(noLedDiscount)}`}</td>
                                         <td style={{ padding: "8px" }}>{item.sortOrder}</td>
                                         <td style={{ padding: "8px", color: status[item.id]?.used ? "#0a7d33" : "#b25e00" }}>
                                             {status[item.id]?.used ? "✓ " : "⚠ "}{status[item.id]?.note}

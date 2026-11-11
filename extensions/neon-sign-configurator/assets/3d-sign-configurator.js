@@ -408,7 +408,7 @@ function sign3dBuildFontPicker(root) {
         .map((x) => x.f);
     // Event Marquee: ONE manufacturer-approved font, no font menu. A font whose Admin "Show On"
     // explicitly lists Event Marquee (Settings > Configurator Visibility) wins; otherwise the
-    // built-in marquee font (moz-marquee-font.woff2, @font-face in sign3d-core.liquid).
+    // built-in marquee font (moz-marquee-font.css, loaded by sign3d-core.liquid).
     if (root.dataset.sign3dMode === 'marquee') {
         const chosen = fonts.find((f) => String(f.so || '').trim() !== '');
         fonts = [chosen || { name: 'Marquee Bold', family: '"moz-marquee-font"', preview: '', isNew: false }];
@@ -866,7 +866,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v6|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|v7|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1103,7 +1103,7 @@ function sign3dBulbPoints(ch, fontCss) {
             if (score > best) { best = score; bx = x; by = y; }
         }
         const local = dist[by * W + bx] || 1;
-        return { x: bx, y: by, d: Math.max(S * 0.02, Math.min(dia, local * 1.55)) };
+        return { x: bx, y: by, d: Math.max(S * 0.02, Math.min(dia, local * 1.55)), l: local };
     });
     const placed = [];
     fitted.forEach((p) => {
@@ -1113,9 +1113,49 @@ function sign3dBulbPoints(ch, fontCss) {
         });
         if (ok) placed.push(p);
     });
-    const res = placed.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: p.d / S }));
+    // l = distance from the bulb centre to the nearest letter edge (em)
+    const res = placed.map((p) => ({ x: (p.x - ox) / S, y: (p.y - base) / S, d: p.d / S, l: p.l / S }));
     SIGN3D_BULB_CACHE[key] = res;
     return res;
+}
+
+// Event Marquee open-face letter (client's reference: the bulbs sit INSIDE each letter and the
+// face sits inside the letter walls). An SVG laid exactly over the letter draws, clipped to the
+// letter's own outline:
+//   - the inner wall surfaces (side colour, shaded) showing at the top / left inside edges,
+//   - the recessed back face (face colour), set back into the depth like the outer returns,
+//   - a warm glow around every bulb (LED on) that never leaves the letter walls,
+// plus the front edge of the walls (a thin rim in the side colour) on the outline.
+// Colours / LED state come from CSS variables and classes, so they change without a rebuild.
+// baseY: baseline from the span top (px); shift: back-face offset {x, y} (px); rim: wall edge (px);
+// bulbs: [{x, y, r}] glow centres / radius (px, relative to the span).
+var SIGN3D_MQ_UID = 0;
+function sign3dMarqueeFace(span, ch, baseY, shift, rim, bulbs) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const uid = 'mqf' + (++SIGN3D_MQ_UID);
+    const mk = (tag, attrs, parent) => {
+        const n = document.createElementNS(NS, tag);
+        Object.keys(attrs).forEach((k) => n.setAttribute(k, attrs[k]));
+        if (parent) parent.appendChild(n);
+        return n;
+    };
+    const text = (attrs, parent) => { const t = mk('text', Object.assign({ x: 0, y: baseY.toFixed(2) }, attrs), parent); t.textContent = ch; return t; };
+    const w = span.offsetWidth || 1;
+    const h = span.offsetHeight || 1;
+    const svg = mk('svg', { class: 'sign3d-mq-face', width: w, height: h, viewBox: '0 0 ' + w + ' ' + h, 'aria-hidden': 'true', focusable: 'false' });
+    const defs = mk('defs', {}, svg);
+    text({}, mk('clipPath', { id: uid + 'c' }, defs));
+    const grad = mk('radialGradient', { id: uid + 'g' }, defs);
+    [['0', '0.95'], ['0.35', '0.55'], ['0.7', '0.18'], ['1', '0']].forEach(([o, a]) => mk('stop', { offset: o, class: 'sign3d-mq-face__stop', 'stop-opacity': a }, grad));
+    const inside = mk('g', { 'clip-path': 'url(#' + uid + 'c)' }, svg);
+    mk('rect', { class: 'sign3d-mq-face__wall', x: -w, y: -h, width: w * 3, height: h * 3 }, inside);
+    text({ class: 'sign3d-mq-face__back', x: shift.x.toFixed(2), y: (baseY + shift.y).toFixed(2), 'stroke-width': Math.max(1, rim * 1.6).toFixed(2) }, inside);
+    const glow = mk('g', { class: 'sign3d-mq-face__glow' }, inside);
+    bulbs.forEach((b) => mk('circle', { cx: b.x.toFixed(2), cy: b.y.toFixed(2), r: b.r.toFixed(2), fill: 'url(#' + uid + 'g)' }, glow));
+    text({ class: 'sign3d-mq-face__rim', 'stroke-width': rim.toFixed(2) }, svg);
+    span.appendChild(svg);
+    span.classList.add('sign3d-has-mq-face');
+    return svg;
 }
 
 // Infinity Mirror letter: nested outlines that follow the letter's own shape inward (the LED
@@ -1165,9 +1205,110 @@ function sign3dEdt(B, W, H) {
     return d;
 }
 
+// Font string for measuring a glyph exactly as the preview draws it. The preview never fakes bold
+// (font-synthesis: none) but a canvas does, which made the measured letters fatter than the
+// letters on screen (bulbs / LED rings spilling over the edges). A font without a real bold face
+// (same advance widths at both weights) is therefore measured at its regular weight.
+function sign3dGlyphFontCss(cs) {
+    const fam = cs.fontFamily;
+    const st = cs.fontStyle || 'normal';
+    const w = String(cs.fontWeight || '400');
+    if (w === '400' || w === 'normal') return st + ' 400 100px ' + fam;
+    const key = 'wt|' + st + '|' + w + '|' + fam + '|' + sign3dFontReady(st + ' ' + w + ' 100px ' + fam);
+    if (!(key in SIGN3D_BULB_CACHE)) {
+        const g = document.createElement('canvas').getContext('2d');
+        const sample = 'HIOWabgmo1';
+        g.font = st + ' 400 100px ' + fam;
+        const a = g.measureText(sample).width;
+        g.font = st + ' ' + w + ' 100px ' + fam;
+        const b = g.measureText(sample).width;
+        SIGN3D_BULB_CACHE[key] = Math.abs(a - b) > a * 0.004 ? w : '400';
+    }
+    return st + ' ' + SIGN3D_BULB_CACHE[key] + ' 100px ' + fam;
+}
+
+// The letter as a manufactured infinity mirror box: one clean shape per letter. Decorative details
+// of a font — small cut-outs / dots inside the strokes (western fonts such as Cowboy), inline
+// lines (multi-line fonts) and hairline slits — are filled, so the LED and its reflections follow
+// the letter's real outline and counters instead of drawing rings around every ornament.
+// B: glyph mask (1 = ink) at S px per em. Returns the cleaned mask (never removes ink).
+function sign3dInfinityShape(B, W, H, S) {
+    const n = W * H;
+    // 1) Close gaps narrower than ~2.4% of the letter height (dilate, then erode).
+    const rc = S * 0.012;
+    const inv = new Uint8Array(n);
+    for (let i = 0; i < n; i++) inv[i] = B[i] ? 0 : 1;
+    const dBg = sign3dEdt(inv, W, H);
+    const dil = new Uint8Array(n);
+    for (let i = 0; i < n; i++) dil[i] = B[i] || dBg[i] <= rc ? 1 : 0;
+    const dIn = sign3dEdt(dil, W, H);
+    const out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) out[i] = B[i] || (dil[i] && dIn[i] > rc) ? 1 : 0;
+    // 2) Fill small enclosed holes (not reachable from the edge of the canvas): ornament cut-outs
+    // and dots. Real counters (O, B, A, e…) are much larger and stay open.
+    const seen = new Uint8Array(n);
+    const stack = [];
+    const push = (i) => { if (!out[i] && !seen[i]) { seen[i] = 1; stack.push(i); } };
+    for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+    for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+    const nbs = (i) => {
+        const x = i % W;
+        return [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i >= W ? i - W : -1, i < n - W ? i + W : -1];
+    };
+    while (stack.length) nbs(stack.pop()).forEach((j) => { if (j > -1) push(j); });
+    const inv2 = new Uint8Array(n);
+    for (let i = 0; i < n; i++) inv2[i] = out[i] ? 0 : 1;
+    const dHole = sign3dEdt(inv2, W, H);
+    const maxR = S * 0.035;
+    const maxArea = (S * 0.075) * (S * 0.075);
+    for (let i0 = 0; i0 < n; i0++) {
+        if (out[i0] || seen[i0]) continue;
+        const comp = [];
+        let deepest = 0;
+        seen[i0] = 1;
+        stack.push(i0);
+        while (stack.length) {
+            const i = stack.pop();
+            comp.push(i);
+            if (dHole[i] > deepest) deepest = dHole[i];
+            nbs(i).forEach((j) => { if (j > -1 && !out[j] && !seen[j]) { seen[j] = 1; stack.push(j); } });
+        }
+        // Small holes go; so do bigger ROUND ones (ornament circles / dots of western fonts). A
+        // real counter is much larger, or long and narrow (e.g. the slits of a condensed "B").
+        const round = comp.length < 2.4 * Math.PI * deepest * deepest;
+        if ((deepest < maxR && comp.length < maxArea) || (round && deepest < S * 0.06)) comp.forEach((i) => { out[i] = 1; });
+    }
+    return out;
+}
+
+// Typical half stroke width of a cleaned letter shape (median distance along its centre line).
+function sign3dShapeHalf(shape, W, H) {
+    const d = sign3dEdt(shape, W, H);
+    const sk = sign3dThin(shape, W, H);
+    const vals = [];
+    for (let i = 0; i < sk.length; i++) if (sk[i] && d[i] > 0) vals.push(d[i]);
+    if (!vals.length) return 0;
+    vals.sort((a, b) => a - b);
+    return vals[Math.floor(vals.length / 2)];
+}
+
 function sign3dInfinityMask(ch, fontCss, fsPx) {
     const S = 240;
-    const hw = sign3dStrokeHalf(fontCss, S);
+    // The font's typical stroke ("H"), measured on the cleaned shape like every letter below.
+    const refKey = fontCss + '|infref|' + sign3dFontReady(fontCss);
+    if (!(refKey in SIGN3D_BULB_CACHE)) {
+        const rf = sign3dGlyphField('H', fontCss, S);
+        SIGN3D_BULB_CACHE[refKey] = rf ? sign3dShapeHalf(sign3dInfinityShape(rf.B, rf.W, rf.H, S), rf.W, rf.H) : 0;
+    }
+    const hwRef = SIGN3D_BULB_CACHE[refKey] || sign3dStrokeHalf(fontCss, S);
+    const f = sign3dGlyphField(ch, fontCss, S);
+    if (!f) return null;
+    const shapeKey = fontCss + '|' + ch + '|infshape|' + sign3dFontReady(fontCss);
+    const shape = SIGN3D_BULB_CACHE[shapeKey] || (SIGN3D_BULB_CACHE[shapeKey] = sign3dInfinityShape(f.B, f.W, f.H, S));
+    // This letter's own stroke, kept close to the font's (so every letter of the word matches).
+    const hwOwnKey = shapeKey + '|hw';
+    const hwOwn = SIGN3D_BULB_CACHE[hwOwnKey] || (SIGN3D_BULB_CACHE[hwOwnKey] = sign3dShapeHalf(shape, f.W, f.H) || hwRef);
+    const hw = Math.max(hwRef * 0.75, Math.min(hwRef * 1.35, Math.sqrt(hwOwn * hwRef)));
     // A real infinity mirror letter: one bright LED line just inside the wall, then its
     // reflections — concentric copies of the letter's outline stepping into the depth, closer
     // together and quickly dimmer each time (perspective), the centre of the stroke stays dark.
@@ -1179,12 +1320,10 @@ function sign3dInfinityMask(ch, fontCss, fsPx) {
     n = Math.max(2, Math.min(n, Math.floor((hwScreen * 0.7) / 3.5) + 1));
     // Lines at least ~0.85px wide on screen (mask px -> screen px = fsPx / S)
     const wMin = fsPx > 0 ? Math.max(1.1, 0.85 * S / fsPx) : 1.1;
-    const key = fontCss + '|' + ch + '|inf8|' + n + '|' + Math.round(wMin * 4) + '|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|inf9|' + n + '|' + Math.round(wMin * 4) + '|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
-    const f = sign3dGlyphField(ch, fontCss, S);
-    if (!f) return null;
     const { W, H, ox, base } = f;
-    const dist = sign3dEdt(f.B, W, H);
+    const dist = sign3dEdt(shape, W, H);
     const r0 = Math.max(1.8, hw * 0.15);
     const rEnd = hw * 0.86;
     const q = 0.66;
@@ -1226,7 +1365,22 @@ function sign3dInfinityMask(ch, fontCss, fsPx) {
         id.data[i * 4 + 3] = Math.round(a * 255);
     }
     g.putImageData(id, 0, 0);
-    const res = { url: c.toDataURL('image/png'), x: -ox / S, y: -base / S, w: W / S, h: H / S };
+    // Solid mask of the cleaned letter (only when something was filled in): the dark mirror face
+    // over the filled ornaments, under the LED rings.
+    let faceUrl = '';
+    let filled = false;
+    for (let i = 0; i < W * H; i++) if (shape[i] && !f.B[i]) { filled = true; break; }
+    if (filled) {
+        const fc = document.createElement('canvas');
+        fc.width = W;
+        fc.height = H;
+        const fg = fc.getContext('2d');
+        const fd = fg.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) if (shape[i]) { fd.data[i * 4] = 255; fd.data[i * 4 + 1] = 255; fd.data[i * 4 + 2] = 255; fd.data[i * 4 + 3] = 255; }
+        fg.putImageData(fd, 0, 0);
+        faceUrl = fc.toDataURL('image/png');
+    }
+    const res = { url: c.toDataURL('image/png'), face: faceUrl, x: -ox / S, y: -base / S, w: W / S, h: H / S };
     SIGN3D_BULB_CACHE[key] = res;
     return res;
 }
@@ -1854,6 +2008,12 @@ function initSign3dConfigurator(root) {
             previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-dark', depthFn(depthMm, selectedSideHex, 'dark'));
             previewInnerForLed.style.setProperty('--sign3d-extrusion-shadow-lit', depthFn(depthMm, selectedSideHex, 'lit'));
             previewInnerForLed.style.setProperty('--sign3d-light', selectedColourHex);
+            if (root.dataset.sign3dMode === 'marquee') {
+                // Open-face letters: the walls (rim + inner wall surfaces) are in the side colour;
+                // the set-back face depends on the depth, so the letters are rebuilt when it changes.
+                previewInnerForLed.style.setProperty('--sign3d-side', selectedSideHex || '#ffffff');
+                try { scheduleGlyphDecor(); } catch (err) { /* letters not built yet */ }
+            }
             if (root.dataset.sign3dMode === 'infinity') {
                 previewInnerForLed.style.setProperty('--sign3d-side', selectedSideHex || '#111111');
                 previewInnerForLed.style.setProperty('--sign3d-inf-rings', sign3dInfinityRings(selectedColourHex || '#29d3ff', ledOn));
@@ -3609,7 +3769,8 @@ function initSign3dConfigurator(root) {
                 'Side Colour': (selectedSideName || 'Default') + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')',
                 'Mounting': getSelectedOptionText(mountingSelect, 'Standard'),
                 'Add-ons': selectedAddons || 'None',
-                'Construction': isOutdoorForCart ? 'Outdoor' : 'Indoor',
+                // Event Marquee / Infinity Mirror are indoor signs (no Indoor / Outdoor choice).
+                'Construction': isOutdoorForCart ? 'Outdoor' : (['marquee', 'infinity'].indexOf(root.dataset.sign3dMode) > -1 ? 'Indoor use only' : 'Indoor'),
 
                 'Configured Total': sign3dMoney(root, currentTotal),
                 '_blueprint_width_cm': blueprintWidthCm,
@@ -4641,38 +4802,72 @@ function initSign3dConfigurator(root) {
         if (!bulbSwatches.length || !textFlex) return;
         const fs = parseFloat(textFlex.style.fontSize) || 0;
         const cs = getComputedStyle(textFlex);
-        const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
-        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length + '|' + sign3dFontReady(fontCss);
+        const fontCss = sign3dGlyphFontCss(cs);
+        // Open-face letters (client's reference): the face is set back inside the letter walls by
+        // part of the sign depth, in the same direction as the outer returns (sign3dBuildLetterDepth).
+        const depthOpt = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
+        const depthEm = Math.max(0.05, Math.min(0.11, 0.05 + (parseFloat(depthOpt && depthOpt.value) || 50) / 2000));
+        const shift = { x: depthEm * 0.5 * 0.6 * fs, y: depthEm * 0.6 * fs };
+        const rim = Math.max(1, fs * 0.017);
+        const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length + '|' + sign3dFontReady(fontCss) + '|' + depthEm;
         if (sig === bulbSignature && textFlex.querySelector('.sign3d-configurator__bulb')) return;
         bulbSignature = sig;
         // Collect every letter's bulb points first: all bulbs on the sign get ONE size (the
         // median of the sizes that fit the strokes), so they look like real, identical bulbs.
         const jobs = [];
         textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
-            span.querySelectorAll('.sign3d-configurator__bulb, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
+            span.querySelectorAll('.sign3d-configurator__bulb, .sign3d-configurator__bulb-probe, .sign3d-mq-face').forEach((n) => n.remove());
+            span.classList.remove('sign3d-has-mq-face');
             const ch = span.dataset.char;
-            if (!ch || ch === '\u00A0' || !fs) return;
+            if (!ch || ch === ' ' || !fs) return;
             const pts = sign3dBulbPoints(ch, fontCss);
             if (pts.length) jobs.push({ span, pts });
         });
+        // Room for a bulb at a point: its distance to the letter edge, less the wall rim and the
+        // half back-face offset the bulbs sit at — so no bulb crosses a letter wall.
+        const shiftHalf = Math.sqrt(shift.x * shift.x + shift.y * shift.y) / 2;
+        const room = (p) => (p.l || p.d) * fs - rim / 2 - shiftHalf - 0.5;
         const sizes = jobs.reduce((all, j) => all.concat(j.pts.map((p) => p.d)), []).sort((a, b) => a - b);
-        const uniformD = sizes.length ? sizes[Math.floor(sizes.length / 2)] : 0;
+        const rooms = jobs.reduce((all, j) => all.concat(j.pts.map(room)), []).sort((a, b) => a - b);
+        const medianD = sizes.length ? sizes[Math.floor(sizes.length / 2)] * fs : 0;
+        const uniformD = Math.max(3, Math.min(medianD, rooms.length ? 2 * rooms[Math.floor(rooms.length * 0.2)] : medianD));
         jobs.forEach(({ span, pts }) => {
             const probe = document.createElement('i');
             probe.className = 'sign3d-configurator__bulb-probe';
             span.appendChild(probe);
             const baseY = probe.getBoundingClientRect().top - span.getBoundingClientRect().top;
+            const glows = [];
+            // The letter's own shape (cached) — the final check that a bulb sits fully inside it.
+            const fKey = fontCss + '|' + span.dataset.char + '|mqfield|' + sign3dFontReady(fontCss);
+            const field = SIGN3D_BULB_CACHE[fKey] || (SIGN3D_BULB_CACHE[fKey] = sign3dGlyphField(span.dataset.char, fontCss, 120));
+            const fits = (xEm, yEm, rEm) => {
+                if (!field) return true;
+                for (let k = 0; k < 16; k++) {
+                    const a = (k / 16) * Math.PI * 2;
+                    const x = Math.round(field.ox + (xEm + Math.cos(a) * rEm) * field.S);
+                    const y = Math.round(field.base + (yEm + Math.sin(a) * rEm) * field.S);
+                    if (x < 0 || y < 0 || x >= field.W || y >= field.H || !field.B[y * field.W + x]) return false;
+                }
+                return true;
+            };
             pts.forEach((p) => {
+                // A thin spot gets a slightly smaller bulb; where even that would touch a wall, none.
+                const dia = Math.min(uniformD, 2 * room(p));
+                if (dia < uniformD * 0.7) return;
+                const cx = p.x * fs + shift.x / 2;
+                const cy = baseY + p.y * fs + shift.y / 2;
+                if (!fits(p.x + shift.x / 2 / fs, p.y + shift.y / 2 / fs, (dia / 2 + rim / 2) / fs)) return;
                 const b = document.createElement('i');
                 b.className = 'sign3d-configurator__bulb';
-                const dia = Math.max(3, uniformD * fs);
                 b.style.width = dia + 'px';
                 b.style.fontSize = dia + 'px'; // socket ring / glass sizes in em follow the bulb
                 b.style.height = dia + 'px';
-                b.style.left = (p.x * fs - dia / 2) + 'px';
-                b.style.top = (baseY + p.y * fs - dia / 2) + 'px';
+                b.style.left = (cx - dia / 2) + 'px';
+                b.style.top = (cy - dia / 2) + 'px';
                 span.appendChild(b);
+                glows.push({ x: cx, y: cy, r: dia * 1.9 });
             });
+            try { sign3dMarqueeFace(span, span.dataset.char, baseY, shift, rim, glows); } catch (err) { console.error('[Mozemo 3D] marquee face:', err); }
         });
     }
 
@@ -4681,12 +4876,12 @@ function initSign3dConfigurator(root) {
         if (root.dataset.sign3dMode !== 'infinity' || !textFlex) return;
         const fs = parseFloat(textFlex.style.fontSize) || 0;
         const cs = getComputedStyle(textFlex);
-        const fontCss = cs.fontStyle + ' ' + cs.fontWeight + ' 100px ' + cs.fontFamily;
+        const fontCss = sign3dGlyphFontCss(cs);
         const sig = textFlex.textContent + '|' + fs + '|' + fontCss + '|' + textFlex.children.length + '|' + sign3dFontReady(fontCss);
         if (sig === tunnelSignature && textFlex.querySelector('.sign3d-configurator__tunnel')) return;
         tunnelSignature = sig;
         textFlex.querySelectorAll('.sign3d-configurator__letter').forEach((span) => {
-            span.querySelectorAll('.sign3d-configurator__tunnel, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
+            span.querySelectorAll('.sign3d-configurator__tunnel, .sign3d-configurator__tunnel-face, .sign3d-configurator__bulb-probe').forEach((n) => n.remove());
             const ch = span.dataset.char;
             if (!ch || ch === '\u00A0' || !fs) return;
             const m = sign3dInfinityMask(ch, fontCss, fs);
@@ -4695,15 +4890,20 @@ function initSign3dConfigurator(root) {
             probe.className = 'sign3d-configurator__bulb-probe';
             span.appendChild(probe);
             const baseY = probe.getBoundingClientRect().top - span.getBoundingClientRect().top;
-            const t = document.createElement('i');
-            t.className = 'sign3d-configurator__tunnel';
-            t.style.left = (m.x * fs) + 'px';
-            t.style.top = (baseY + m.y * fs) + 'px';
-            t.style.width = (m.w * fs) + 'px';
-            t.style.height = (m.h * fs) + 'px';
-            t.style.webkitMaskImage = 'url("' + m.url + '")';
-            t.style.maskImage = 'url("' + m.url + '")';
-            span.appendChild(t);
+            const layer = (cls, url) => {
+                const t = document.createElement('i');
+                t.className = cls;
+                t.style.left = (m.x * fs) + 'px';
+                t.style.top = (baseY + m.y * fs) + 'px';
+                t.style.width = (m.w * fs) + 'px';
+                t.style.height = (m.h * fs) + 'px';
+                t.style.webkitMaskImage = 'url("' + url + '")';
+                t.style.maskImage = 'url("' + url + '")';
+                span.appendChild(t);
+            };
+            // Decorative cut-outs filled in: the mirror face covers them, the LED rings go on top.
+            if (m.face) layer('sign3d-configurator__tunnel-face', m.face);
+            layer('sign3d-configurator__tunnel', m.url);
             span.classList.add('sign3d-has-tunnel');
         });
     }
@@ -4730,9 +4930,12 @@ function initSign3dConfigurator(root) {
     // Sides Images); the live-preview bracket is the client's transparent bracket render.
     // tipX / tipY: where the arm ends in the cutout image (share of its width / height) — the box
     // hangs there. aspect = cutout width / height.
+    // arms: each arm's top / bottom at its end (share of the image height); capX: where the arm's
+    // end face (round cap / square end) starts (share of the width). The box is placed so every arm
+    // ends behind the sign — no visible end cap, gap or floating arm (client) — see lightboxArmOverlap.
     const LBX_BRACKETS = {
-        round: { label: 'Single Circular Mount', desc: 'One round pole bracket — our main, most popular mount.', aspect: 389 / 365, tipX: 0.97, tipY: 0.577 },
-        rect: { label: 'Double Rectangular Mount', desc: 'Two square arms — extra support for larger lightboxes.', aspect: 410 / 366, tipX: 0.97, tipY: 0.576 }
+        round: { label: 'Single Circular Mount', desc: 'One round pole bracket — our main, most popular mount.', aspect: 389 / 365, tipX: 0.97, tipY: 0.577, capX: 0.874, arms: [[0.466, 0.707]] },
+        rect: { label: 'Double Rectangular Mount', desc: 'Two square arms — extra support for larger lightboxes.', aspect: 410 / 366, tipX: 0.97, tipY: 0.576, capX: 0.94, arms: [[0.33, 0.47], [0.68, 0.83]] }
     };
     let lbBracket = 'round';
     const lbBracketGrid = root.querySelector('[data-lb-bracket-cards]');
@@ -4960,9 +5163,61 @@ function initSign3dConfigurator(root) {
     // distorted, so the printed graphic fills it right to the edge.
     const LBX_SIDE = { x: -0.92, y: -0.38 };
     const LBX_SIDE_SLICES = 14;
-    // Where the shape's edge is at its vertical centre, as a share of the box width (the bracket arm
-    // meets the box there). Every shape starts at its left edge except the star.
-    const LBX_EDGE_AT_MIDDLE = { star: 0.223 };
+    // Left edge of the shape (share of the box width) at a height (share of the box height), from
+    // its clip shape. Outside the shape = 1 (nothing there to hold an arm).
+    function lightboxShapeLeft(key, y) {
+        if (y <= 0 || y >= 1) return 1;
+        const clip = LBX_CLIP[key] || '';
+        if (clip.indexOf('ellipse') === 0) { const d = y - 0.5; return 0.5 - Math.sqrt(Math.max(0, 0.25 - d * d)); }
+        if (clip.indexOf('polygon') === 0) {
+            const pts = clip.replace(/^polygon\(|\)$/g, '').split(',').map((p) => p.trim().split(/\s+/).map((v) => parseFloat(v) / 100));
+            let best = 1;
+            pts.forEach((a, i) => {
+                const b = pts[(i + 1) % pts.length];
+                if ((a[1] - y) * (b[1] - y) > 0 || a[1] === b[1]) return;
+                best = Math.min(best, a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]));
+            });
+            return best;
+        }
+        // inset(0 round r%): straight left side between the rounded corners.
+        const r = (parseFloat((clip.match(/round\s+([\d.]+)%/) || [])[1]) || 0) / 100;
+        const c = Math.max(r - y, y - (1 - r), 0);
+        return r - Math.sqrt(Math.max(0, r * r - c * c));
+    }
+    // Box-left offset (px, relative to where the box's side band starts at the arm tip) so every
+    // arm of the bracket — placed at bracketTop (px, relative to the box top) — ends hidden behind
+    // the sign (its face or metal side band). Positive = the box moves left onto the arms.
+    function lightboxArmOverlap(key, bracket, bracketTop, bw, bh, w, h, sl) {
+        const capRel = bw * (bracket.capX - bracket.tipX) - Math.max(2, bw * 0.02);
+        let need = -Infinity;
+        bracket.arms.forEach((arm) => {
+            for (let i = 0; i <= 4; i++) {
+                const y = bracketTop + bh * (arm[0] + (arm[1] - arm[0]) * i / 4);
+                // Leftmost point covered at this height: the face, or the side band stepping back
+                // along LBX_SIDE (sampled along its depth).
+                let cover = Infinity;
+                for (let t = 0; t <= 1.001; t += 0.25) {
+                    cover = Math.min(cover, lightboxShapeLeft(key, (y - LBX_SIDE.y * sl * t) / h) * w + LBX_SIDE.x * sl * t);
+                }
+                need = Math.max(need, cover - LBX_SIDE.x * sl - capRel);
+            }
+        });
+        return Number.isFinite(need) ? need : 0;
+    }
+    // Best height for the bracket against the box: moves the bracket (by o px, within oMin..oMax)
+    // to where its arms need the least overlap — e.g. a star takes the arms in its left point, like
+    // the client's reference — but only when that clearly helps; circles / rectangles stay centred.
+    function lightboxArmFit(key, bracket, baseTop, bw, bh, w, h, sl, oMin, oMax) {
+        let best = { o: 0, need: lightboxArmOverlap(key, bracket, baseTop, bw, bh, w, h, sl) };
+        let bestScore = best.need;
+        const step = Math.max(1, h / 60);
+        for (let o = Math.ceil(oMin / step) * step; o <= oMax; o += step) {
+            const need = lightboxArmOverlap(key, bracket, baseTop + o, bw, bh, w, h, sl);
+            const score = need + Math.abs(o) * 0.25;
+            if (score < bestScore - 0.5) { bestScore = score; best = { o, need }; }
+        }
+        return best;
+    }
     // Wall plate bolt holes in the bracket renders (px of the 389 x 365 / 410 x 366 images).
     const LBX_BOLTS = {
         round: { w: 389, h: 365, holes: [[40, 70.4], [104.5, 48.6], [39.8, 312.7], [106, 285]] },
@@ -5033,7 +5288,6 @@ function initSign3dConfigurator(root) {
         const tipPhotoX = LBX_WALL.bracketLeft + LBX_WALL.bracketH * bracket.aspect * bracket.tipX;
         const focusX = hanging ? (LBX_WALL.bracketLeft + tipPhotoX + boxPhotoW) / 2 : LBX_WALL.mountX;
         const wall = lightboxWallMap(stageRect, focusX);
-        const edgeAt = LBX_EDGE_AT_MIDDLE[key] || 0;
         // Depth of the metal side return on screen (thick, like a real lightbox) for a w x h box.
         const sideLen = (bw, bh) => Math.max(8, Math.min(30, Math.min(bw, bh) * 0.08));
         let w, h, left, top, bracketBox = null;
@@ -5057,8 +5311,12 @@ function initSign3dConfigurator(root) {
                 // The box hangs on the end of the arm: its side band (the edge facing the wall)
                 // starts right at the arm's tip, for every shape.
                 const sl = sideLen(w, h);
-                left = tipX - 2 - sl * LBX_SIDE.x - edgeAt * w;
-                top = tipY - h / 2;
+                // The box may move up / down (staying on the visible wall) so the arms meet it well.
+                const top0 = tipY - h / 2;
+                const fit = lightboxArmFit(key, bracket, bt - top0, bw, bh, w, h, sl,
+                    Math.max(-h * 0.3, top0 + h - (wall.visB - m)), Math.min(h * 0.3, top0 - (wall.visT + m)));
+                top = top0 - fit.o;
+                left = tipX - 2 - sl * LBX_SIDE.x - fit.need;
                 bracketBox = { left: bl - left, top: bt - top, w: bw, h: bh };
             } else {
                 const k = Math.min(1, (wall.visR - wall.visL - m * 2) / (w * 1.1), (wall.visB - wall.visT - m * 2) / (h * 1.05));
@@ -5089,8 +5347,11 @@ function initSign3dConfigurator(root) {
                 // Bracket to the left of the box, its arm ending at the box's side band (middle height).
                 const bh = Math.min(h * 0.6, (w * 0.3) / bracket.aspect);
                 const bw = bh * bracket.aspect;
-                const edgeX = edgeAt * w + sideLen(w, h) * LBX_SIDE.x + 2;
-                bracketBox = { left: edgeX - bw * bracket.tipX, top: h / 2 - bh * bracket.tipY, w: bw, h: bh };
+                const sl = sideLen(w, h);
+                const bt0 = h / 2 - bh * bracket.tipY;
+                const fit = lightboxArmFit(key, bracket, bt0, bw, bh, w, h, sl, -h * 0.3, h * 0.3);
+                const edgeX = sl * LBX_SIDE.x + 2 + fit.need;
+                bracketBox = { left: edgeX - bw * bracket.tipX, top: bt0 + fit.o, w: bw, h: bh };
             }
         }
 
@@ -5139,7 +5400,7 @@ function initSign3dConfigurator(root) {
             bracketEl.classList.toggle('is-tinted', Math.max(c.r, c.g, c.b) > 48);
             // Wall bolts (supplied with every Lightbox) in the four plate holes.
             const bolts = LBX_BOLTS[lbBracket] || LBX_BOLTS.round;
-            const boltPx = Math.max(5, bracketBox.h * 0.075);
+            const boltPx = Math.max(6, bracketBox.h * 0.085);
             bracketEl.querySelectorAll('.sign3d-lbx__bolt').forEach((bolt, i) => {
                 const hole = bolts.holes[i];
                 bolt.style.left = (hole[0] / bolts.w * bracketBox.w) + 'px';
