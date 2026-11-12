@@ -406,12 +406,24 @@ function sign3dBuildFontPicker(root) {
         .map((f, i) => ({ f, i }))
         .sort((a, b) => ((a.f.sort ?? 999999) - (b.f.sort ?? 999999)) || (a.i - b.i))
         .map((x) => x.f);
-    // Event Marquee: ONE manufacturer-approved font, no font menu. A font whose Admin "Show On"
-    // explicitly lists Event Marquee (Settings > Configurator Visibility) wins; otherwise the
-    // built-in marquee font (moz-marquee-font.css, loaded by sign3d-core.liquid).
+    // Event Marquee: manufacturer-approved fonts only (opt-in). The built-in marquee font
+    // (moz-marquee-font.css, loaded by sign3d-core.liquid) plus every Admin font ticked for
+    // "Event Marquee" in Settings > Configurator Visibility (stored as the "marquee_font" key, so
+    // fonts shown "everywhere" never land on the marquee). A font ticked ONLY for Event Marquee
+    // (e.g. a licensed marquee font) replaces the built-in one as the default.
     if (root.dataset.sign3dMode === 'marquee') {
-        const chosen = fonts.find((f) => String(f.so || '').trim() !== '');
-        fonts = [chosen || { name: 'Marquee Bold', family: '"moz-marquee-font"', preview: '', isNew: false }];
+        const keysOf = (f) => String(f.so || '').split(',').map((k) => k.trim().toLowerCase()).filter(Boolean);
+        let all = [];
+        try { all = JSON.parse((root.querySelector('[data-sign3d-fonts]') || {}).textContent || '[]') || []; } catch (e) { all = []; }
+        const listed = all
+            .map((f, i) => ({ f, i }))
+            .filter((x) => x.f && keysOf(x.f).indexOf('marquee_font') > -1)
+            .sort((a, b) => ((a.f.sort ?? 999999) - (b.f.sort ?? 999999)) || (a.i - b.i))
+            .map((x) => x.f);
+        const own = listed.filter((f) => keysOf(f).length === 1);
+        const builtIn = { name: 'Marquee Bold', family: '"moz-marquee-font"', preview: '', isNew: false };
+        fonts = own.length ? own.concat(listed.filter((f) => own.indexOf(f) === -1)) : [builtIn].concat(listed);
+        root.dataset.sign3dFontCount = String(fonts.length);
     }
     if (!fonts.length) return;
 
@@ -1232,18 +1244,13 @@ function sign3dGlyphFontCss(cs) {
 // lines (multi-line fonts) and hairline slits — are filled, so the LED and its reflections follow
 // the letter's real outline and counters instead of drawing rings around every ornament.
 // B: glyph mask (1 = ink) at S px per em. Returns the cleaned mask (never removes ink).
-function sign3dInfinityShape(B, W, H, S) {
+// hollow: the font only draws letter OUTLINES (e.g. "Fulturise Hollow" / Futuristic) — the
+// letter bodies between the outlines are filled first so the box is the real letter shape.
+function sign3dInfinityShape(B, W, H, S, hollow) {
     const n = W * H;
     // 1) Close gaps narrower than ~2.4% of the letter height (dilate, then erode).
-    const rc = S * 0.012;
-    const inv = new Uint8Array(n);
-    for (let i = 0; i < n; i++) inv[i] = B[i] ? 0 : 1;
-    const dBg = sign3dEdt(inv, W, H);
-    const dil = new Uint8Array(n);
-    for (let i = 0; i < n; i++) dil[i] = B[i] || dBg[i] <= rc ? 1 : 0;
-    const dIn = sign3dEdt(dil, W, H);
-    const out = new Uint8Array(n);
-    for (let i = 0; i < n; i++) out[i] = B[i] || (dil[i] && dIn[i] > rc) ? 1 : 0;
+    let out = sign3dCloseMask(B, W, H, S * 0.012);
+    if (hollow) out = sign3dHollowFill(out, W, H);
     // 2) Fill small enclosed holes (not reachable from the edge of the canvas): ornament cut-outs
     // and dots. Real counters (O, B, A, e…) are much larger and stay open.
     const seen = new Uint8Array(n);
@@ -1281,6 +1288,108 @@ function sign3dInfinityShape(B, W, H, S) {
     return out;
 }
 
+// Morphological closing (dilate, then erode by rc px): seals gaps narrower than 2 x rc.
+// Never removes ink.
+function sign3dCloseMask(B, W, H, rc) {
+    const n = W * H;
+    const inv = new Uint8Array(n);
+    for (let i = 0; i < n; i++) inv[i] = B[i] ? 0 : 1;
+    const dBg = sign3dEdt(inv, W, H);
+    const dil = new Uint8Array(n);
+    for (let i = 0; i < n; i++) dil[i] = B[i] || dBg[i] <= rc ? 1 : 0;
+    const dIn = sign3dEdt(dil, W, H);
+    const out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) out[i] = B[i] || (dil[i] && dIn[i] > rc) ? 1 : 0;
+    return out;
+}
+
+// Enclosed (not reachable from the canvas edge) empty regions of a glyph mask.
+// Returns { lab, count }: lab[i] = 0 background, 1..count = enclosed region, -1 ink.
+function sign3dGlyphRegions(B, W, H) {
+    const n = W * H;
+    const lab = new Int32Array(n).fill(-2);
+    const stack = [];
+    const nbs = (i, fn) => {
+        const x = i % W;
+        if (x > 0) fn(i - 1);
+        if (x < W - 1) fn(i + 1);
+        if (i >= W) fn(i - W);
+        if (i < n - W) fn(i + W);
+    };
+    const flood = (i0, id) => {
+        lab[i0] = id;
+        stack.push(i0);
+        while (stack.length) nbs(stack.pop(), (j) => { if (lab[j] === -2 && !B[j]) { lab[j] = id; stack.push(j); } });
+    };
+    for (let i = 0; i < n; i++) if (B[i]) lab[i] = -1;
+    for (let x = 0; x < W; x++) {
+        if (lab[x] === -2) flood(x, 0);
+        if (lab[(H - 1) * W + x] === -2) flood((H - 1) * W + x, 0);
+    }
+    for (let y = 0; y < H; y++) {
+        if (lab[y * W] === -2) flood(y * W, 0);
+        if (lab[y * W + W - 1] === -2) flood(y * W + W - 1, 0);
+    }
+    let count = 0;
+    for (let i = 0; i < n; i++) if (lab[i] === -2) flood(i, ++count);
+    return { lab, count };
+}
+
+// Outline ("hollow") font: the font draws each letter as thin outlines only. Detected on "I" and
+// "H": a normal font has no enclosed space inside them, a hollow one is mostly enclosed space.
+function sign3dIsHollowFont(fontCss) {
+    const key = fontCss + '|hollow|' + sign3dFontReady(fontCss);
+    if (!(key in SIGN3D_BULB_CACHE)) {
+        const S = 160;
+        const test = (ch) => {
+            const f = sign3dGlyphField(ch, fontCss, S);
+            if (!f) return false;
+            const { lab } = sign3dGlyphRegions(sign3dCloseMask(f.B, f.W, f.H, S * 0.012), f.W, f.H);
+            let ink = 0;
+            let hole = 0;
+            for (let i = 0; i < lab.length; i++) { if (lab[i] === -1) ink++; else if (lab[i] > 0) hole++; }
+            return hole > ink * 1.2;
+        };
+        SIGN3D_BULB_CACHE[key] = test('I') && test('H');
+    }
+    return SIGN3D_BULB_CACHE[key];
+}
+
+// Hollow letter -> solid letter. The regions between the outlines alternate: letter body (fill),
+// counter (keep open, e.g. inside "O"), body again… Each enclosed region's depth is found by
+// stepping across one outline at a time from the background (even = space, odd = letter body).
+function sign3dHollowFill(B, W, H) {
+    const n = W * H;
+    const { lab, count } = sign3dGlyphRegions(B, W, H);
+    if (!count) return B;
+    // One outline line's width (plus a little) = how far one step reaches.
+    const line = Math.max(1, sign3dShapeHalf(B, W, H));
+    const reach = line * 2 + 2.5;
+    const depth = new Int8Array(count + 1).fill(-1);
+    depth[0] = 0;
+    let frontier = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (lab[i] === 0) frontier[i] = 1;
+    for (let d = 1; d <= 8; d++) {
+        const away = new Uint8Array(n);
+        for (let i = 0; i < n; i++) away[i] = frontier[i] ? 0 : 1;
+        const dist = sign3dEdt(away, W, H);
+        const next = new Uint8Array(n);
+        let found = false;
+        for (let i = 0; i < n; i++) {
+            const r = lab[i];
+            if (r > 0 && depth[r] === -1 && dist[i] <= reach) { depth[r] = d; found = true; }
+        }
+        if (!found) break;
+        for (let i = 0; i < n; i++) if (lab[i] > 0 && depth[lab[i]] === d) next[i] = 1;
+        frontier = next;
+    }
+    const out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) out[i] = B[i] || (lab[i] > 0 && depth[lab[i]] % 2 !== 0 && depth[lab[i]] !== -1) ? 1 : 0;
+    // Regions never reached (should not happen) are treated as letter body.
+    for (let i = 0; i < n; i++) if (lab[i] > 0 && depth[lab[i]] === -1) out[i] = 1;
+    return out;
+}
+
 // Typical half stroke width of a cleaned letter shape (median distance along its centre line).
 function sign3dShapeHalf(shape, W, H) {
     const d = sign3dEdt(shape, W, H);
@@ -1295,16 +1404,17 @@ function sign3dShapeHalf(shape, W, H) {
 function sign3dInfinityMask(ch, fontCss, fsPx) {
     const S = 240;
     // The font's typical stroke ("H"), measured on the cleaned shape like every letter below.
+    const hollow = sign3dIsHollowFont(fontCss);
     const refKey = fontCss + '|infref|' + sign3dFontReady(fontCss);
     if (!(refKey in SIGN3D_BULB_CACHE)) {
         const rf = sign3dGlyphField('H', fontCss, S);
-        SIGN3D_BULB_CACHE[refKey] = rf ? sign3dShapeHalf(sign3dInfinityShape(rf.B, rf.W, rf.H, S), rf.W, rf.H) : 0;
+        SIGN3D_BULB_CACHE[refKey] = rf ? sign3dShapeHalf(sign3dInfinityShape(rf.B, rf.W, rf.H, S, hollow), rf.W, rf.H) : 0;
     }
     const hwRef = SIGN3D_BULB_CACHE[refKey] || sign3dStrokeHalf(fontCss, S);
     const f = sign3dGlyphField(ch, fontCss, S);
     if (!f) return null;
     const shapeKey = fontCss + '|' + ch + '|infshape|' + sign3dFontReady(fontCss);
-    const shape = SIGN3D_BULB_CACHE[shapeKey] || (SIGN3D_BULB_CACHE[shapeKey] = sign3dInfinityShape(f.B, f.W, f.H, S));
+    const shape = SIGN3D_BULB_CACHE[shapeKey] || (SIGN3D_BULB_CACHE[shapeKey] = sign3dInfinityShape(f.B, f.W, f.H, S, hollow));
     // This letter's own stroke, kept close to the font's (so every letter of the word matches).
     const hwOwnKey = shapeKey + '|hw';
     const hwOwn = SIGN3D_BULB_CACHE[hwOwnKey] || (SIGN3D_BULB_CACHE[hwOwnKey] = sign3dShapeHalf(shape, f.W, f.H) || hwRef);
@@ -1476,7 +1586,8 @@ function sign3dAddonIconSvg(key, label) {
         const l = String(label || '').toLowerCase();
         const rules = [
             ['diagram', /diagram|schematic/], ['template', /template|1:1|stencil/], ['guide', /guide|manual|instruction|book/],
-            ['waterproof', /waterproof|weather|ip6|outdoor|seal/], ['power', /power|driver|supply|adapter|transformer/],
+            // Power before waterproof: "Outdoor/Indoor Power Supply" is a power supply, not a seal.
+            ['power', /power|driver|supply|adapter|transformer/], ['waterproof', /waterproof|weather|ip6|outdoor|seal/],
             ['studs', /stud|spacer|standoff|stand-off/], ['screws', /screw|hardware|fixing|bolt|anchor/],
             ['package', /packag|box|crate|shipping|delivery/], ['plug', /wir|electr|cable|connect|plug|switch/],
             ['letters', /letter|logo|character/], ['led', /\bled\b|light|illumin|bulb|dimmer|remote/], ['letters', /sign|3d/],
@@ -2235,7 +2346,8 @@ function initSign3dConfigurator(root) {
             // Numbering is handled automatically by renumberSteps().
             const fontFieldEl = root.querySelector('[data-font-field]');
             // Event Marquee has one fixed font, so its font menu stays hidden.
-            if (fontFieldEl) fontFieldEl.hidden = !showText || root.dataset.sign3dMode === 'marquee';
+            // Event Marquee shows the font menu only when more than one approved font exists.
+            if (fontFieldEl) fontFieldEl.hidden = !showText || (root.dataset.sign3dMode === 'marquee' && Number(root.dataset.sign3dFontCount || 1) < 2);
             renumberSteps();
         }
 
@@ -4850,13 +4962,21 @@ function initSign3dConfigurator(root) {
                 }
                 return true;
             };
-            pts.forEach((p) => {
-                // A thin spot gets a slightly smaller bulb; where even that would touch a wall, none.
+            // A thin spot gets a slightly smaller bulb; where even that would touch a wall, none.
+            // A character whose strokes are all thin (e.g. * or @) would end up with no bulbs at
+            // all: it gets smaller bulbs instead (down to half size), so every character lights up.
+            const minFor = (p, minRatio) => {
                 const dia = Math.min(uniformD, 2 * room(p));
-                if (dia < uniformD * 0.7) return;
+                if (dia < uniformD * minRatio) return 0;
+                return fits(p.x + shift.x / 2 / fs, p.y + shift.y / 2 / fs, (dia / 2 + rim / 2) / fs) ? dia : 0;
+            };
+            let ratio = 0.7;
+            if (!pts.some((p) => minFor(p, 0.7) > 0)) ratio = 0.45;
+            pts.forEach((p) => {
+                const dia = minFor(p, ratio);
+                if (!dia) return;
                 const cx = p.x * fs + shift.x / 2;
                 const cy = baseY + p.y * fs + shift.y / 2;
-                if (!fits(p.x + shift.x / 2 / fs, p.y + shift.y / 2 / fs, (dia / 2 + rim / 2) / fs)) return;
                 const b = document.createElement('i');
                 b.className = 'sign3d-configurator__bulb';
                 b.style.width = dia + 'px';
@@ -4954,19 +5074,31 @@ function initSign3dConfigurator(root) {
     function lightboxRow() { return root.dataset.sign3dMode === 'lightbox' ? lbSize : null; }
     // Box size in the preview for a size box, for every shape and mounting: the largest size in the
     // Admin list fills the free preview area, smaller sizes follow the Neon curve (sqrt of the width).
-    const LBX_BRACKET = 0.32; // the bracket reaches this share of the box width to the left (CSS)
+    const LBX_BRACKET = 0.32; // (kept for reference) old fixed bracket share of the box width
+    // Wall Hanging bracket at its real size: the bracket (wall plate height) grows with the sign but
+    // much slower than it — a 30 cm box gets a ~21 cm bracket, a 120 cm box a ~48 cm one — so a small
+    // lightbox shows a relatively big, sturdy bracket and a large one a relatively small bracket,
+    // exactly like the real product next to each size (client's reference photo).
+    const lightboxBracketCm = (cm) => Math.max(18, Math.min(48, 12 + 0.3 * (Number(cm) || 60)));
+    // How far the bracket reaches out to the left of the box, as a share of the box width.
+    function lightboxBracketReach(cm) {
+        const br = LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round;
+        return Math.min(0.9, (lightboxBracketCm(cm) / Math.max(1, Number(cm) || 60)) * br.aspect * br.tipX * 0.92);
+    }
     const LBX_INNER = { circle: 0.66, oval: 0.56, square: 0.76, rectangle: 0.76, star: 0.36, hexagon: 0.6, octagon: 0.68, other: 0.72 };
     function lightboxBoxPx(row) {
         const area = previewFreeArea();
         const hanging = getBackingType() === 'bracket';
         const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
-        const maxW = Math.max(120, area.w - 70) / (hanging ? 1 + LBX_BRACKET : 1);
-        const maxH = area.h * 0.9;
+        const reach = hanging ? lightboxBracketReach(row.w) : 0;
+        const maxW = Math.max(120, area.w - 70) / (1 + reach);
+        // Hanging: the side return shows below the box, so leave a little more room at the bottom.
+        const maxH = area.h * (hanging ? 0.82 : 0.9);
         const fullW = Math.min(maxW, maxH * ratio);
         const largest = lbSizes.reduce((m, r) => Math.max(m, r.w), 0);
         const w = fullW * Math.max(0.4, Math.sqrt(row.w / largest));
         const key = lbShape ? lbShape.key : 'rectangle';
-        return { w, h: w / ratio, inner: LBX_INNER[key] || 0.7, shift: hanging ? w * LBX_BRACKET / 2 : 0 };
+        return { w, h: w / ratio, inner: LBX_INNER[key] || 0.7, shift: hanging ? w * reach / 2 : 0 };
     }
     function lightboxRowPrice(row) { return lbSides === 'double' && row.d !== null ? row.d : row.s; }
     function lightboxRows() { return lbSides === 'double' ? lbSizes.filter((r) => r.d !== null) : lbSizes; }
@@ -5146,7 +5278,7 @@ function initSign3dConfigurator(root) {
         const key = lbShape ? lbShape.key : 'rectangle';
         const box = key === 'star' ? 2.4 : (['circle', 'square', 'hexagon', 'octagon', 'other'].indexOf(key) > -1 ? 1.45 : (key === 'oval' ? 1.5 : 1.3));
         // 1.35: the lightbox no longer fills most of the preview (client: "excessively large")
-        return box * (getBackingType() === 'bracket' ? 1.3 : 1) * 1.35;
+        return box * (getBackingType() === 'bracket' ? 1 + lightboxBracketReach(lbSize ? lbSize.w : getWidthCm()) : 1) * 1.35;
     }
 
     // ---- Realistic wall preview (client's storefront wall photo, moz-lb-wall.jpg) ----
@@ -5161,8 +5293,10 @@ function initSign3dConfigurator(root) {
     // its metal side return shows on the left / top edge as one even band (LBX_SIDE = direction of
     // the depth on screen, length set per box in drawLightbox). The face is never rotated or
     // distorted, so the printed graphic fills it right to the edge.
-    const LBX_SIDE = { x: -0.92, y: -0.38 };
-    const LBX_SIDE_SLICES = 14;
+    const LBX_SIDE_WALL = { x: -0.92, y: -0.38 };
+    const LBX_SIDE_HANG = { x: 0.72, y: 0.69 };
+    let LBX_SIDE = LBX_SIDE_WALL;
+    const LBX_SIDE_SLICES = 24; // enough slices for a smooth side return on large boxes
     // Left edge of the shape (share of the box width) at a height (share of the box height), from
     // its clip shape. Outside the shape = 1 (nothing there to hold an arm).
     function lightboxShapeLeft(key, y) {
@@ -5280,6 +5414,7 @@ function initSign3dConfigurator(root) {
         lbxEl.hidden = false;
         const key = lbShape ? lbShape.key : 'rectangle';
         const hanging = getBackingType() === 'bracket';
+        LBX_SIDE = hanging ? LBX_SIDE_HANG : LBX_SIDE_WALL;
         const bracket = LBX_BRACKETS[lbBracket] || LBX_BRACKETS.round;
         const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
         // Part of the wall photo the sign needs: Wall Mount = its mount point; Wall Hanging = from the
@@ -5289,7 +5424,9 @@ function initSign3dConfigurator(root) {
         const focusX = hanging ? (LBX_WALL.bracketLeft + tipPhotoX + boxPhotoW) / 2 : LBX_WALL.mountX;
         const wall = lightboxWallMap(stageRect, focusX);
         // Depth of the metal side return on screen (thick, like a real lightbox) for a w x h box.
-        const sideLen = (bw, bh) => Math.max(8, Math.min(30, Math.min(bw, bh) * 0.08));
+        const sideLen = (bw, bh) => (hanging
+            ? Math.max(8, Math.min(40, Math.min(bw, bh) * 0.075))
+            : Math.max(8, Math.min(30, Math.min(bw, bh) * 0.08)));
         let w, h, left, top, bracketBox = null;
 
         if (wall) {
@@ -5306,7 +5443,7 @@ function initSign3dConfigurator(root) {
                 const tipX = bl + bw * bracket.tipX;
                 const tipY = bt + bh * bracket.tipY;
                 // Keep the whole box inside the visible wall (small screens show less of the photo).
-                const k = Math.min(1, (wall.visR - m - tipX) / (w * 1.08), (2 * Math.min(tipY - wall.visT, wall.visB - tipY) - m * 2) / h);
+                const k = Math.min(1, (wall.visR - m - tipX) / (w * 1.14), (2 * Math.min(tipY - wall.visT, wall.visB - tipY) - m * 2) / (h * 1.08));
                 if (k > 0) { w *= k; h *= k; }
                 // The box hangs on the end of the arm: its side band (the edge facing the wall)
                 // starts right at the arm's tip, for every shape.
@@ -5345,7 +5482,8 @@ function initSign3dConfigurator(root) {
             top = cy - h / 2;
             if (hanging) {
                 // Bracket to the left of the box, its arm ending at the box's side band (middle height).
-                const bh = Math.min(h * 0.6, (w * 0.3) / bracket.aspect);
+                const cmNow = lbSize ? lbSize.w : getWidthCm();
+                const bh = Math.min(h * 0.95, lightboxBracketCm(cmNow) * (w / Math.max(1, cmNow)));
                 const bw = bh * bracket.aspect;
                 const sl = sideLen(w, h);
                 const bt0 = h / 2 - bh * bracket.tipY;

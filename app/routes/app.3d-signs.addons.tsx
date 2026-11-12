@@ -27,6 +27,37 @@ const ICONS = [
     { value: "star", label: "Star / premium" },
 ];
 
+// Client-approved "Included With Your Order" list — the same on 3D Illuminated Signs, Event Marquee
+// and Infinity Mirror (all three read these sign3d_option add-ons). "Apply standard list" updates the
+// matching included add-ons (or creates the missing ones) to exactly this text, icon and order.
+// The list is checked in this order (most specific first); each existing add-on is used once.
+const STANDARD_INCLUDED = [
+    { label: "Wiring/connection diagram", icon: "diagram", match: /diagram|schematic/i },
+    { label: "Full-size 1:1 installation template", icon: "template", match: /template|1:1|stencil/i },
+    { label: "Installation guide", icon: "guide", match: /guide|manual|instruction/i },
+    { label: "Waterproof cable protection for outdoor applications", icon: "waterproof", match: /waterproof|cable protection|weather/i },
+    { label: "Secure protective packaging", icon: "package", match: /packag/i },
+    { label: "Outdoor/Indoor Power Supply", icon: "power", match: /power|supply|driver|adapter|transformer/i },
+    { label: "Mounting screws and hardware", icon: "screws", match: /screw|hardware|fixing/i },
+    { label: "Pre-wired electrical connections", icon: "plug", match: /pre-?wired|electric|wiring|connection/i },
+    { label: "Premium LED lighting system", icon: "led", match: /\bled\b|lighting/i },
+    { label: "Custom-made 3D illuminated letters/logo", icon: "letters", match: /letter|logo/i },
+];
+// Final card order (2 columns, left to right, as in the client's reference).
+const STANDARD_ORDER = [
+    "Installation guide",
+    "Waterproof cable protection for outdoor applications",
+    "Secure protective packaging",
+    "Custom-made 3D illuminated letters/logo",
+    "Premium LED lighting system",
+    "Outdoor/Indoor Power Supply",
+    "Pre-wired electrical connections",
+    "Mounting screws and hardware",
+    "Full-size 1:1 installation template",
+    "Wiring/connection diagram",
+];
+const STANDARD_PRODUCTS = ["3d", "infinity", "marquee"];
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Standard 3-step upload: stagedUploadsCreate -> direct upload -> fileCreate. Returns the File gid.
@@ -128,6 +159,86 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
 
     try {
+        if (intent === "apply_standard") {
+            const res = await admin.graphql(
+                `#graphql
+      query All { metaobjects(type: "$app:sign3d_option", first: 250) { edges { node { id fields { key value } } } } }`
+            );
+            const json = await res.json();
+            const included = (json.data?.metaobjects?.edges || [])
+                .map((edge: any) => {
+                    const f: Record<string, string> = {};
+                    edge.node.fields.forEach((x: any) => { f[x.key] = x.value || ""; });
+                    return { id: edge.node.id as string, label: f.label || "", category: f.category || "", isFree: f.is_free === "true", showOn: f.show_on || "" };
+                })
+                .filter((o: any) => o.category === "addon" && o.isFree);
+            const used = new Set<string>();
+            // Pass 1: exact label matches first, so a renamed item is never taken by another rule.
+            const picks = new Map<string, any>();
+            STANDARD_INCLUDED.forEach((item) => {
+                const exact = included.find((o: any) => !used.has(o.id) && o.label.trim().toLowerCase() === item.label.toLowerCase());
+                if (exact) { used.add(exact.id); picks.set(item.label, exact); }
+            });
+            // Pass 2: keyword matches for the rest.
+            STANDARD_INCLUDED.forEach((item) => {
+                if (picks.has(item.label)) return;
+                const hit = included.find((o: any) => !used.has(o.id) && item.match.test(o.label));
+                if (hit) { used.add(hit.id); picks.set(item.label, hit); }
+            });
+            let updated = 0;
+            let created = 0;
+            for (const item of STANDARD_INCLUDED) {
+                const hit = picks.get(item.label);
+                const fields = [
+                    { key: "label", value: item.label },
+                    { key: "extra_price_decimal", value: "0" },
+                    { key: "is_free", value: "true" },
+                    { key: "sort_order", value: String(STANDARD_ORDER.indexOf(item.label) + 1) },
+                    { key: "category", value: "addon" },
+                    { key: "icon_key", value: item.icon },
+                ];
+                if (hit) {
+                    // Keep where it is shown, but make sure all three products show it
+                    // (empty = shown everywhere already).
+                    const list = String(hit.showOn).split(",").map((k) => k.trim().toLowerCase()).filter((k) => k && k !== "none");
+                    if (list.length || String(hit.showOn).trim().toLowerCase() === "none") {
+                        STANDARD_PRODUCTS.forEach((k) => { if (!list.includes(k)) list.push(k); });
+                        fields.push({ key: "show_on", value: list.join(",") });
+                    }
+                    const up = await admin.graphql(
+                        `#graphql
+      mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+        metaobjectUpdate(id: $id, metaobject: $metaobject) { metaobject { id } userErrors { field message } }
+      }`,
+                        { variables: { id: hit.id, metaobject: { fields } } }
+                    );
+                    const upData = await up.json();
+                    const errs = upData.data?.metaobjectUpdate?.userErrors;
+                    if (errs?.length) return { error: item.label + ": " + errs[0].message };
+                    updated++;
+                } else {
+                    fields.push({ key: "show_on", value: STANDARD_PRODUCTS.join(",") });
+                    const cr = await admin.graphql(
+                        `#graphql
+      mutation Create($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) { metaobject { id } userErrors { field message } }
+      }`,
+                        { variables: { metaobject: { type: "$app:sign3d_option", fields } } }
+                    );
+                    const crData = await cr.json();
+                    const errs = crData.data?.metaobjectCreate?.userErrors;
+                    if (errs?.length) return { error: item.label + ": " + errs[0].message };
+                    created++;
+                }
+            }
+            const others = included.filter((o: any) => !used.has(o.id)).map((o: any) => o.label);
+            return {
+                success: true,
+                message: "Standard list applied: " + updated + " updated, " + created + " added." +
+                    (others.length ? " Other included add-ons kept (delete them below if not wanted): " + others.join(", ") + "." : ""),
+            };
+        }
+
         const fields = [
             { key: "label", value: String(formData.get("label") || "") },
             { key: "extra_price_decimal", value: String(formData.get("extraPrice") || "0") },
@@ -208,7 +319,7 @@ export default function AddonsPage() {
 
     useEffect(() => {
         if (fetcher.data && "success" in fetcher.data && fetcher.data.success) {
-            shopify.toast.show("Saved successfully");
+            shopify.toast.show("message" in fetcher.data && fetcher.data.message ? String(fetcher.data.message) : "Saved successfully", { duration: 8000 });
             setEditingId(null);
         }
         if (fetcher.data && "error" in fetcher.data && fetcher.data.error) {
@@ -238,6 +349,18 @@ export default function AddonsPage() {
                         <input type="file" name="imageFile" accept="image/*" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
+                </fetcher.Form>
+            </s-section>
+
+            <s-section heading="Standard Included list (3D Signs, Event Marquee, Infinity Mirror)">
+                <s-paragraph>
+                    One click sets the client-approved "Included With Your Order" cards on all three configurators:{" "}
+                    {STANDARD_ORDER.join(" · ")}. Matching included add-ons are renamed / re-ordered (icons set); missing ones
+                    are added. Optional (paid) add-ons are not touched.
+                </s-paragraph>
+                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee and Infinity Mirror?")) e.preventDefault(); }}>
+                    <input type="hidden" name="intent" value="apply_standard" />
+                    <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Apply standard Included list</s-button>
                 </fetcher.Form>
             </s-section>
 
