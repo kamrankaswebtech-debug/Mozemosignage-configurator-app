@@ -506,6 +506,118 @@ function sign3dBuildFontPicker(root) {
     if (keepOpen) setOpen(true);
 }
 
+// Event Marquee / Infinity Mirror Mounting cards (client): show ONLY the "MS" symbol (with its
+// backing panel / raceway), centred in a square on the picture's own light background — no title
+// text above it and no corner badge ("EASY TO INSTALL", "ELECTRIC"). The uploaded picture is
+// cleaned in the browser: background colour measured on its left / bottom edges, everything that
+// differs from it found, the small marks in the top band (title letters) and in the top-right
+// corner (badge) painted over with the background, and the rest cropped and centred in a square.
+// Resolves to a PNG data URL, or null (picture not readable — the original is kept).
+var SIGN3D_MOUNT_IMG_CACHE = {};
+function sign3dCleanMountImage(url) {
+    if (!url) return Promise.resolve(null);
+    if (SIGN3D_MOUNT_IMG_CACHE[url]) return SIGN3D_MOUNT_IMG_CACHE[url];
+    SIGN3D_MOUNT_IMG_CACHE[url] = new Promise((resolve) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onerror = () => resolve(null);
+        im.onload = () => {
+            try {
+                const k = Math.min(1, 640 / Math.max(im.naturalWidth, im.naturalHeight));
+                const W = Math.max(8, Math.round(im.naturalWidth * k));
+                const H = Math.max(8, Math.round(im.naturalHeight * k));
+                const c = document.createElement('canvas');
+                c.width = W;
+                c.height = H;
+                const g = c.getContext('2d', { willReadFrequently: true });
+                g.drawImage(im, 0, 0, W, H);
+                const id = g.getImageData(0, 0, W, H);
+                const d = id.data;
+                // Background: median of the left edge (middle / lower part) and the bottom edge.
+                const sr = [], sg = [], sb = [];
+                const sample = (x, y) => { const i = (y * W + x) * 4; sr.push(d[i]); sg.push(d[i + 1]); sb.push(d[i + 2]); };
+                for (let y = Math.round(H * 0.35); y < H - 2; y += 2) { sample(2, y); sample(4, y); }
+                for (let x = 2; x < W - 2; x += 3) { sample(x, H - 3); }
+                const med = (a) => a.sort((p, q) => p - q)[a.length >> 1];
+                const bg = [med(sr), med(sg), med(sb)];
+                // Pixels that are not background.
+                const n = W * H;
+                const ink = new Uint8Array(n);
+                for (let i = 0; i < n; i++) {
+                    const j = i * 4;
+                    const diff = Math.max(Math.abs(d[j] - bg[0]), Math.abs(d[j + 1] - bg[1]), Math.abs(d[j + 2] - bg[2]));
+                    if (diff > 16 && d[j + 3] > 40) ink[i] = 1;
+                }
+                // Connected parts; drop the title (parts fully inside the top band), the corner badge
+                // (parts in the top-right corner) and specks.
+                const lab = new Int32Array(n).fill(-1);
+                const keep = new Uint8Array(n);
+                const stack = [];
+                let x0 = W, y0 = H, x1 = -1, y1 = -1;
+                const drop = [];
+                for (let s = 0; s < n; s++) {
+                    if (!ink[s] || lab[s] > -1) continue;
+                    const comp = [];
+                    let cx0 = W, cy0 = H, cx1 = 0, cy1 = 0;
+                    lab[s] = s;
+                    stack.push(s);
+                    while (stack.length) {
+                        const p = stack.pop();
+                        comp.push(p);
+                        const px = p % W;
+                        const py = (p / W) | 0;
+                        if (px < cx0) cx0 = px;
+                        if (px > cx1) cx1 = px;
+                        if (py < cy0) cy0 = py;
+                        if (py > cy1) cy1 = py;
+                        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                            const qx = px + dx;
+                            const qy = py + dy;
+                            if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+                            const q = qy * W + qx;
+                            if (ink[q] && lab[q] < 0) { lab[q] = s; stack.push(q); }
+                        }
+                    }
+                    const title = cy1 < H * 0.24;
+                    const badge = cx0 > W * 0.74 && cy1 < H * 0.42;
+                    const speck = comp.length < Math.max(12, n * 0.00004);
+                    if (title || badge || speck) { drop.push({ x0: cx0, y0: cy0, x1: cx1, y1: cy1 }); continue; }
+                    comp.forEach((p) => { keep[p] = 1; });
+                    if (cx0 < x0) x0 = cx0;
+                    if (cy0 < y0) y0 = cy0;
+                    if (cx1 > x1) x1 = cx1;
+                    if (cy1 > y1) y1 = cy1;
+                }
+                if (x1 < 0 || (x1 - x0) < W * 0.08) { resolve(null); return; }
+                // Paint the dropped marks (with a little margin for their soft edges) in the background.
+                g.fillStyle = 'rgb(' + bg.join(',') + ')';
+                drop.forEach((r) => { g.fillRect(r.x0 - 3, r.y0 - 3, r.x1 - r.x0 + 7, r.y1 - r.y0 + 7); });
+                // Square output: the symbol fills ~74% of it, centred, on the same background.
+                const pad = Math.round(Math.max(x1 - x0, y1 - y0) * 0.06);
+                const sx = Math.max(0, x0 - pad);
+                const sy = Math.max(0, y0 - pad);
+                const sw = Math.min(W, x1 + pad + 1) - sx;
+                const sh = Math.min(H, y1 + pad + 1) - sy;
+                const S = 600;
+                const f = (S * 0.74) / Math.max(sw, sh);
+                const out = document.createElement('canvas');
+                out.width = S;
+                out.height = S;
+                const o = out.getContext('2d');
+                o.fillStyle = 'rgb(' + bg.join(',') + ')';
+                o.fillRect(0, 0, S, S);
+                o.imageSmoothingQuality = 'high';
+                o.drawImage(c, sx, sy, sw, sh, (S - sw * f) / 2, (S - sh * f) / 2, sw * f, sh * f);
+                resolve(out.toDataURL('image/png'));
+            } catch (err) {
+                resolve(null); // e.g. a picture from another site without CORS: keep the original
+            }
+        };
+        im.src = url;
+    });
+    return SIGN3D_MOUNT_IMG_CACHE[url];
+}
+
 // Visual cards driven by a hidden <select> (Illumination Type, Mounting). The select keeps all existing logic working.
 function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
     const select = root.querySelector(selectSelector);
@@ -530,9 +642,21 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
         if (opt.dataset.image) {
             const img = document.createElement('img');
             img.className = 'sign3d-configurator__pick-card-img';
-            img.src = opt.dataset.image;
             img.alt = opt.textContent.trim();
-            img.loading = 'lazy';
+            const mode = root.dataset.sign3dMode;
+            if (grid.hasAttribute('data-mounting-cards') && (mode === 'marquee' || mode === 'infinity')) {
+                // Only the MS symbol, centred in a square (title text / corner badge removed).
+                img.classList.add('is-cleaning');
+                const src = opt.dataset.image;
+                sign3dCleanMountImage(src).then((clean) => {
+                    img.src = clean || src;
+                    img.classList.remove('is-cleaning');
+                    if (clean) img.classList.add('is-clean');
+                });
+            } else {
+                img.src = opt.dataset.image;
+                img.loading = 'lazy';
+            }
             card.appendChild(img);
         } else {
             const ph = document.createElement('span');
@@ -1770,9 +1894,18 @@ function sign3dHydrateOptions(root) {
     // NOTE: the label text must stay the FIRST <span> inside the <label> — calculateTotal()
     // and Add to Cart read the add-on name with label.querySelector('span'). The tick box and
     // icon are <i> elements and the price is an <em> for that reason.
+    // 3D LED Lightbox: the client's own order for its 8 add-ons (by label); any other add-on follows
+    // in Admin "Sort Order". Other configurators: Admin "Sort Order" as before.
+    const LIGHTBOX_ADDON_ORDER = ['installation guide', 'waterproof cable protection for outdoor applications', 'secure protective packaging',
+        'premium led lighting system', 'wiring/connection diagram', 'outdoor/indoor power supply', 'pre-wired electrical connections', 'mounting screws and hardware'];
+    const lbRank = (o) => {
+        if (root.dataset.sign3dMode !== 'lightbox') return 0;
+        const r = LIGHTBOX_ADDON_ORDER.indexOf(String(o.l || '').trim().toLowerCase());
+        return r > -1 ? r : 100;
+    };
     const addons = byCat('addon')
         .map((o, i) => ({ o, i }))
-        .sort((a, b) => ((Number(a.o.s) || 999999) - (Number(b.o.s) || 999999)) || (a.i - b.i))
+        .sort((a, b) => (lbRank(a.o) - lbRank(b.o)) || ((Number(a.o.s) || 999999) - (Number(b.o.s) || 999999)) || (a.i - b.i))
         .map((x) => x.o);
     const buildAddons = (boxSel, wrapSel, items, locked) => {
         const box = root.querySelector(boxSel);
@@ -5281,14 +5414,26 @@ function initSign3dConfigurator(root) {
         return box * (getBackingType() === 'bracket' ? 1 + lightboxBracketReach(lbSize ? lbSize.w : getWidthCm()) : 1) * 1.35;
     }
 
-    // ---- Realistic wall preview (client's storefront wall photo, moz-lb-wall.jpg) ----
-    // Points below are pixels of that 1536 x 1024 photo: where the bracket is fixed on the wood
-    // panel (same place as in the client's mounted-bracket photos) and where a Wall Mount box hangs.
-    // They are only used while that built-in photo is the wallpaper; any other wallpaper (Admin) or
-    // Wallpaper Off keeps the box centred in the preview as before.
-    const LBX_WALL = { w: 1536, h: 1024, bracketLeft: 506, bracketTop: 336, bracketH: 252, mountX: 572, mountY: 470 };
-    // Box width in photo pixels for a size in cm (eased so large sizes stay on the wall).
+    // ---- Realistic wall preview (client's storefront wall photo, moz-lb-wall.jpg, 1535 x 1024) ----
+    // Points below are pixels of that photo. panelL / panelR: the front face of the wooden wall
+    // panel; mountX / mountY: where a Wall Mount box is centred on it; bracketLeft / tipY: where the
+    // Wall Hanging bracket plate is fixed on the panel and the height its arm reaches. Only used while
+    // that built-in photo is the wallpaper; any other wallpaper (Admin) or Wallpaper Off keeps the
+    // box centred in the preview as before.
+    const LBX_WALL = { w: 1535, h: 1024, panelL: 432, panelR: 748, mountX: 590, mountY: 430, bracketLeft: 452, tipY: 430, bracketH: 252 };
+    // Wall Hanging: box width in photo pixels for a size in cm (eased so large sizes stay on the wall;
+    // the wallpaper stays still and only the sign changes size).
     const lbxWallPx = (cm) => 300 * Math.pow(Math.max(10, cm) / 30, 0.6);
+    // Wall Mount: true scale on the wooden panel — the largest size offered fills ~76% of the panel's
+    // width, every other size in exact proportion (so every size sits fully on the wood).
+    function lbxMountPxPerCm() {
+        const largest = Math.max(60, lbSizes.reduce((m, r) => Math.max(m, r.w), 0), Number(getWidthCm()) || 0);
+        return ((LBX_WALL.panelR - LBX_WALL.panelL) * 0.76) / largest;
+    }
+    // Wall Mount on the photo: seen like the wooden panel itself (camera a little to the left, at
+    // about the sign's height): the box's left side return shows, a touch of its underside, and the
+    // face turns very slightly away to the right like the shop front.
+    const LBX_SIDE_PHOTO = { x: -0.97, y: 0.24 };
     // The box is a solid 3D object seen like the wall photo (camera a little left of and above it):
     // its metal side return shows on the left / top edge as one even band (LBX_SIDE = direction of
     // the depth on screen, length set per box in drawLightbox). The face is never rotated or
@@ -5363,9 +5508,16 @@ function initSign3dConfigurator(root) {
     // focusX (photo px): the part of the wall the sign needs. On narrow previews (phones) the photo is
     // cropped a lot, so it is shifted (CSS var --lbx-wall-x on the ::before wallpaper) to keep that
     // part in view instead of always cropping around the photo's centre.
-    function lightboxWallMap(stageRect, focusX) {
+    // zoom (optional, Wall Mount): { fit(paintW, paintH) -> scale (screen px per photo px, never below "cover"), x, y }
+    // and the photo point to put in the middle of the preview — the whole wallpaper zooms with the
+    // sign (like the Car Bonnet configurator). Without zoom the photo stays as it is ("cover").
+    function lightboxWallMap(stageRect, focusX, zoom) {
         if (!previewBox || wallpaperHidden || !root.dataset.lbWall || selectedBgUrl !== root.dataset.lbWall) {
-            if (previewBox) previewBox.style.removeProperty('--lbx-wall-x');
+            if (previewBox) {
+                previewBox.style.removeProperty('--lbx-wall-x');
+                previewBox.style.removeProperty('--lbx-wall-y');
+                previewBox.style.removeProperty('--lbx-wall-size');
+            }
             return null;
         }
         const box = previewBox.getBoundingClientRect();
@@ -5376,14 +5528,22 @@ function initSign3dConfigurator(root) {
         } catch (err) { /* keep the full width */ }
         const paintH = box.height;
         if (!paintW || !paintH) return null;
-        const s = Math.max(paintW / LBX_WALL.w, paintH / LBX_WALL.h);
+        const cover = Math.max(paintW / LBX_WALL.w, paintH / LBX_WALL.h);
+        const s = zoom ? Math.max(cover, zoom.fit(paintW, paintH)) : cover;
         const minShift = paintW - LBX_WALL.w * s;
-        const shift = Math.round(Math.min(0, Math.max(minShift, paintW / 2 - (focusX || LBX_WALL.w / 2) * s)));
+        const shift = Math.round(Math.min(0, Math.max(minShift, paintW / 2 - (zoom ? zoom.x : (focusX || LBX_WALL.w / 2)) * s)));
+        const minShiftY = paintH - LBX_WALL.h * s;
+        const shiftY = zoom ? Math.round(Math.min(0, Math.max(minShiftY, paintH / 2 - zoom.y * s))) : Math.round(minShiftY / 2);
         previewBox.style.setProperty('--lbx-wall-x', shift + 'px');
+        previewBox.style.setProperty('--lbx-wall-y', shiftY + 'px');
+        previewBox.style.setProperty('--lbx-wall-size', (LBX_WALL.w * s).toFixed(1) + 'px ' + (LBX_WALL.h * s).toFixed(1) + 'px');
         const ox = box.left + shift - stageRect.left;
-        const oy = box.top + (paintH - LBX_WALL.h * s) / 2 - stageRect.top;
+        const oy = box.top + shiftY - stageRect.top;
         return {
             s,
+            cover,
+            paintW,
+            paintH,
             x: (px) => ox + px * s,
             y: (py) => oy + py * s,
             visL: box.left - stageRect.left,
@@ -5419,10 +5579,23 @@ function initSign3dConfigurator(root) {
         const ratio = lightboxIsWide() ? LBX_WIDE_RATIO : 1;
         // Part of the wall photo the sign needs: Wall Mount = its mount point; Wall Hanging = from the
         // bracket plate to the box's far edge.
-        const boxPhotoW = lbxWallPx(lbSize ? lbSize.w : getWidthCm());
-        const tipPhotoX = LBX_WALL.bracketLeft + LBX_WALL.bracketH * bracket.aspect * bracket.tipX;
-        const focusX = hanging ? (LBX_WALL.bracketLeft + tipPhotoX + boxPhotoW) / 2 : LBX_WALL.mountX;
-        const wall = lightboxWallMap(stageRect, focusX);
+        // Wall Hanging keeps the wallpaper completely still (fixed focus, no zoom) — only the sign
+        // changes size. Wall Mount zooms the whole wallpaper with the sign (see below).
+        const cmNow = lbSize ? lbSize.w : getWidthCm();
+        let zoom = null;
+        if (!hanging) {
+            const pxCm = lbxMountPxPerCm();
+            const boxMax = Math.max(cmNow, cmNow / ratio) * pxCm;
+            const minCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.min(m, r.w), Infinity) : 30;
+            const maxCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.max(m, r.w), 0) : 120;
+            const t = maxCm > minCm ? Math.max(0, Math.min(1, (cmNow - minCm) / (maxCm - minCm))) : 1;
+            // On screen the sign grows a little with its size while the wallpaper zooms out
+            // (scale worked out from the visible wallpaper area in lightboxWallMap).
+            zoom = { fit: (pw, ph) => Math.min(1.5, (Math.min(pw, ph) * (0.3 + 0.18 * t)) / Math.max(1, boxMax)), x: LBX_WALL.mountX, y: LBX_WALL.mountY };
+        }
+        const wall = lightboxWallMap(stageRect, LBX_WALL.bracketLeft + 260, zoom);
+        if (wall && !hanging) LBX_SIDE = LBX_SIDE_PHOTO;
+        let photoSide = 0;
         // Depth of the metal side return on screen (thick, like a real lightbox) for a w x h box.
         const sideLen = (bw, bh) => (hanging
             ? Math.max(8, Math.min(40, Math.min(bw, bh) * 0.075))
@@ -5431,15 +5604,17 @@ function initSign3dConfigurator(root) {
 
         if (wall) {
             // Built-in wall photo: true-to-photo size and position.
-            const cm = lbSize ? lbSize.w : getWidthCm();
-            w = lbxWallPx(cm) * wall.s;
+            const cm = cmNow;
+            w = (hanging ? lbxWallPx(cm) : cm * lbxMountPxPerCm()) * wall.s;
             h = w / ratio;
             const m = 14;
             if (hanging) {
-                const bh = LBX_WALL.bracketH * wall.s;
+                // The bracket at its real size for this sign (same rule as everywhere), fixed on the panel.
+                const bhPhoto = lightboxBracketCm(cm) * (lbxWallPx(cm) / Math.max(1, cm));
+                const bh = bhPhoto * wall.s;
                 const bw = bh * bracket.aspect;
                 const bl = wall.x(LBX_WALL.bracketLeft);
-                const bt = wall.y(LBX_WALL.bracketTop);
+                const bt = wall.y(LBX_WALL.tipY - bhPhoto * bracket.tipY);
                 const tipX = bl + bw * bracket.tipX;
                 const tipY = bt + bh * bracket.tipY;
                 // Keep the whole box inside the visible wall (small screens show less of the photo).
@@ -5456,14 +5631,12 @@ function initSign3dConfigurator(root) {
                 left = tipX - 2 - sl * LBX_SIDE.x - fit.need;
                 bracketBox = { left: bl - left, top: bt - top, w: bw, h: bh };
             } else {
-                const k = Math.min(1, (wall.visR - wall.visL - m * 2) / (w * 1.1), (wall.visB - wall.visT - m * 2) / (h * 1.05));
-                if (k > 0) { w *= k; h *= k; }
-                // The side band sticks out on the left / top: keep it inside the visible wall too.
-                const sl = sideLen(w, h);
-                const cx = Math.min(Math.max(wall.x(LBX_WALL.mountX), wall.visL + m + w / 2 - sl * LBX_SIDE.x), wall.visR - m - w / 2);
-                const cy = Math.min(Math.max(wall.y(LBX_WALL.mountY), wall.visT + m + h / 2 - sl * LBX_SIDE.y), wall.visB - m - h / 2);
-                left = cx - w / 2;
-                top = cy - h / 2;
+                // Wall Mount: centred on the wooden panel at true scale; the side return is the box's
+                // real depth (~8-14 cm) seen at the photo's angle.
+                const depthCm = Math.max(8, Math.min(14, 6 + 0.06 * cm));
+                photoSide = Math.max(5, depthCm * 0.55 * lbxMountPxPerCm() * wall.s);
+                left = wall.x(LBX_WALL.mountX) - w / 2;
+                top = wall.y(LBX_WALL.mountY) - h / 2;
             }
         } else {
             // Any other wallpaper / no wallpaper: centred on the design, as before.
@@ -5499,7 +5672,7 @@ function initSign3dConfigurator(root) {
         lbxEl.style.height = h + 'px';
         const sideF = activeFinish('side');
         const bracketF = activeFinish('backing');
-        lbxEl.className = 'sign3d-lbx is-' + key + (lightboxIsWide() ? ' is-wide' : '') + (hanging ? ' is-hanging' : ' is-wall') + (lbSides === 'double' ? ' is-double' : '')
+        lbxEl.className = 'sign3d-lbx is-' + key + (lightboxIsWide() ? ' is-wide' : '') + (hanging ? ' is-hanging' : ' is-wall') + (wall && !hanging ? ' is-on-photo' : '') + (lbSides === 'double' ? ' is-double' : '')
             + (ledOn ? ' is-lit' : '') + (sideF ? ' side-' + sign3dFinishSurface(sideF) : '') + (bracketF ? ' bracket-' + sign3dFinishSurface(bracketF) : '');
         lbxEl.style.setProperty('--lbx-clip', LBX_CLIP[key]);
         lbxEl.style.setProperty('--lbx-side', selectedSideHex || '#1a1a1a');
@@ -5509,7 +5682,7 @@ function initSign3dConfigurator(root) {
         // slices stepping back along LBX_SIDE, and — Double-Sided — the rear light as a thin lit line
         // at the back of the side return. The slices sit a hair inside the face outline (scale) so no
         // dark fringe shows around the face where there is no side band.
-        const sl = sideLen(w, h);
+        const sl = photoSide || sideLen(w, h);
         lbxEl.style.setProperty('--lbx-depth', sl + 'px');
         lbxBody.querySelectorAll('.sign3d-lbx__side').forEach((slice, i) => {
             const t = (i + 1) / LBX_SIDE_SLICES;

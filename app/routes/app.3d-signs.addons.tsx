@@ -57,6 +57,33 @@ const STANDARD_ORDER = [
     "Wiring/connection diagram",
 ];
 const STANDARD_PRODUCTS = ["3d", "infinity", "marquee"];
+// 3D LED Lightbox: only these 8 add-ons (client), in this order on the Lightbox (its order is set on
+// the storefront; see sign3d LIGHTBOX_ADDON_ORDER). Every other add-on is hidden from the Lightbox.
+const LIGHTBOX_ADDONS = [
+    "Installation guide",
+    "Waterproof cable protection for outdoor applications",
+    "Secure protective packaging",
+    "Premium LED lighting system",
+    "Wiring/connection diagram",
+    "Outdoor/Indoor Power Supply",
+    "Pre-wired electrical connections",
+    "Mounting screws and hardware",
+];
+// show_on keys of 3D-family entries; empty show_on = all of them.
+const FAMILY_3D = ["3d", "infinity", "marquee", "lightbox"];
+const showOnKeys = (value: string) => {
+    const t = String(value || "").trim().toLowerCase();
+    if (!t) return FAMILY_3D.slice();
+    if (t === "none") return [];
+    return t.split(",").map((k) => k.trim()).filter(Boolean);
+};
+const showOnValue = (keys: string[]) => {
+    const fam = FAMILY_3D.filter((k) => keys.includes(k));
+    const extra = keys.filter((k) => !FAMILY_3D.includes(k));
+    if (fam.length === FAMILY_3D.length && !extra.length) return "";
+    const list = fam.concat(extra);
+    return list.length ? list.join(",") : "none";
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -165,13 +192,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       query All { metaobjects(type: "$app:sign3d_option", first: 250) { edges { node { id fields { key value } } } } }`
             );
             const json = await res.json();
-            const included = (json.data?.metaobjects?.edges || [])
+            const addons = (json.data?.metaobjects?.edges || [])
                 .map((edge: any) => {
                     const f: Record<string, string> = {};
                     edge.node.fields.forEach((x: any) => { f[x.key] = x.value || ""; });
                     return { id: edge.node.id as string, label: f.label || "", category: f.category || "", isFree: f.is_free === "true", showOn: f.show_on || "" };
                 })
-                .filter((o: any) => o.category === "addon" && o.isFree);
+                .filter((o: any) => o.category === "addon");
+            const included = addons.filter((o: any) => o.isFree);
             const used = new Set<string>();
             // Pass 1: exact label matches first, so a renamed item is never taken by another rule.
             const picks = new Map<string, any>();
@@ -197,14 +225,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     { key: "category", value: "addon" },
                     { key: "icon_key", value: item.icon },
                 ];
+                const onLightbox = LIGHTBOX_ADDONS.includes(item.label);
                 if (hit) {
-                    // Keep where it is shown, but make sure all three products show it
-                    // (empty = shown everywhere already).
-                    const list = String(hit.showOn).split(",").map((k) => k.trim().toLowerCase()).filter((k) => k && k !== "none");
-                    if (list.length || String(hit.showOn).trim().toLowerCase() === "none") {
-                        STANDARD_PRODUCTS.forEach((k) => { if (!list.includes(k)) list.push(k); });
-                        fields.push({ key: "show_on", value: list.join(",") });
-                    }
+                    // Keep where it is shown, but make sure all three products show it, and the
+                    // Lightbox only when it is one of its 8 add-ons.
+                    const keys = showOnKeys(hit.showOn);
+                    STANDARD_PRODUCTS.forEach((k) => { if (!keys.includes(k)) keys.push(k); });
+                    const final = onLightbox ? (keys.includes("lightbox") ? keys : keys.concat("lightbox")) : keys.filter((k) => k !== "lightbox");
+                    fields.push({ key: "show_on", value: showOnValue(final) });
                     const up = await admin.graphql(
                         `#graphql
       mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
@@ -217,7 +245,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     if (errs?.length) return { error: item.label + ": " + errs[0].message };
                     updated++;
                 } else {
-                    fields.push({ key: "show_on", value: STANDARD_PRODUCTS.join(",") });
+                    fields.push({ key: "show_on", value: showOnValue(onLightbox ? STANDARD_PRODUCTS.concat("lightbox") : STANDARD_PRODUCTS) });
                     const cr = await admin.graphql(
                         `#graphql
       mutation Create($metaobject: MetaobjectCreateInput!) {
@@ -231,10 +259,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     created++;
                 }
             }
+            // Every other add-on (included or optional) is hidden from the Lightbox (only 8 there).
+            let hiddenLb = 0;
+            for (const o of addons) {
+                if (used.has(o.id)) continue;
+                const keys = showOnKeys(o.showOn);
+                if (!keys.includes("lightbox")) continue;
+                const up = await admin.graphql(
+                    `#graphql
+      mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+        metaobjectUpdate(id: $id, metaobject: $metaobject) { metaobject { id } userErrors { field message } }
+      }`,
+                    { variables: { id: o.id, metaobject: { fields: [{ key: "show_on", value: showOnValue(keys.filter((k) => k !== "lightbox")) }] } } }
+                );
+                const upData = await up.json();
+                const errs = upData.data?.metaobjectUpdate?.userErrors;
+                if (errs?.length) return { error: o.label + ": " + errs[0].message };
+                hiddenLb++;
+            }
             const others = included.filter((o: any) => !used.has(o.id)).map((o: any) => o.label);
             return {
                 success: true,
-                message: "Standard list applied: " + updated + " updated, " + created + " added." +
+                message: "Standard list applied: " + updated + " updated, " + created + " added" +
+                    (hiddenLb ? ", " + hiddenLb + " other add-on(s) hidden from the Lightbox" : "") + "." +
                     (others.length ? " Other included add-ons kept (delete them below if not wanted): " + others.join(", ") + "." : ""),
             };
         }
@@ -352,13 +399,14 @@ export default function AddonsPage() {
                 </fetcher.Form>
             </s-section>
 
-            <s-section heading="Standard Included list (3D Signs, Event Marquee, Infinity Mirror)">
+            <s-section heading="Standard Included list (3D Signs, Event Marquee, Infinity Mirror, 3D LED Lightbox)">
                 <s-paragraph>
                     One click sets the client-approved "Included With Your Order" cards on all three configurators:{" "}
                     {STANDARD_ORDER.join(" · ")}. Matching included add-ons are renamed / re-ordered (icons set); missing ones
-                    are added. Optional (paid) add-ons are not touched.
+                    are added. The 3D LED Lightbox gets only its 8 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every other add-on
+                    is hidden from the Lightbox. Prices of optional (paid) add-ons are not touched.
                 </s-paragraph>
-                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee and Infinity Mirror?")) e.preventDefault(); }}>
+                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee, Infinity Mirror and the 3D LED Lightbox (8 add-ons)?")) e.preventDefault(); }}>
                     <input type="hidden" name="intent" value="apply_standard" />
                     <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Apply standard Included list</s-button>
                 </fetcher.Form>
