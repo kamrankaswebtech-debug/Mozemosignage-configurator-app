@@ -9,6 +9,20 @@ const SIGN3D_ALLOW_MANUAL_PLACEMENT = false;
 var SIGN3D_BUILTIN_GLOSSY = null;
 // Cache for Marquee bulb positions / Infinity tunnels / stroke widths.
 var SIGN3D_BULB_CACHE = {};
+// Cleaned Marquee / Infinity Mounting card pictures (sign3dCleanMountImage), by picture URL.
+var SIGN3D_MOUNT_IMG_CACHE = {};
+// Unique ids for the Marquee letter faces (sign3dMarqueeFace).
+var SIGN3D_MQ_UID = 0;
+// Built-in Event Marquee bulb colours (used when Admin has none).
+var SIGN3D_MQ_BULB_COLOURS = [
+    { n: 'Cool White', h: '#eef4ff' },
+    { n: 'Warm White', h: '#ffd9a0' },
+    { n: 'Yellow', h: '#ffd60a' },
+    { n: 'Red', h: '#e8202e' },
+    { n: 'Blue', h: '#1f5bff' },
+    { n: 'Green', h: '#1fbf4a' },
+    { n: 'Purple', h: '#9b30ff' }
+];
 
 function initAllSign3dConfigurators() {
     document.querySelectorAll('.sign3d-configurator').forEach((root) => {
@@ -513,9 +527,10 @@ function sign3dBuildFontPicker(root) {
 // differs from it found, the small marks in the top band (title letters) and in the top-right
 // corner (badge) painted over with the background, and the rest cropped and centred in a square.
 // Resolves to a PNG data URL, or null (picture not readable — the original is kept).
-var SIGN3D_MOUNT_IMG_CACHE = {};
+// (SIGN3D_MOUNT_IMG_CACHE is declared at the top of the file: init runs before this line.)
 function sign3dCleanMountImage(url) {
     if (!url) return Promise.resolve(null);
+    if (!SIGN3D_MOUNT_IMG_CACHE) SIGN3D_MOUNT_IMG_CACHE = {};
     if (SIGN3D_MOUNT_IMG_CACHE[url]) return SIGN3D_MOUNT_IMG_CACHE[url];
     SIGN3D_MOUNT_IMG_CACHE[url] = new Promise((resolve) => {
         const im = new Image();
@@ -648,11 +663,16 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
                 // Only the MS symbol, centred in a square (title text / corner badge removed).
                 img.classList.add('is-cleaning');
                 const src = opt.dataset.image;
-                sign3dCleanMountImage(src).then((clean) => {
+                const show = (clean) => {
                     img.src = clean || src;
                     img.classList.remove('is-cleaning');
                     if (clean) img.classList.add('is-clean');
-                });
+                };
+                try {
+                    sign3dCleanMountImage(src).then(show, () => show(null));
+                } catch (err) {
+                    show(null);
+                }
             } else {
                 img.src = opt.dataset.image;
                 img.loading = 'lazy';
@@ -826,15 +846,7 @@ function sign3dBuildColourSwatches(root) {
 // Event Marquee: Plastic LED bulb colours (client's list, all included in the price). Admin
 // (Event Marquee > Bulb Colours, event_marquee_option category "bulb_colour") replaces the list;
 // none saved = these 7. Same swatch markup as the other colour lists, Warm White is the default.
-const SIGN3D_MQ_BULB_COLOURS = [
-    { n: 'Cool White', h: '#eef4ff' },
-    { n: 'Warm White', h: '#ffd9a0' },
-    { n: 'Yellow', h: '#ffd60a' },
-    { n: 'Red', h: '#e8202e' },
-    { n: 'Blue', h: '#1f5bff' },
-    { n: 'Green', h: '#1fbf4a' },
-    { n: 'Purple', h: '#9b30ff' }
-];
+// (SIGN3D_MQ_BULB_COLOURS is declared at the top of the file: init runs before this line.)
 function sign3dBuildBulbSwatches(root) {
     const container = root.querySelector('[data-bulb-colour-swatches]');
     if (!container) return;
@@ -1265,7 +1277,7 @@ function sign3dBulbPoints(ch, fontCss) {
 // Colours / LED state come from CSS variables and classes, so they change without a rebuild.
 // baseY: baseline from the span top (px); shift: back-face offset {x, y} (px); rim: wall edge (px);
 // bulbs: [{x, y, r}] glow centres / radius (px, relative to the span).
-var SIGN3D_MQ_UID = 0;
+// (SIGN3D_MQ_UID is declared at the top of the file: init runs before this line.)
 function sign3dMarqueeFace(span, ch, baseY, shift, rim, bulbs) {
     const NS = 'http://www.w3.org/2000/svg';
     const uid = 'mqf' + (++SIGN3D_MQ_UID);
