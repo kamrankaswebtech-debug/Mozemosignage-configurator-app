@@ -1014,7 +1014,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v7|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|v8|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1186,12 +1186,15 @@ function sign3dBulbPoints(ch, fontCss) {
         // already stop there; pointed / slanted ends run into a corner and are pulled back).
         const tip = (fromEnd) => {
             const n = s.path.length;
-            // how thick this stroke is near its end
+            // how thick this stroke is near its end (a short stroke — e.g. the arm of an "r" — is
+            // only measured near its own end, not up to the thick junction it starts from, so its
+            // end bulb stays at the end instead of being pulled back onto the junction)
             let near = 0;
+            const win = Math.min(hw * 3, total * 0.4);
             for (let k = 0; k < n; k++) {
                 const idx = fromEnd ? n - 1 - k : k;
                 const along = fromEnd ? total - cum[idx] : cum[idx];
-                if (along > hw * 3) break;
+                if (along > win) break;
                 if (dist[s.path[idx]] > near) near = dist[s.path[idx]];
             }
             const inside = Math.min(hw * 0.78, near * 0.85);
@@ -5442,6 +5445,13 @@ function initSign3dConfigurator(root) {
         const largest = Math.max(60, lbSizes.reduce((m, r) => Math.max(m, r.w), 0), Number(getWidthCm()) || 0);
         return ((LBX_WALL.panelR - LBX_WALL.panelL) * 0.76) / largest;
     }
+    // Wall Mount box width in photo pixels for a size in cm: the largest size fills ~76% of the
+    // panel's width; smaller sizes are eased (same curve as Wall Hanging) so the default / small
+    // sizes still show clearly on the wall — every size stays fully on the wooden panel.
+    function lbxMountPhotoW(cm) {
+        const largest = Math.max(60, lbSizes.reduce((m, r) => Math.max(m, r.w), 0), Number(cm) || 0);
+        return (LBX_WALL.panelR - LBX_WALL.panelL) * 0.76 * Math.pow(Math.max(10, Number(cm) || 60) / largest, 0.6);
+    }
     // Wall Mount on the photo: seen like the wooden panel itself (camera a little to the left, at
     // about the sign's height): the box's left side return shows, a touch of its underside, and the
     // face turns very slightly away to the right like the shop front.
@@ -5596,14 +5606,13 @@ function initSign3dConfigurator(root) {
         const cmNow = lbSize ? lbSize.w : getWidthCm();
         let zoom = null;
         if (!hanging) {
-            const pxCm = lbxMountPxPerCm();
-            const boxMax = Math.max(cmNow, cmNow / ratio) * pxCm;
+            const boxMax = lbxMountPhotoW(cmNow);
             const minCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.min(m, r.w), Infinity) : 30;
             const maxCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.max(m, r.w), 0) : 120;
             const t = maxCm > minCm ? Math.max(0, Math.min(1, (cmNow - minCm) / (maxCm - minCm))) : 1;
             // On screen the sign grows a little with its size while the wallpaper zooms out
             // (scale worked out from the visible wallpaper area in lightboxWallMap).
-            zoom = { fit: (pw, ph) => Math.min(1.5, (Math.min(pw, ph) * (0.3 + 0.18 * t)) / Math.max(1, boxMax)), x: LBX_WALL.mountX, y: LBX_WALL.mountY };
+            zoom = { fit: (pw, ph) => Math.min(1.6, (Math.min(pw, ph) * (0.33 + 0.15 * t)) / Math.max(1, boxMax)), x: LBX_WALL.mountX, y: LBX_WALL.mountY };
         }
         const wall = lightboxWallMap(stageRect, LBX_WALL.bracketLeft + 260, zoom);
         if (wall && !hanging) LBX_SIDE = LBX_SIDE_PHOTO;
@@ -5617,7 +5626,7 @@ function initSign3dConfigurator(root) {
         if (wall) {
             // Built-in wall photo: true-to-photo size and position.
             const cm = cmNow;
-            w = (hanging ? lbxWallPx(cm) : cm * lbxMountPxPerCm()) * wall.s;
+            w = (hanging ? lbxWallPx(cm) : lbxMountPhotoW(cm)) * wall.s;
             h = w / ratio;
             const m = 14;
             if (hanging) {
@@ -5646,7 +5655,7 @@ function initSign3dConfigurator(root) {
                 // Wall Mount: centred on the wooden panel at true scale; the side return is the box's
                 // real depth (~8-14 cm) seen at the photo's angle.
                 const depthCm = Math.max(8, Math.min(14, 6 + 0.06 * cm));
-                photoSide = Math.max(5, depthCm * 0.55 * lbxMountPxPerCm() * wall.s);
+                photoSide = Math.max(5, depthCm * 0.55 * (lbxMountPhotoW(cm) / Math.max(1, cm)) * wall.s);
                 left = wall.x(LBX_WALL.mountX) - w / 2;
                 top = wall.y(LBX_WALL.mountY) - h / 2;
             }
