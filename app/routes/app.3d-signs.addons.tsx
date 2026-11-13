@@ -57,6 +57,8 @@ const STANDARD_ORDER = [
     "Wiring/connection diagram",
 ];
 const STANDARD_PRODUCTS = ["3d", "infinity", "marquee"];
+// Infinity Mirror and Event Marquee show ONLY the standard included list (client's 10 cards).
+const STANDARD_ONLY_PRODUCTS = ["infinity", "marquee"];
 // 3D LED Lightbox: only these 8 add-ons (client), in this order on the Lightbox (its order is set on
 // the storefront; see sign3d LIGHTBOX_ADDON_ORDER). Every other add-on is hidden from the Lightbox.
 const LIGHTBOX_ADDONS = [
@@ -260,29 +262,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
             }
             // Every other add-on (included or optional) is hidden from the Lightbox (only 8 there).
+            // Every other INCLUDED add-on is also hidden from Infinity Mirror and Event Marquee, so they
+            // show exactly the client's 10 "Included With Your Order" cards. 3D Illuminated Signs and
+            // optional (paid) add-ons on Infinity / Marquee are left as they are. Visibility can still
+            // be changed per add-on in Settings > Configurator Visibility > "3D Add-ons".
             let hiddenLb = 0;
+            let hiddenStd = 0;
             for (const o of addons) {
                 if (used.has(o.id)) continue;
-                const keys = showOnKeys(o.showOn);
-                if (!keys.includes("lightbox")) continue;
+                const before = showOnKeys(o.showOn);
+                const drop = o.isFree ? ["lightbox", ...STANDARD_ONLY_PRODUCTS] : ["lightbox"];
+                const keys = before.filter((k) => !drop.includes(k));
+                if (keys.length === before.length) continue;
                 const up = await admin.graphql(
                     `#graphql
       mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
         metaobjectUpdate(id: $id, metaobject: $metaobject) { metaobject { id } userErrors { field message } }
       }`,
-                    { variables: { id: o.id, metaobject: { fields: [{ key: "show_on", value: showOnValue(keys.filter((k) => k !== "lightbox")) }] } } }
+                    { variables: { id: o.id, metaobject: { fields: [{ key: "show_on", value: showOnValue(keys) }] } } }
                 );
                 const upData = await up.json();
                 const errs = upData.data?.metaobjectUpdate?.userErrors;
                 if (errs?.length) return { error: o.label + ": " + errs[0].message };
-                hiddenLb++;
+                if (before.includes("lightbox")) hiddenLb++;
+                if (STANDARD_ONLY_PRODUCTS.some((k) => before.includes(k) && !keys.includes(k))) hiddenStd++;
             }
             const others = included.filter((o: any) => !used.has(o.id)).map((o: any) => o.label);
             return {
                 success: true,
                 message: "Standard list applied: " + updated + " updated, " + created + " added" +
-                    (hiddenLb ? ", " + hiddenLb + " other add-on(s) hidden from the Lightbox" : "") + "." +
-                    (others.length ? " Other included add-ons kept (delete them below if not wanted): " + others.join(", ") + "." : ""),
+                    (hiddenLb ? ", " + hiddenLb + " other add-on(s) hidden from the Lightbox" : "") +
+                    (hiddenStd ? ", " + hiddenStd + " other included add-on(s) hidden from Infinity Mirror / Event Marquee" : "") + "." +
+                    (others.length ? " Other included add-ons kept on 3D Illuminated Signs (change in Configurator Visibility > 3D Add-ons): " + others.join(", ") + "." : ""),
             };
         }
 
@@ -403,8 +414,10 @@ export default function AddonsPage() {
                 <s-paragraph>
                     One click sets the client-approved "Included With Your Order" cards on all three configurators:{" "}
                     {STANDARD_ORDER.join(" · ")}. Matching included add-ons are renamed / re-ordered (icons set); missing ones
-                    are added. The 3D LED Lightbox gets only its 8 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every other add-on
-                    is hidden from the Lightbox. Prices of optional (paid) add-ons are not touched.
+                    are added. Infinity Mirror and Event Marquee then show only these 10 included cards (any other included
+                    add-on is hidden there). The 3D LED Lightbox gets only its 8 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every
+                    other add-on is hidden from the Lightbox. Prices of optional (paid) add-ons are not touched. Per add-on
+                    visibility: Settings → Configurator Visibility → "3D Add-ons".
                 </s-paragraph>
                 <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee, Infinity Mirror and the 3D LED Lightbox (8 add-ons)?")) e.preventDefault(); }}>
                     <input type="hidden" name="intent" value="apply_standard" />

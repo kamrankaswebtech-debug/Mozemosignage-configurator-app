@@ -20,10 +20,12 @@ const CONFIGURATORS: Record<string, string> = {
 };
 const FAMILY_3D = ["3d", "infinity", "marquee", "lightbox"];
 
-type TypeDef = { title: string; keys: string[]; labelKey: string; categories?: string[]; optIn?: string[] };
+// metaType: the metaobject type when the list key is only a filtered view of another type.
+type TypeDef = { title: string; keys: string[]; labelKey: string; categories?: string[]; optIn?: string[]; metaType?: string };
 const TYPES: Record<string, TypeDef> = {
     sign3d_front_colour: { title: "3D Colours (front, side, backing, bulb, lighting)", keys: FAMILY_3D, labelKey: "name" },
-    sign3d_option: { title: "3D Material / Finish, Mounting & Add-ons", keys: FAMILY_3D, labelKey: "label", categories: ["finish", "mounting", "addon"] },
+    sign3d_addon: { title: "3D Add-ons (Included With Your Order & optional)", keys: FAMILY_3D, labelKey: "label", categories: ["addon"], metaType: "sign3d_option" },
+    sign3d_option: { title: "3D Material / Finish & Mounting", keys: FAMILY_3D, labelKey: "label", categories: ["finish", "mounting"] },
     neon_font: { title: "Fonts", keys: ["neon", "graphic", "3d", "infinity", "marquee_font"], labelKey: "name", optIn: ["marquee_font"] },
     neon_quick_symbol: { title: "Quick Symbols", keys: ["neon", "graphic", "3d"], labelKey: "label" },
     power_adapter: { title: "Power Adapters", keys: ["neon", "graphic", "bonnet", "3d", "infinity", "marquee", "lightbox"], labelKey: "label" },
@@ -35,7 +37,7 @@ const TYPES: Record<string, TypeDef> = {
     signage_addon: { title: "Neon Add-ons & Indoor / Outdoor", keys: ["neon", "graphic"], labelKey: "label", categories: ["", "addon", "neon_type"] },
 };
 
-type Entry = { id: string; label: string; category: string; showOn: string[] };
+type Entry = { id: string; label: string; category: string; showOn: string[]; isFree?: boolean };
 
 // Keys implied by an empty show_on ("shown everywhere"): every key except the opt-in ones.
 const defaultKeys = (def: TypeDef) => def.keys.filter((k) => !(def.optIn || []).includes(k));
@@ -63,7 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const response = await admin.graphql(
         `#graphql
     query VisibilityList($type: String!) { metaobjects(type: $type, first: 250) { edges { node { id fields { key value } } } } }`,
-        { variables: { type: "$app:" + type } }
+        { variables: { type: "$app:" + (def.metaType || type) } }
     );
     const data = await response.json();
     const entries: Entry[] = (data.data?.metaobjects?.edges || [])
@@ -75,6 +77,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 label: f[def.labelKey] || f.label || f.name || "(no name)",
                 category: String(f.category || "").trim().toLowerCase(),
                 showOn: parseShowOn(f.show_on, def),
+                isFree: f.is_free === "true",
                 sort: Number(f.sort_order || 0),
             };
         })
@@ -165,7 +168,7 @@ function EntryRow({ type, def, entry, picked, dirty, onToggle, onSaved }: {
         <tr style={{ borderBottom: "1px solid #eee", background: dirty ? "#fff8e1" : undefined }}>
             <td style={{ padding: "8px", whiteSpace: "nowrap" }}>
                 {entry.label}
-                {entry.category ? <><br /><small style={{ color: "#888" }}>{entry.category === "neon_type" ? "Indoor / Outdoor" : entry.category}</small></> : null}
+                {entry.category ? <><br /><small style={{ color: "#888" }}>{entry.category === "neon_type" ? "Indoor / Outdoor" : entry.category === "addon" && def.metaType === "sign3d_option" ? (entry.isFree ? "Included With Your Order" : "Optional add-on") : entry.category}</small></> : null}
                 {dirty ? <><br /><small style={{ color: "#b26a00" }}>Not saved yet</small></> : null}
             </td>
             <td style={{ padding: "8px" }}>
