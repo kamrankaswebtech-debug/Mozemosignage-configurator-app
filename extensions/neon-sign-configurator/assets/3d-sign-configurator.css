@@ -3441,6 +3441,17 @@
     transform: scale(1.09);
     clip-path: inset(4.13% round 6px);
 }
+/* Client: the Illumination Type example a bit smaller — centred in its card, at most 320px wide. */
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__panel [data-illumination-cards].sign3d-configurator__card-grid .sign3d-configurator__pick-card-img {
+    width: min(100%, 320px) !important;
+    max-width: 320px !important;
+    height: auto !important;
+    max-height: none !important;
+    aspect-ratio: 1 / 1 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    object-fit: cover !important;
+}
 
 /* Event Marquee: clear-glass note + a divider between the bulb options and the letter face colours */
 .sign3d-configurator .sign3d-mq-glass-note[hidden] {
@@ -3473,4 +3484,13 @@
 .sign3d-lbx.is-on-photo,
 .sign3d-lbx.is-on-photo.is-lit {
     filter: drop-shadow(-2px 5px 5px rgba(0, 0, 0, 0.45)) drop-shadow(-6px 14px 16px rgba(0, 0, 0, 0.28));
+}
+
+/* Font previews (sign3dCleanFontPreview): hidden while the picture is prepared; a cleaned picture
+   is already white lettering, so it is not inverted like the usual black-on-transparent previews. */
+.sign3d-configurator .sign3d-configurator__font-panel .sign3d-configurator__pick-card-img.is-cleaning {
+    opacity: 0;
+}
+.sign3d-configurator .sign3d-configurator__font-panel .sign3d-configurator__pick-card-img.is-clean {
+    filter: none !important;
 }

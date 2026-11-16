@@ -556,6 +556,11 @@ name = "Image"
 description = "Used for category = wallpaper, mounting, install_electrician and install_easy"
 type = "file_reference"
 
+[metaobjects.app.sign3d_option.fields.image_marquee]
+name = "Event Marquee / Infinity Mirror Image"
+description = "category=mounting only. Card picture shown on the Event Marquee and Infinity Mirror configurators. Empty = the built-in picture for the backing type."
+type = "file_reference"
+
 [metaobjects.app.sign3d_option.fields.sort_order]
 name = "Sort Order"
 type = "number_integer"

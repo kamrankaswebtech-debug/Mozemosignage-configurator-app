@@ -440,6 +440,13 @@ function sign3dBuildFontPicker(root) {
         root.dataset.sign3dFontCount = String(fonts.length);
     }
     if (!fonts.length) return;
+    // Client: Arial Black is the first font (and the default) on Infinity Mirror and 3D Illuminated
+    // Signs; every other font keeps its Admin "Sort Order" after it.
+    const mode = root.dataset.sign3dMode || '3d';
+    if (mode === 'infinity' || mode === '3d') {
+        const first = (f) => /^arial[\s_-]*black$/i.test(String(f.name || '').trim());
+        fonts = fonts.filter(first).concat(fonts.filter((f) => !first(f)));
+    }
 
     select.innerHTML = '';
     panel.innerHTML = '';
@@ -478,11 +485,22 @@ function sign3dBuildFontPicker(root) {
 
         if (font.preview) {
             const img = document.createElement('img');
-            img.className = 'sign3d-configurator__pick-card-img';
-            img.src = font.preview;
+            img.className = 'sign3d-configurator__pick-card-img is-cleaning';
             img.alt = font.name;
-            img.loading = 'lazy';
             card.appendChild(img);
+            // Every preview shows as white lettering on the card (like the other fonts): a picture
+            // on its own solid / textured background is turned into clean white lettering; the usual
+            // black-on-transparent previews keep the CSS invert as before.
+            const show = (clean) => {
+                img.src = clean || font.preview;
+                img.classList.remove('is-cleaning');
+                if (clean) img.classList.add('is-clean');
+            };
+            try {
+                sign3dCleanFontPreview(font.preview).then(show, () => show(null));
+            } catch (err) {
+                show(null);
+            }
         } else {
             // No Admin preview image: a live text sample in the font itself (Neon shows "Your Text").
             const ph = document.createElement('span');
@@ -518,6 +536,69 @@ function sign3dBuildFontPicker(root) {
     select.selectedIndex = 0;
     sync();
     if (keepOpen) setOpen(true);
+}
+
+// Font preview picture -> white lettering on a transparent background, for a picture drawn on its
+// own solid or textured background (e.g. light text on a dark photo): the background level is
+// measured on the picture's border, every pixel that clearly differs from it becomes white (soft
+// edges kept, low-contrast texture dropped). Resolves to a PNG data URL, or null when the picture
+// already has a transparent background (it keeps the usual CSS invert) or cannot be read.
+function sign3dCleanFontPreview(url) {
+    const cache = sign3dCleanFontPreview.cache || (sign3dCleanFontPreview.cache = {});
+    if (!url) return Promise.resolve(null);
+    if (cache[url]) return cache[url];
+    cache[url] = new Promise((resolve) => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onerror = () => resolve(null);
+        im.onload = () => {
+            try {
+                const k = Math.min(1, 600 / Math.max(im.naturalWidth, im.naturalHeight));
+                const W = Math.max(4, Math.round(im.naturalWidth * k));
+                const H = Math.max(4, Math.round(im.naturalHeight * k));
+                const c = document.createElement('canvas');
+                c.width = W;
+                c.height = H;
+                const g = c.getContext('2d', { willReadFrequently: true });
+                g.drawImage(im, 0, 0, W, H);
+                const id = g.getImageData(0, 0, W, H);
+                const d = id.data;
+                const lum = (i) => (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+                const border = [];
+                let opaque = 0;
+                const take = (x, y) => { const i = (y * W + x) * 4; border.push(lum(i)); if (d[i + 3] > 230) opaque++; };
+                for (let x = 0; x < W; x += 2) { take(x, 0); take(x, 1); take(x, H - 1); take(x, H - 2); }
+                for (let y = 0; y < H; y += 2) { take(0, y); take(1, y); take(W - 1, y); take(W - 2, y); }
+                // Transparent background: the usual preview — keep the CSS invert.
+                if (opaque < border.length * 0.85) { resolve(null); return; }
+                border.sort((a, b) => a - b);
+                const bg = border[border.length >> 1];
+                // Texture / noise level of the background (spread of the border values).
+                const noise = Math.max(0.04, border[Math.floor(border.length * 0.9)] - border[Math.floor(border.length * 0.1)]);
+                const t0 = Math.min(0.3, noise * 0.9 + 0.04);
+                const t1 = Math.max(t0 + 0.12, Math.min(0.6, t0 + 0.28));
+                let ink = 0;
+                for (let i = 0; i < W * H; i++) {
+                    const j = i * 4;
+                    const diff = Math.abs(lum(j) - bg) * (d[j + 3] / 255);
+                    const a = Math.max(0, Math.min(1, (diff - t0) / (t1 - t0)));
+                    d[j] = 255;
+                    d[j + 1] = 255;
+                    d[j + 2] = 255;
+                    d[j + 3] = Math.round(a * 255);
+                    if (a > 0.5) ink++;
+                }
+                // Nothing (or almost everything) left: not a lettering picture — keep the original.
+                if (ink < W * H * 0.005 || ink > W * H * 0.7) { resolve(null); return; }
+                g.putImageData(id, 0, 0);
+                resolve(c.toDataURL('image/png'));
+            } catch (err) {
+                resolve(null); // e.g. a picture from another site without CORS: keep the original
+            }
+        };
+        im.src = url;
+    });
+    return cache[url];
 }
 
 // Event Marquee / Infinity Mirror Mounting cards (client): show ONLY the "MS" symbol (with its
@@ -1385,7 +1466,7 @@ function sign3dGlyphFontCss(cs) {
 // B: glyph mask (1 = ink) at S px per em. Returns the cleaned mask (never removes ink).
 // hollow: the font only draws letter OUTLINES (e.g. "Fulturise Hollow" / Futuristic) — the
 // letter bodies between the outlines are filled first so the box is the real letter shape.
-function sign3dInfinityShape(B, W, H, S, hollow) {
+function sign3dInfinityShape(B, W, H, S, hollow, ch) {
     const n = W * H;
     // 1) Close gaps narrower than ~2.4% of the letter height (dilate, then erode).
     let out = sign3dCloseMask(B, W, H, S * 0.012);
@@ -1424,7 +1505,153 @@ function sign3dInfinityShape(B, W, H, S, hollow) {
         const round = comp.length < 2.4 * Math.PI * deepest * deepest;
         if ((deepest < maxR && comp.length < maxArea) || (round && deepest < S * 0.06)) comp.forEach((i) => { out[i] = 1; });
     }
+    // 3) A letter's real counters always stay open, however small (e.g. the two narrow slits of a
+    // heavy western "B", which the rules above would fill and turn the letter into a dark blob):
+    // the largest enclosed spaces of the original glyph, as many as the letter has.
+    const COUNTERS = { B: 2, '8': 2, g: 2, '%': 2, '&': 2, A: 1, D: 1, O: 1, P: 1, Q: 1, R: 1, a: 1, b: 1, d: 1, e: 1, o: 1, p: 1, q: 1, '0': 1, '4': 1, '6': 1, '9': 1, '@': 1 };
+    const want = !hollow && ch ? (COUNTERS[ch] || 0) : 0;
+    if (want) {
+        const { lab, count } = sign3dGlyphRegions(B, W, H);
+        if (count) {
+            const area = new Int32Array(count + 1);
+            const bx0 = new Int32Array(count + 1).fill(W);
+            const by0 = new Int32Array(count + 1).fill(H);
+            const bx1 = new Int32Array(count + 1).fill(-1);
+            const by1 = new Int32Array(count + 1).fill(-1);
+            for (let i = 0; i < n; i++) {
+                const r = lab[i];
+                if (r < 1) continue;
+                area[r]++;
+                const x = i % W;
+                const y = (i / W) | 0;
+                if (x < bx0[r]) bx0[r] = x;
+                if (x > bx1[r]) bx1[r] = x;
+                if (y < by0[r]) by0[r] = y;
+                if (y > by1[r]) by1[r] = y;
+            }
+            const keep = [];
+            for (let r = 1; r <= count; r++) {
+                const ext = Math.max(bx1[r] - bx0[r], by1[r] - by0[r]) + 1;
+                if (ext >= S * 0.05 && area[r] >= S * S * 0.0006) keep.push(r);
+            }
+            keep.sort((p, q) => area[q] - area[p]);
+            const open = new Uint8Array(count + 1);
+            keep.slice(0, want).forEach((r) => { open[r] = 1; });
+            for (let i = 0; i < n; i++) if (lab[i] > 0 && open[lab[i]]) out[i] = 0;
+        }
+    }
     return out;
+}
+
+// Iso-lines of a field (marching squares, saddles resolved by the cell centre): every line where
+// F crosses lv, chained into polylines [x0, y0, x1, y1, ...] in field pixels (pixel centres).
+// Returns [{ p: number[], closed: boolean }].
+function sign3dIsoLines(F, W, H, lv) {
+    const pt = new Map();
+    const link = new Map();
+    const edgePt = (id) => {
+        if (pt.has(id)) return;
+        const c = id >> 1;
+        const x = c % W;
+        const y = (c / W) | 0;
+        const a = F[c];
+        const b = (id & 1) ? F[c + W] : F[c + 1];
+        const t = b === a ? 0.5 : Math.max(0, Math.min(1, (lv - a) / (b - a)));
+        pt.set(id, (id & 1) ? [x, y + t] : [x + t, y]);
+    };
+    const add = (e1, e2) => {
+        edgePt(e1);
+        edgePt(e2);
+        if (!link.has(e1)) link.set(e1, []);
+        if (!link.has(e2)) link.set(e2, []);
+        link.get(e1).push(e2);
+        link.get(e2).push(e1);
+    };
+    for (let y = 0; y < H - 1; y++) {
+        for (let x = 0; x < W - 1; x++) {
+            const c = y * W + x;
+            const tl = F[c];
+            const tr = F[c + 1];
+            const br = F[c + W + 1];
+            const bl = F[c + W];
+            const idx = (tl >= lv ? 8 : 0) | (tr >= lv ? 4 : 0) | (br >= lv ? 2 : 0) | (bl >= lv ? 1 : 0);
+            if (idx === 0 || idx === 15) continue;
+            const T = c * 2;
+            const R = (c + 1) * 2 + 1;
+            const Bm = (c + W) * 2;
+            const L = c * 2 + 1;
+            const mid = (tl + tr + br + bl) / 4 >= lv;
+            switch (idx) {
+                case 1: case 14: add(L, Bm); break;
+                case 2: case 13: add(Bm, R); break;
+                case 3: case 12: add(L, R); break;
+                case 4: case 11: add(T, R); break;
+                case 6: case 9: add(T, Bm); break;
+                case 7: case 8: add(L, T); break;
+                case 5: if (mid) { add(T, L); add(Bm, R); } else { add(L, Bm); add(T, R); } break;
+                case 10: if (mid) { add(T, R); add(L, Bm); } else { add(L, T); add(Bm, R); } break;
+                default: break;
+            }
+        }
+    }
+    const used = new Set();
+    const lines = [];
+    const walk = (start) => {
+        const p = [];
+        let prev = -1;
+        let cur = start;
+        let closed = false;
+        while (cur !== undefined) {
+            used.add(cur);
+            const q = pt.get(cur);
+            p.push(q[0] + 0.5, q[1] + 0.5);
+            const nb = link.get(cur) || [];
+            let next;
+            for (let k = 0; k < nb.length; k++) {
+                if (nb[k] === prev) continue;
+                if (nb[k] === start && p.length > 4) { closed = true; next = undefined; break; }
+                if (!used.has(nb[k])) { next = nb[k]; break; }
+            }
+            prev = cur;
+            cur = next;
+        }
+        if (p.length >= 6) lines.push({ p, closed });
+    };
+    link.forEach((nb, id) => { if (!used.has(id) && nb.length === 1) walk(id); });
+    link.forEach((nb, id) => { if (!used.has(id)) walk(id); });
+    return lines;
+}
+
+// Points every `step` px along a polyline (closed lines: evenly spread around, a whole number
+// of steps). Returns [x0, y0, x1, y1, ...].
+function sign3dResample(line, step) {
+    const p = line.p;
+    const pts = [];
+    const m = p.length / 2;
+    const segs = line.closed ? m : m - 1;
+    let total = 0;
+    for (let i = 0; i < segs; i++) {
+        const j = (i + 1) % m;
+        total += Math.hypot(p[j * 2] - p[i * 2], p[j * 2 + 1] - p[i * 2 + 1]);
+    }
+    if (total < step * 0.75) return pts;
+    const count = Math.max(1, Math.round(total / step));
+    const st = total / count;
+    let want = line.closed ? st / 2 : 0;
+    let acc = 0;
+    for (let i = 0; i < segs; i++) {
+        const j = (i + 1) % m;
+        const ax = p[i * 2];
+        const ay = p[i * 2 + 1];
+        const len = Math.hypot(p[j * 2] - ax, p[j * 2 + 1] - ay);
+        while (want <= acc + len && pts.length / 2 < count + (line.closed ? 0 : 1)) {
+            const t = len ? (want - acc) / len : 0;
+            pts.push(ax + (p[j * 2] - ax) * t, ay + (p[j * 2 + 1] - ay) * t);
+            want += st;
+        }
+        acc += len;
+    }
+    return pts;
 }
 
 // Morphological closing (dilate, then erode by rc px): seals gaps narrower than 2 x rc.
@@ -1547,13 +1774,13 @@ function sign3dInfinityMask(ch, fontCss, fsPx) {
     const refKey = fontCss + '|infref|' + sign3dFontReady(fontCss);
     if (!(refKey in SIGN3D_BULB_CACHE)) {
         const rf = sign3dGlyphField('H', fontCss, S);
-        SIGN3D_BULB_CACHE[refKey] = rf ? sign3dShapeHalf(sign3dInfinityShape(rf.B, rf.W, rf.H, S, hollow), rf.W, rf.H) : 0;
+        SIGN3D_BULB_CACHE[refKey] = rf ? sign3dShapeHalf(sign3dInfinityShape(rf.B, rf.W, rf.H, S, hollow, 'H'), rf.W, rf.H) : 0;
     }
     const hwRef = SIGN3D_BULB_CACHE[refKey] || sign3dStrokeHalf(fontCss, S);
     const f = sign3dGlyphField(ch, fontCss, S);
     if (!f) return null;
-    const shapeKey = fontCss + '|' + ch + '|infshape|' + sign3dFontReady(fontCss);
-    const shape = SIGN3D_BULB_CACHE[shapeKey] || (SIGN3D_BULB_CACHE[shapeKey] = sign3dInfinityShape(f.B, f.W, f.H, S, hollow));
+    const shapeKey = fontCss + '|' + ch + '|infshape2|' + sign3dFontReady(fontCss);
+    const shape = SIGN3D_BULB_CACHE[shapeKey] || (SIGN3D_BULB_CACHE[shapeKey] = sign3dInfinityShape(f.B, f.W, f.H, S, hollow, ch));
     // This letter's own stroke, kept close to the font's (so every letter of the word matches).
     const hwOwnKey = shapeKey + '|hw';
     const hwOwn = SIGN3D_BULB_CACHE[hwOwnKey] || (SIGN3D_BULB_CACHE[hwOwnKey] = sign3dShapeHalf(shape, f.W, f.H) || hwRef);
@@ -1567,53 +1794,124 @@ function sign3dInfinityMask(ch, fontCss, fsPx) {
     let n = hw >= 22 ? 6 : (hw >= 15 ? 5 : (hw >= 10 ? 4 : (hw >= 7 ? 3 : 2)));
     const hwScreen = fsPx > 0 ? hw / S * fsPx : 999;
     n = Math.max(2, Math.min(n, Math.floor((hwScreen * 0.7) / 3.5) + 1));
-    // Lines at least ~0.85px wide on screen (mask px -> screen px = fsPx / S)
-    const wMin = fsPx > 0 ? Math.max(1.1, 0.85 * S / fsPx) : 1.1;
-    const key = fontCss + '|' + ch + '|inf9|' + n + '|' + Math.round(wMin * 4) + '|' + sign3dFontReady(fontCss);
+    // Screen px per mask px, and the drawing scale: the LED picture is drawn at the size it is
+    // shown (device pixels, up to 3x the mask) so the dots stay sharp — never stretched / blurry.
+    // (in ~12% steps, so dragging the size slider reuses the pictures already drawn)
+    const pxu = fsPx > 0 ? Math.pow(1.12, Math.round(Math.log(fsPx / S) / Math.log(1.12))) : 1;
+    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    const osc = Math.max(1, Math.min(3, Math.round(pxu * dpr * 4) / 4));
+    // Lines at least ~0.85px wide on screen
+    const wMin = Math.max(0.6, 0.85 / pxu);
+    const key = fontCss + '|' + ch + '|inf10|' + n + '|' + Math.round(Math.log(pxu) / Math.log(1.12)) + '|' + osc + '|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const { W, H, ox, base } = f;
-    const dist = sign3dEdt(shape, W, H);
+    // Distance field of the letter shape and a slightly smoothed copy for the LED lines (no pixel
+    // steps along curves) — cached per letter, so a new size only redraws the picture.
+    const geoKey = shapeKey + '|geo';
+    if (!SIGN3D_BULB_CACHE[geoKey]) {
+        const d0 = sign3dEdt(shape, W, H);
+        const sm = new Float32Array(W * H);
+        for (let y = 1; y < H - 1; y++) {
+            for (let x = 1; x < W - 1; x++) {
+                const i = y * W + x;
+                if (!d0[i]) continue;
+                sm[i] = (d0[i] * 4 + d0[i - 1] + d0[i + 1] + d0[i - W] + d0[i + W]) / 8;
+            }
+        }
+        SIGN3D_BULB_CACHE[geoKey] = { dist: d0, fld: sm, iso: {} };
+    }
+    const geo = SIGN3D_BULB_CACHE[geoKey];
+    const dist = geo.dist;
+    const fld = geo.fld;
+    // A real infinity mirror letter: one row of LEDs just inside the wall, then its reflections —
+    // copies of that LED row following the letter's outline into the depth, each one closer to the
+    // last, smaller and dimmer (perspective); the centre of the stroke stays dark. LEDs show as
+    // separate dots (like the strip in the client's photo) while they are big enough to see on
+    // screen; tiny letters get clean continuous lines instead.
     const r0 = Math.max(1.8, hw * 0.15);
     const rEnd = hw * 0.86;
     const q = 0.66;
     const span = 1 - Math.pow(q, n - 1) || 1;
-    const rings = [];
-    for (let k = 0; k < n; k++) {
+    const c = document.createElement('canvas');
+    c.width = Math.round(W * osc);
+    c.height = Math.round(H * osc);
+    const g = c.getContext('2d');
+    // Soft light of the LEDs on the mirror right next to the wall (no haze over the face).
+    const spKey = 'spill' + hw.toFixed(2);
+    let sp = geo[spKey];
+    if (!sp) {
+        sp = geo[spKey] = document.createElement('canvas');
+        sp.width = W;
+        sp.height = H;
+        const sg = sp.getContext('2d');
+        const id = sg.createImageData(W, H);
+        for (let i = 0; i < W * H; i++) {
+            const d = dist[i];
+            if (!d) continue;
+            id.data[i * 4] = 255;
+            id.data[i * 4 + 1] = 255;
+            id.data[i * 4 + 2] = 255;
+            id.data[i * 4 + 3] = Math.round(0.13 * Math.exp(-d / Math.max(1.5, hw * 0.26)) * 255);
+        }
+        sg.putImageData(id, 0, 0);
+    }
+    g.imageSmoothingEnabled = true;
+    g.drawImage(sp, 0, 0, c.width, c.height);
+    g.save();
+    g.scale(osc, osc);
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    const sprites = {};
+    const sprite = (rd) => {
+        const k = Math.round(rd * osc * 8);
+        if (sprites[k]) return sprites[k];
+        const R = Math.max(2, Math.ceil(rd * osc * 2.6));
+        const sc = document.createElement('canvas');
+        sc.width = sc.height = R * 2;
+        const x = sc.getContext('2d');
+        const gr = x.createRadialGradient(R, R, 0, R, R, R);
+        const core = (rd * osc) / R;
+        gr.addColorStop(0, 'rgba(255,255,255,1)');
+        gr.addColorStop(Math.min(0.9, core * 0.6), 'rgba(255,255,255,1)');
+        gr.addColorStop(Math.min(0.95, core), 'rgba(255,255,255,0.55)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        x.fillStyle = gr;
+        x.fillRect(0, 0, R * 2, R * 2);
+        return (sprites[k] = { c: sc, R: R / osc });
+    };
+    for (let k = n - 1; k >= 0; k--) {
         const depth = n > 1 ? k / (n - 1) : 0;
-        rings.push({
-            r: r0 + (rEnd - r0) * ((1 - Math.pow(q, k)) / span),
-            a: k === 0 ? 1 : 0.68 * Math.pow(0.66, k - 1),            // front LED brightest, each reflection dimmer
-            w: Math.max(wMin, hw * (k === 0 ? 0.12 : 0.095 - depth * 0.035)),
-            bloom: k === 0 ? 0.5 : 0.2 * (1 - depth * 0.6)
+        const r = r0 + (rEnd - r0) * ((1 - Math.pow(q, k)) / span);
+        const a = k === 0 ? 1 : 0.6 * Math.pow(0.62, k - 1);
+        const isoKey = r.toFixed(2);
+        const lines = geo.iso[isoKey] || (geo.iso[isoKey] = sign3dIsoLines(fld, W, H, r));
+        if (!lines.length) continue;
+        const step = Math.max(hw * 0.62 * (1 - 0.4 * depth), 1.2);
+        let rd = Math.max(0.5 / pxu, hw * (k === 0 ? 0.1 : 0.068 * (1 - 0.45 * depth)));
+        rd = Math.min(rd, step * 0.34);
+        const dots = step * pxu >= 2.8 && rd * pxu >= 0.45;
+        // The LED strip / its reflection as a faint continuous line (the only line when too small
+        // for dots).
+        g.globalAlpha = dots ? a * (k === 0 ? 0.5 : 0.36) : a;
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = dots ? Math.max(wMin * 0.7, rd * 0.9) : Math.max(wMin, hw * (k === 0 ? 0.12 : 0.095 - depth * 0.035));
+        g.beginPath();
+        lines.forEach((ln) => {
+            const p = ln.p;
+            g.moveTo(p[0], p[1]);
+            for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]);
+            if (ln.closed) g.closePath();
+        });
+        g.stroke();
+        if (!dots) continue;
+        const spr = sprite(rd);
+        g.globalAlpha = a;
+        lines.forEach((ln) => {
+            const pts = sign3dResample(ln, step);
+            for (let i = 0; i < pts.length; i += 2) g.drawImage(spr.c, pts[i] - spr.R, pts[i + 1] - spr.R, spr.R * 2, spr.R * 2);
         });
     }
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d');
-    const id = g.createImageData(W, H);
-    for (let i = 0; i < W * H; i++) {
-        const d = dist[i];
-        if (!d) continue;
-        let a = 0;
-        for (let k = 0; k < rings.length; k++) {
-            const rk = rings[k];
-            if (rk.r > d + rk.w * 4) continue;
-            const off = Math.abs(d - rk.r);
-            const core = Math.max(0, 1 - off / rk.w);
-            const halo = Math.max(0, 1 - off / (rk.w * 4)) * rk.bloom;
-            const v = rk.a * Math.min(1, 1.5 * core + halo);
-            if (v > a) a = v;
-        }
-        // Soft light from the LED on the mirror right next to the wall only (no haze over the face)
-        const spill = Math.exp(-d / Math.max(1.5, hw * 0.28));
-        a = Math.max(a, 0.12 * spill);
-        id.data[i * 4] = 255;
-        id.data[i * 4 + 1] = 255;
-        id.data[i * 4 + 2] = 255;
-        id.data[i * 4 + 3] = Math.round(a * 255);
-    }
-    g.putImageData(id, 0, 0);
+    g.restore();
     // Solid mask of the cleaned letter (only when something was filled in): the dark mirror face
     // over the filled ornaments, under the LED rings.
     let faceUrl = '';
@@ -1826,6 +2124,20 @@ function sign3dHydrateOptions(root) {
     fillSelect('[data-mounting-select]', 'mounting', (opt, o) => {
         opt.dataset.sortOrder = o.s;
         opt.dataset.image = o.i || '';
+        // Event Marquee / Infinity Mirror: own Mounting card picture — the Admin "Event Marquee /
+        // Infinity Mirror image" of this entry (3D Signs > Mounting), else the client's built-in
+        // picture for its backing type (moz-mnt-*.jpg), else the shared Admin image as before.
+        if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity') {
+            const bt = String(o.b || '').trim().toLowerCase();
+            const lt = String(o.l || '').toLowerCase();
+            const type = ['none', 'raceway', 'rectangle', 'circle'].indexOf(bt) > -1 ? bt
+                : /no\s*backing|without|none|freestand/.test(lt) ? 'none'
+                    : /raceway/.test(lt) ? 'raceway'
+                        : /circle|round/.test(lt) ? 'circle'
+                            : /rect|square|panel/.test(lt) ? 'rectangle' : 'none';
+            const builtIn = root.dataset['mnt' + type.charAt(0).toUpperCase() + type.slice(1)] || '';
+            opt.dataset.image = o.im || builtIn || o.i || '';
+        }
         opt.dataset.backingType = o.b || '';
         opt.dataset.description = o.d || '';
         if (o.wmin) opt.dataset.wmin = o.wmin;
@@ -5437,20 +5749,21 @@ function initSign3dConfigurator(root) {
     // box centred in the preview as before.
     const LBX_WALL = { w: 1535, h: 1024, panelL: 432, panelR: 748, mountX: 590, mountY: 430, bracketLeft: 452, tipY: 430, bracketH: 252 };
     // Wall Hanging: box width in photo pixels for a size in cm (eased so large sizes stay on the wall;
-    // the wallpaper stays still and only the sign changes size).
-    const lbxWallPx = (cm) => 300 * Math.pow(Math.max(10, cm) / 30, 0.6);
+    // the wallpaper stays still and only the sign changes size). Client: 30 cm a little smaller and
+    // only a small step up per size, so 120 cm still fits the screen (~1.7x the 30 cm box).
+    const lbxWallPx = (cm) => 255 * Math.pow(Math.max(10, cm) / 30, 0.38);
     // Wall Mount: true scale on the wooden panel — the largest size offered fills ~76% of the panel's
     // width, every other size in exact proportion (so every size sits fully on the wood).
     function lbxMountPxPerCm() {
         const largest = Math.max(60, lbSizes.reduce((m, r) => Math.max(m, r.w), 0), Number(getWidthCm()) || 0);
         return ((LBX_WALL.panelR - LBX_WALL.panelL) * 0.76) / largest;
     }
-    // Wall Mount box width in photo pixels for a size in cm: the largest size fills ~76% of the
-    // panel's width; smaller sizes are eased (same curve as Wall Hanging) so the default / small
-    // sizes still show clearly on the wall — every size stays fully on the wooden panel.
+    // Wall Mount box width in photo pixels for a size in cm: the largest size fills ~86% of the
+    // panel's width (client: a bit larger, never wider than the brown wall, side return included);
+    // smaller sizes are eased so the default / small sizes still show clearly on the wall.
     function lbxMountPhotoW(cm) {
         const largest = Math.max(60, lbSizes.reduce((m, r) => Math.max(m, r.w), 0), Number(cm) || 0);
-        return (LBX_WALL.panelR - LBX_WALL.panelL) * 0.76 * Math.pow(Math.max(10, Number(cm) || 60) / largest, 0.6);
+        return (LBX_WALL.panelR - LBX_WALL.panelL) * 0.86 * Math.pow(Math.max(10, Number(cm) || 60) / largest, 0.45);
     }
     // Wall Mount on the photo: seen like the wooden panel itself (camera a little to the left, at
     // about the sign's height): the box's left side return shows, a touch of its underside, and the
@@ -5610,9 +5923,10 @@ function initSign3dConfigurator(root) {
             const minCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.min(m, r.w), Infinity) : 30;
             const maxCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.max(m, r.w), 0) : 120;
             const t = maxCm > minCm ? Math.max(0, Math.min(1, (cmNow - minCm) / (maxCm - minCm))) : 1;
-            // On screen the sign grows a little with its size while the wallpaper zooms out
-            // (scale worked out from the visible wallpaper area in lightboxWallMap).
-            zoom = { fit: (pw, ph) => Math.min(1.6, (Math.min(pw, ph) * (0.33 + 0.15 * t)) / Math.max(1, boxMax)), x: LBX_WALL.mountX, y: LBX_WALL.mountY };
+            // On screen the sign grows slowly with its size while the wallpaper zooms out (scale worked
+            // out from the visible wallpaper area in lightboxWallMap). Client: the smallest size shows
+            // as large as 50 cm used to, rising gently to the largest.
+            zoom = { fit: (pw, ph) => Math.min(1.6, (Math.min(pw, ph) * (0.34 + 0.16 * t)) / Math.max(1, boxMax)), x: LBX_WALL.mountX, y: LBX_WALL.mountY };
         }
         const wall = lightboxWallMap(stageRect, LBX_WALL.bracketLeft + 260, zoom);
         if (wall && !hanging) LBX_SIDE = LBX_SIDE_PHOTO;

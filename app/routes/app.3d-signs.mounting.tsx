@@ -12,6 +12,8 @@ type Entry = {
     description: string;
     backingType: string;
     imageUrl: string;
+    // Event Marquee / Infinity Mirror card picture (field image_marquee); empty = built-in picture.
+    marqueeImageUrl: string;
 };
 type Badge = { id: string; imageUrl: string } | null;
 
@@ -95,9 +97,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const all = data.data.metaobjects.edges.map((edge: any) => {
         const f: Record<string, string> = {};
         let imageUrl = "";
+        let marqueeImageUrl = "";
         edge.node.fields.forEach((x: any) => {
             f[x.key] = x.value;
             if (x.key === "image" && x.reference?.image?.url) imageUrl = x.reference.image.url;
+            if (x.key === "image_marquee" && x.reference?.image?.url) marqueeImageUrl = x.reference.image.url;
         });
         return {
             id: edge.node.id,
@@ -108,6 +112,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             description: f.description || "",
             backingType: f.backing_type || "",
             imageUrl,
+            marqueeImageUrl,
         };
     });
     const items: Entry[] = all.filter((a: any) => a.category === "mounting");
@@ -182,12 +187,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const backingType = String(formData.get("backingType") || "");
         const description = String(formData.get("description") || "");
         const file = formData.get("imageFile");
+        const mqFile = formData.get("imageMarqueeFile");
 
         if (intent === "create") {
             const fields = [...baseFields];
             if (backingType) fields.push({ key: "backing_type", value: backingType });
             if (description) fields.push({ key: "description", value: description });
             if (hasFile(file)) fields.push({ key: "image", value: await uploadImageFile(admin, file) });
+            if (hasFile(mqFile)) fields.push({ key: "image_marquee", value: await uploadImageFile(admin, mqFile) });
             const response = await admin.graphql(
                 `#graphql
       mutation Create($metaobject: MetaobjectCreateInput!) {
@@ -206,6 +213,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             const fields = [...baseFields, { key: "backing_type", value: backingType }, { key: "description", value: description }];
             // Image is only replaced when a new file is chosen; otherwise the current image stays.
             if (hasFile(file)) fields.push({ key: "image", value: await uploadImageFile(admin, file) });
+            // Event Marquee / Infinity Mirror picture: replaced when a file is chosen, cleared with
+            // "Use built-in" (the storefront then shows the built-in picture for the backing type).
+            if (hasFile(mqFile)) fields.push({ key: "image_marquee", value: await uploadImageFile(admin, mqFile) });
+            else if (formData.get("removeMarqueeImage") === "on") fields.push({ key: "image_marquee", value: "" });
             const response = await admin.graphql(
                 `#graphql
       mutation Update($id: ID!, $metaobject: MetaobjectUpdateInput!) {
@@ -272,6 +283,11 @@ export default function MountingPage() {
                     Use 4 entries: No Backing Panel, Raceway, Rectangle Backing Panel and Circle Backing Panel. "Backing Type" controls the
                     preview drawing and the installation / power-supply rules. Leave it on Auto-detect to read it from the label.
                 </s-paragraph>
+                <s-paragraph>
+                    Images: "Image" is the card picture on 3D Illuminated Signs. Event Marquee and Infinity Mirror show their own picture:
+                    the "Marquee / Infinity image" when uploaded, otherwise the built-in client picture for the Backing Type
+                    (No Backing / Raceway / Rectangle / Circle).
+                </s-paragraph>
                 <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -280,7 +296,8 @@ export default function MountingPage() {
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={items.length + 1} />
                         <select name="backingType" defaultValue="">{BACKING_OPTIONS}</select>
                         <input type="text" name="description" placeholder="Short description (optional)" />
-                        <input type="file" name="imageFile" accept="image/*" />
+                        <label>3D image <input type="file" name="imageFile" accept="image/*" /></label>
+                        <label>Marquee / Infinity image <input type="file" name="imageMarqueeFile" accept="image/*" /></label>
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -290,7 +307,8 @@ export default function MountingPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                         <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
-                            <th style={{ padding: "8px" }}>Image</th>
+                            <th style={{ padding: "8px" }}>Image (3D)</th>
+                            <th style={{ padding: "8px" }}>Marquee / Infinity image</th>
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Backing Type</th>
                             <th style={{ padding: "8px" }}>Extra Price</th>
@@ -302,7 +320,7 @@ export default function MountingPage() {
                         {items.map((item) => (
                             <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === item.id ? (
-                                    <td colSpan={6} style={{ padding: "8px" }}>
+                                    <td colSpan={7} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={item.id} />
@@ -312,7 +330,11 @@ export default function MountingPage() {
                                                 <input type="number" name="sortOrder" defaultValue={item.sortOrder} />
                                                 <select name="backingType" defaultValue={item.backingType}>{BACKING_OPTIONS}</select>
                                                 <input type="text" name="description" defaultValue={item.description} placeholder="Short description" />
-                                                <input type="file" name="imageFile" accept="image/*" />
+                                                <label>3D image <input type="file" name="imageFile" accept="image/*" /></label>
+                                                <label>Marquee / Infinity image <input type="file" name="imageMarqueeFile" accept="image/*" /></label>
+                                                {item.marqueeImageUrl ? (
+                                                    <label><input type="checkbox" name="removeMarqueeImage" /> Use built-in Marquee / Infinity image</label>
+                                                ) : null}
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -326,6 +348,13 @@ export default function MountingPage() {
                                                 <img src={item.imageUrl} alt={item.label} style={{ width: 64, height: 48, objectFit: "contain", background: "#111", borderRadius: 4 }} />
                                             ) : (
                                                 "—"
+                                            )}
+                                        </td>
+                                        <td style={{ padding: "8px" }}>
+                                            {item.marqueeImageUrl ? (
+                                                <img src={item.marqueeImageUrl} alt={item.label} style={{ width: 48, height: 48, objectFit: "contain", background: "#eee", borderRadius: 4 }} />
+                                            ) : (
+                                                <small style={{ color: "#666" }}>Built-in</small>
                                             )}
                                         </td>
                                         <td style={{ padding: "8px" }}>{item.label}</td>
