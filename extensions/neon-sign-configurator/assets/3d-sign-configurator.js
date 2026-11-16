@@ -193,7 +193,7 @@ async function addConfiguredLine(routesRoot, variantId, properties, sectionIds, 
         const added = Array.isArray(addResult && addResult.items)
             ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
             : null;
-        if (configLinePriceOk(added, want)) return addResult;
+        if (configLinePriceOk(added, want)) return await mozSettleSections(routesRoot, sectionIds, addResult, want);
 
         // Line went in at the wrong price: give Shopify a moment to apply the real price.
         for (let check = 0; check < 6; check++) {
@@ -213,10 +213,45 @@ async function addConfiguredLine(routesRoot, variantId, properties, sectionIds, 
     throw new Error('Configured price was not applied in the cart');
 }
 
-// A brand-new price variant can show as $0.00 in the cart drawer for a few seconds while
-// Shopify finishes setting it up (a refresh / checkout always shows the right price). If the
-// line just added isn't at the configured price yet, wait until the cart has the real price,
-// then redraw the theme's cart (drawer, totals, icon) with fresh sections.
+// Before the cart drawer opens: when the drawer drawn by the add still shows an old price (see
+// mozSectionsShowPrice), fetch it again for a few seconds so the customer sees the right price
+// straight away. Returns addResult (with the newer sections when they arrived in time).
+async function mozSettleSections(routesRoot, sectionIds, addResult, cents) {
+    if (!addResult || !sectionIds.length || !cents || mozSectionsShowPrice(addResult.sections, cents)) return addResult;
+    for (let i = 0; i < 6; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+            const fresh = await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')) + '&_=' + Date.now(), { cache: 'no-store' })).json();
+            if (mozSectionsShowPrice(fresh, cents)) { addResult.sections = fresh; break; }
+        } catch (err) {
+            /* keep the sections from the add */
+        }
+    }
+    return addResult;
+}
+
+// Does the theme's freshly rendered cart (sections HTML) show the configured price? Shopify can
+// render the cart drawer from an older copy of a brand-new / just re-priced variant for a few
+// seconds — the cart itself (cart.js, checkout) already has the right price, but the drawer
+// would show $0.00. Looks for the amount in any usual money format (1,690.00 / 1690 / 1.690,00).
+function mozSectionsShowPrice(sections, cents) {
+    if (!sections || typeof sections !== 'object') return false;
+    const html = Object.keys(sections).map((k) => String(sections[k] || '')).join(' ');
+    if (!html) return false;
+    const text = html.replace(/<[^>]*>/g, ' ');
+    const whole = String(Math.floor(cents / 100));
+    const dec = String(cents % 100).padStart(2, '0');
+    const groups = [];
+    for (let i = whole.length; i > 0; i -= 3) groups.unshift(whole.slice(Math.max(0, i - 3), i));
+    const intPart = groups.join("[.,'\\s\\u00a0\\u202f]?");
+    const decPart = dec === '00' ? '(?:[.,]00)?' : '[.,]' + dec;
+    return new RegExp('(^|[^\\d])' + intPart + decPart + '(?![\\d])').test(text);
+}
+
+// A brand-new / just re-priced variant can show as $0.00 in the cart drawer for a few seconds
+// while Shopify finishes setting it up (a refresh / checkout always shows the right price). Until
+// the cart line has the configured price AND the theme's re-rendered cart shows it, keep checking
+// (about 20 seconds); then redraw the theme's cart (drawer, totals, icon) with those sections.
 async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionIds, addResult, sourceId) {
     const want = Math.round((Number(expectedPrice) || 0) * 100);
     if (!want) return;
@@ -224,10 +259,12 @@ async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionId
     const added = addResult && Array.isArray(addResult.items)
         ? addResult.items.find((item) => String(item.variant_id) === String(variantId))
         : null;
-    const firstOk = lineOk(added);
+    // The cart drawer drawn by the add itself already shows the right price: nothing to fix.
+    if (lineOk(added) && mozSectionsShowPrice(addResult && addResult.sections, want)) return;
 
-    for (let attempt = 0; attempt < 15; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? (firstOk ? 1200 : 700) : 1000));
+    const ATTEMPTS = 20;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 700 : 1000));
         let cart;
         try {
             cart = await (await fetch(routesRoot + 'cart.js', { cache: 'no-store' })).json();
@@ -240,10 +277,12 @@ async function syncCartLinePrice(routesRoot, variantId, expectedPrice, sectionId
         let sections;
         if (sectionIds.length) {
             try {
-                sections = await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')), { cache: 'no-store' })).json();
+                sections = await (await fetch(routesRoot + '?sections=' + encodeURIComponent(sectionIds.join(',')) + '&_=' + Date.now(), { cache: 'no-store' })).json();
             } catch (err) {
                 sections = undefined;
             }
+            // Drawer still drawn with the old price: wait and fetch it again (last try: use it anyway).
+            if (!mozSectionsShowPrice(sections, want) && attempt < ATTEMPTS - 1) continue;
         }
         try {
             const themeEvents = await import('@theme/events');
@@ -4441,7 +4480,7 @@ function initSign3dConfigurator(root) {
                     throw new Error('Variant price ' + proxyData.price + ' does not match configured total ' + currentTotal.toFixed(2));
                 }
                 const priceMatchedVariantId = proxyData.variantId;
-                const isNewVariant = proxyData.reused === false;
+                const isNewVariant = proxyData.reused === false || proxyData.fixed === true;
 
                 setButtonLoadingText(addToCartBtn, 'Adding...');
                 const routesRoot = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';

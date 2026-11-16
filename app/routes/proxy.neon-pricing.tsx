@@ -152,7 +152,8 @@ async function handlePricing(request: Request, admin: any) {
             return Response.json({ error: "Could not set the configured price" }, { status: 422 });
         }
         const numericVariantId = verified.id.split("/").pop();
-        return Response.json({ variantId: numericVariantId, price: verified.price, reused: true });
+        // fixed: the price was just changed — the storefront waits for it like a brand-new variant.
+        return Response.json({ variantId: numericVariantId, price: verified.price, reused: true, fixed: !!verified.fixed });
     }
 
     // Step 4: No matching variant found — create a new one for this exact price.
@@ -192,7 +193,7 @@ async function handlePricing(request: Request, admin: any) {
         const existing = await findConfigVariant(admin, gid, optionValue);
         const verified = existing ? await ensureVariantPrice(admin, gid, existing, priceString) : null;
         if (verified) {
-            return Response.json({ variantId: verified.id.split("/").pop(), price: verified.price, reused: true });
+            return Response.json({ variantId: verified.id.split("/").pop(), price: verified.price, reused: true, fixed: !!verified.fixed });
         }
         console.error("Neon Pricing Proxy: userErrors", result.userErrors);
         return Response.json({ error: result.userErrors[0].message }, { status: 422 });
@@ -285,7 +286,7 @@ async function updateVariantPrice(admin: any, productGid: string, variant: any, 
         console.error("Neon Pricing Proxy: could not set variant price", variant.id, priceString, errors);
         return null;
     }
-    return updated;
+    return { ...updated, fixed: true };
 }
 
 // Handles a customer-uploaded design file (Bonnet / Lightbox configurators) via Shopify's
