@@ -3555,3 +3555,39 @@
 .sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards] .sign3d-configurator__pick-card-img.is-cleaning {
     visibility: hidden;
 }
+
+/* Infinity Mirror freestanding (placeSignOnScene): soft contact shadow on the floor under the sign */
+.sign3d-configurator .sign3d-configurator__floor-shadow {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.18) 45%, rgba(0, 0, 0, 0) 72%);
+}
+.sign3d-configurator .sign3d-configurator__floor-shadow[hidden] {
+    display: none;
+}
+
+/* 3D Illuminated Signs, Front-Lit (client): the light comes out of the face only — no glow on the
+   wall behind (just the crisp lit edge). The other types keep their glow and also get the wall wash
+   (JS updateWallGlow). */
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__letter {
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.7),
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent);
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_lit .sign3d-configurator__preview-icon {
+    filter: brightness(1.12);
+}
+/* Wall wash of light from the sign (backlit / front & back / fully illuminated) */
+.sign3d-configurator .sign3d-configurator__wall-glow {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(6px);
+    transition: opacity 0.3s ease;
+}
+.sign3d-configurator .sign3d-configurator__wall-glow[hidden] {
+    display: none;
+}

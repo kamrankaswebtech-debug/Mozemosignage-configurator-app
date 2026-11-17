@@ -2272,6 +2272,8 @@ function sign3dHydrateOptions(root) {
     fillSelect('[data-material-select]', 'material', null, '[data-sign3d-materials]');
     fillSelect('[data-depth-select]', 'depth_tier', (opt, o) => { opt.value = o.t; opt.dataset.label = o.l; });
     const isMarqueeMode = root.dataset.sign3dMode === 'marquee';
+    // Event Marquee and Infinity Mirror (client): "No Backing" is the freestanding sign.
+    const freestandMode = isMarqueeMode || root.dataset.sign3dMode === 'infinity';
     fillSelect('[data-mounting-select]', 'mounting', (opt, o) => {
         opt.dataset.sortOrder = o.s;
         opt.dataset.image = o.i || '';
@@ -2294,18 +2296,21 @@ function sign3dHydrateOptions(root) {
         opt.dataset.description = o.d || '';
         if (o.wmin) opt.dataset.wmin = o.wmin;
         if (o.wmax) opt.dataset.wmax = o.wmax;
-        // Event Marquee: "No Backing" means the sign is freestanding (stands on the floor);
-        // every backing option is for wall mounting only.
-        if (isMarqueeMode) {
-            if ((o.b || '') === 'none') {
+        // Event Marquee / Infinity Mirror: "No Backing" means the sign is freestanding (stands on
+        // the floor); every backing option is for wall mounting only.
+        if (freestandMode) {
+            const bNone = String(o.b || '').trim().toLowerCase();
+            if (bNone === 'none' || (!bNone && /nos*backing|without/i.test(o.l))) {
                 if (!/freestand/i.test(o.l)) opt.textContent = o.l + ' (Freestanding)';
-                opt.dataset.description = 'Freestanding: the letters stand on the floor and plug into a standard power outlet — no backing panel or wall fixing needed.';
+                opt.dataset.description = isMarqueeMode
+                    ? 'Freestanding: the letters stand on the floor and plug into a standard power outlet — no backing panel or wall fixing needed.'
+                    : 'Freestanding: the letters stand upright on the floor — no backing panel or wall fixing needed.';
             } else {
                 opt.dataset.description = (o.d ? o.d + ' ' : '') + 'Designed for wall mounting only (not freestanding).';
             }
         }
     }, '[data-sign3d-mountings]');
-    if (isMarqueeMode) {
+    if (freestandMode) {
         // No separate Freestanding option: an Admin "Freestanding" mounting is dropped when a
         // No Backing option exists (No Backing already is the freestanding sign).
         const ms = root.querySelector('[data-mounting-select]');
@@ -2350,6 +2355,11 @@ function sign3dHydrateOptions(root) {
             // Admin "Content Background Colour" (empty = auto from the image).
             btn.dataset.contentBg = o.cb || '';
             btn.dataset.sampleUrl = o.th || '';
+            // Sign placement on this photo (Admin, % of the photo height): floor line for a
+            // freestanding sign, wall-mounted sign centre and its max height. 0 / empty = automatic.
+            btn.dataset.floorY = Number(o.fy) > 0 ? String(o.fy) : '';
+            btn.dataset.wallY = Number(o.wy) > 0 ? String(o.wy) : '';
+            btn.dataset.wallH = Number(o.wh) > 0 ? String(o.wh) : '';
             btn.title = o.l;
             btn.setAttribute('aria-label', o.l);
             const img = document.createElement('img');
@@ -2744,6 +2754,53 @@ function initSign3dConfigurator(root) {
         }
         if (logoImg) {
             logoImg.style.filter = buildLogoIlluminationFilter(depthMm);
+        }
+        updateWallGlow();
+    }
+
+    // ---- 3D Illuminated Signs: light from the sign on the wall behind it (client) ----
+    // Front-Lit: no glow on the wall (the light only comes out of the face). Backlit, Front &
+    // Backlit and Fully Illuminated: a soft wash of light in the LED colour on the wall / backing
+    // panel around the sign — strongest for backlit (the light shines onto the wall), softer for
+    // the others. Drawn behind the sign (above the wallpaper and the backing panel), following
+    // the sign wherever it is placed. LED Off = none.
+    var wallGlowEl = null;
+    function updateWallGlow(rect) {
+        try {
+            if (root.dataset.sign3dMode !== '3d' || !previewStage) return;
+            const key = getIlluminationKey();
+            const looks = {
+                backlit: { a: 0.55, spread: 0.55 },
+                front_back_lit: { a: 0.38, spread: 0.45 },
+                fully_illuminated: { a: 0.32, spread: 0.5 }
+            };
+            const look = ledOn ? looks[key] : null;
+            if (look && !rect) rect = getSignContentRect();
+            if (!look || !rect || !rect.width || !rect.height) {
+                if (wallGlowEl) wallGlowEl.hidden = true;
+                return;
+            }
+            if (!wallGlowEl) {
+                wallGlowEl = document.createElement('i');
+                wallGlowEl.className = 'sign3d-configurator__wall-glow';
+                wallGlowEl.setAttribute('aria-hidden', 'true');
+                if (previewInner && previewInner.parentNode === previewStage) previewStage.insertBefore(wallGlowEl, previewInner);
+                else previewStage.insertBefore(wallGlowEl, previewStage.firstChild);
+            }
+            const st = previewStage.getBoundingClientRect();
+            const padX = rect.width * look.spread * 0.2 + rect.height * 0.7;
+            const padY = rect.height * (0.5 + look.spread * 0.5);
+            const rgb = sign3dParseHex(selectedColourHex || '#ffffff');
+            const c = (a) => 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + a.toFixed(3) + ')';
+            wallGlowEl.hidden = false;
+            wallGlowEl.style.left = (rect.left - st.left - padX) + 'px';
+            wallGlowEl.style.top = (rect.top - st.top - padY) + 'px';
+            wallGlowEl.style.width = (rect.width + padX * 2) + 'px';
+            wallGlowEl.style.height = (rect.height + padY * 2) + 'px';
+            wallGlowEl.style.background = 'radial-gradient(ellipse closest-side at 50% 50%, '
+                + c(look.a) + ' 0%, ' + c(look.a * 0.8) + ' 30%, ' + c(look.a * 0.38) + ' 62%, ' + c(0) + ' 100%)';
+        } catch (err) {
+            /* called during start-up before everything exists — drawn on the next update */
         }
     }
 
@@ -3653,7 +3710,9 @@ function initSign3dConfigurator(root) {
         updateContentStrip();
 
         const area = previewFreeArea();
-        let targetW = area.w * previewFillShare();
+        // sceneFitScale: smaller when the sign must fit a wall / floor area of the wallpaper scene
+        // (placeSignOnScene); 1 everywhere else.
+        let targetW = area.w * previewFillShare() * (sceneFitScale || 1);
         // A round backing panel is as tall as the sign is wide: keep the whole circle in view.
         // A round backing panel is as tall as the sign is wide: keep the whole circle inside the
         // visible wallpaper (about half the preview height, clear of the toggles and thumbnails).
@@ -3701,6 +3760,7 @@ function initSign3dConfigurator(root) {
         updateLogoPreviewSize(widthCm, heightCm, targetW / lightboxScale());
         updateMountingInfo();
         updateDimensionLines();
+        placeSignOnScene();
     }
 
     // Keeps the Width/Height dimension lines hugging the ACTUAL rendered sign content
@@ -3735,6 +3795,7 @@ function initSign3dConfigurator(root) {
         const stageRect = previewStage.getBoundingClientRect();
         let contentRect = getSignContentRect();
         updateBackingPanel(contentRect, stageRect);
+        updateWallGlow(contentRect);
         if (!contentRect || !contentRect.width || !contentRect.height) return;
         // Lightbox: the measurements are of the box, not of the design inside it.
         // (The angled box's on-screen outline, not counting the bracket.)
@@ -4086,6 +4147,7 @@ function initSign3dConfigurator(root) {
             selectedBgUrl = thumb.dataset.bgUrl;
             applyWallpaperBackground();
             applyContentBgFor(thumb);
+            placeSignOnScene();
         });
     });
 
@@ -4196,6 +4258,251 @@ function initSign3dConfigurator(root) {
         previewInner._sign3dShift = shift;
         previewInner.style.transform = shift ? 'translateX(' + shift + 'px)' : '';
         if (typeof updateDimensionLines === 'function') updateDimensionLines();
+        placeSignOnScene();
+    }
+
+    // ---- Event Marquee / Infinity Mirror: the sign placed in the wallpaper scene ----
+    // Freestanding: the sign stands upright on the floor of the photo (its base on the floor
+    // line). Wall mounted: the sign moves onto the wall (its centre at the photo's wall height).
+    // It switches automatically with the Mounting option, the wallpaper and the screen size. The
+    // places come from Admin (Configurator Wallpapers: floor line / wall centre / wall max height,
+    // % of the photo height); a wallpaper without them uses an automatically found floor line.
+    // The sign is only moved (and scaled down when it would not fit — text and logo alike), never
+    // made bigger; any other wallpaper source / Wallpaper Off keeps it centred as before.
+    // var (not const / let): placeSignOnScene can run before this line during start-up.
+    var sceneImgCache;
+    var scenePlacing;
+    var sceneFitScale = 1;
+    var sceneShadowEl = null;
+    function sceneFloorShadow(rect) {
+        if (!rect || !previewStage) {
+            if (sceneShadowEl) sceneShadowEl.hidden = true;
+            return;
+        }
+        if (!sceneShadowEl) {
+            sceneShadowEl = document.createElement('i');
+            sceneShadowEl.className = 'sign3d-configurator__floor-shadow';
+            sceneShadowEl.setAttribute('aria-hidden', 'true');
+            previewStage.insertBefore(sceneShadowEl, previewStage.firstChild);
+        }
+        const st = previewStage.getBoundingClientRect();
+        const h = Math.max(8, rect.height * 0.14);
+        sceneShadowEl.hidden = false;
+        sceneShadowEl.style.left = (rect.left - st.left - rect.width * 0.04) + 'px';
+        sceneShadowEl.style.width = (rect.width * 1.08) + 'px';
+        sceneShadowEl.style.top = (rect.bottom - st.top - h * 0.55) + 'px';
+        sceneShadowEl.style.height = h + 'px';
+    }
+    var sceneRefits = 0;
+    var sceneRefitTimer = null;
+    function sceneImageInfo(url) {
+        if (!url) return null;
+        if (!sceneImgCache) sceneImgCache = {};
+        if (sceneImgCache[url]) return sceneImgCache[url].done ? sceneImgCache[url] : null;
+        const entry = sceneImgCache[url] = { done: false, w: 0, h: 0, floor: 0 };
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => {
+            entry.w = im.naturalWidth;
+            entry.h = im.naturalHeight;
+            entry.floor = sceneFindFloor(im);
+            entry.wall = sceneFindWall(im);
+            entry.done = true;
+            placeSignOnScene();
+        };
+        // Picture not readable with CORS: load it plainly for its size only (Admin values still
+        // work; no automatic floor line).
+        im.onerror = () => {
+            const plain = new Image();
+            plain.onload = () => {
+                entry.w = plain.naturalWidth;
+                entry.h = plain.naturalHeight;
+                entry.done = true;
+                placeSignOnScene();
+            };
+            plain.onerror = () => { entry.done = true; };
+            plain.src = url;
+        };
+        im.src = url;
+        return null;
+    }
+    // Floor line of a room photo: the strongest long horizontal edge (skirting / wall-to-floor
+    // line) in the middle of the picture, between 45% and 92% of its height. 0 = not found.
+    function sceneFindFloor(im) {
+        try {
+            const W = 160;
+            const H = Math.max(40, Math.round(W * (im.naturalHeight / im.naturalWidth || 0.67)));
+            const c = document.createElement('canvas');
+            c.width = W;
+            c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true });
+            g.drawImage(im, 0, 0, W, H);
+            const d = g.getImageData(0, 0, W, H).data;
+            const L = (x, y) => { const i = (y * W + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
+            let best = 0;
+            let bestY = 0;
+            for (let y = Math.round(H * 0.45); y < Math.round(H * 0.92); y++) {
+                let e = 0;
+                for (let x = Math.round(W * 0.25); x < Math.round(W * 0.75); x++) e += Math.abs(L(x, y + 1) - L(x, y - 1));
+                if (e > best) { best = e; bestY = y; }
+            }
+            return best > W * 0.5 * 6 ? (bestY / H) * 100 : 0;
+        } catch (err) {
+            return 0;
+        }
+    }
+    // Empty wall area of a photo (3D Illuminated Signs): the tallest calm band (no windows, doors,
+    // awnings or decorations) across the middle of the picture, between 3% and 75% of its height.
+    // Returns { c, h } = its centre and height in % of the photo height, or null.
+    function sceneFindWall(im) {
+        try {
+            const W = 160;
+            const H = Math.max(40, Math.round(W * (im.naturalHeight / im.naturalWidth || 0.67)));
+            const c = document.createElement('canvas');
+            c.width = W;
+            c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true });
+            g.drawImage(im, 0, 0, W, H);
+            const d = g.getImageData(0, 0, W, H).data;
+            const L = (x, y) => { const i = (y * W + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
+            const x0 = Math.round(W * 0.3);
+            const x1 = Math.round(W * 0.7);
+            const calm = [];
+            for (let y = 1; y < H - 1; y++) {
+                let t = 0;
+                for (let x = x0; x < x1; x++) t += Math.abs(L(x + 1, y) - L(x - 1, y)) + Math.abs(L(x, y + 1) - L(x, y - 1));
+                calm[y] = t / (x1 - x0) < 7;
+            }
+            const yA = Math.round(H * 0.03);
+            const yB = Math.round(H * 0.75);
+            let best = null;
+            let start = -1;
+            let gap = 0;
+            for (let y = yA; y <= yB; y++) {
+                if (calm[y]) {
+                    if (start < 0) start = y;
+                    gap = 0;
+                } else if (start >= 0 && ++gap > 1) {
+                    const end = y - gap;
+                    if (!best || end - start > best.e - best.s) best = { s: start, e: end };
+                    start = -1;
+                    gap = 0;
+                }
+            }
+            if (start >= 0) {
+                const end = yB - gap;
+                if (!best || end - start > best.e - best.s) best = { s: start, e: end };
+            }
+            if (!best || best.e - best.s < H * 0.12) return null;
+            return { c: ((best.s + best.e) / 2 / H) * 100, h: ((best.e - best.s) / H) * 100 };
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function placeSignOnScene() {
+        if (!previewInner || !previewBox || scenePlacing) return;
+        const mode = root.dataset.sign3dMode;
+        const x = previewInner._sign3dShift || 0;
+        const natural = x ? 'translateX(' + x + 'px)' : '';
+        const reset = () => {
+            if (previewInner._sign3dScene) {
+                previewInner._sign3dScene = false;
+                previewInner.style.transform = natural;
+                updateDimensionLines();
+            }
+            sceneFloorShadow(null);
+            if (sceneFitScale !== 1) {
+                sceneFitScale = 1;
+                updatePreviewScale();
+            }
+        };
+        if ((mode !== 'marquee' && mode !== 'infinity' && mode !== '3d') || wallpaperHidden || !selectedBgUrl) { reset(); return; }
+        const thumb = Array.from(bgThumbs).find((t) => t.dataset.bgUrl === selectedBgUrl);
+        const info = sceneImageInfo(selectedBgUrl);
+        if (!info || !info.w || !info.h) { reset(); return; }
+        // 3D Illuminated Signs are always wall mounted: the sign goes on the photo's empty wall area
+        // (Admin "Sign centre %", else found automatically); no floor needed.
+        const is3d = mode === '3d';
+        const autoWall = is3d && info.wall ? info.wall : null;
+        const fy = parseFloat(thumb && thumb.dataset.floorY) || (is3d ? 0 : info.floor);
+        if (!fy && !is3d) { reset(); return; }
+        const wy = parseFloat(thumb && thumb.dataset.wallY) || (autoWall ? autoWall.c : fy * 0.5);
+        if (!wy) { reset(); return; }
+        const wh = parseFloat(thumb && thumb.dataset.wallH) || (autoWall && !parseFloat(thumb && thumb.dataset.wallY) ? autoWall.h : 0);
+        let refit = false;
+        scenePlacing = true;
+        try {
+            // 1) The sign at its natural place (only the sideways centring), drawn and measured.
+            previewInner.style.transform = natural;
+            previewInner._sign3dScene = true;
+            updateDimensionLines();
+            let r = getSignContentRect();
+            if (!r || !r.width || !r.height) { reset(); return; }
+            if (backingEl && !backingEl.hidden) {
+                const b = backingEl.getBoundingClientRect();
+                if (b.width && b.height) {
+                    r = { left: Math.min(r.left, b.left), top: Math.min(r.top, b.top), right: Math.max(r.right, b.right), bottom: Math.max(r.bottom, b.bottom) };
+                    r.width = r.right - r.left;
+                    r.height = r.bottom - r.top;
+                }
+            }
+            // 2) The wallpaper as painted ("cover", centred) in the preview area.
+            const box = previewBox.getBoundingClientRect();
+            let paintW = box.width;
+            try {
+                const pw = parseFloat(getComputedStyle(previewBox, '::before').width);
+                if (pw > 0 && pw <= box.width + 1) paintW = pw;
+            } catch (err) { /* full width */ }
+            const s = Math.max(paintW / info.w, box.height / info.h);
+            const imgTop = box.top + (box.height - info.h * s) / 2;
+            const atY = (pct) => imgTop + (pct / 100) * info.h * s;
+            // 3) Room the sign has: below the toggles, above the wallpaper thumbnails / toolbar.
+            const topSafe = box.top + 64;
+            let bottomSafe = box.bottom - 70;
+            const strip = root.querySelector('[data-bg-thumbs]');
+            if (strip && strip.offsetParent !== null) {
+                const sr = strip.getBoundingClientRect();
+                if (sr.height && sr.top > box.top + 120) bottomSafe = Math.min(bottomSafe, sr.top - 8);
+            }
+            const floorY = atY(fy);
+            const freestanding = isFreestandingMount();
+            const cy0 = (r.top + r.bottom) / 2;
+            let cy;
+            let maxH;
+            if (freestanding) {
+                // Base on the floor, a touch in front of the wall line (the sign stands on the floor
+                // in front of the wall, a little nearer to the camera).
+                const base = Math.min(floorY + info.h * s * 0.012, bottomSafe);
+                maxH = base - topSafe;
+                cy = base - Math.min(r.height, maxH) / 2;
+            } else {
+                const lowest = fy ? Math.min(floorY - box.height * 0.04, bottomSafe) : bottomSafe;
+                maxH = lowest - topSafe;
+                if (wh > 0) maxH = Math.min(maxH, wh / 100 * info.h * s * 0.85);
+                const half = Math.min(r.height, maxH) / 2;
+                cy = Math.min(Math.max(atY(wy), topSafe + half), lowest - half);
+            }
+            // Too tall for that area (a big logo, a narrow sign panel): the sign is drawn smaller
+            // (its real size — no stretched picture); more room again lets it grow back.
+            const want = Math.max(0.35, Math.min(1, sceneFitScale * (Math.max(40, maxH) / r.height)));
+            if (Math.abs(want - sceneFitScale) > 0.02 && (want < sceneFitScale || sceneFitScale < 1) && sceneRefits < 3) {
+                sceneFitScale = want;
+                sceneRefits++;
+                if (!sceneRefitTimer) sceneRefitTimer = setTimeout(() => { sceneRefits = 0; sceneRefitTimer = null; }, 400);
+                refit = true;
+            }
+            const dy = Math.round(cy - cy0);
+            previewInner.style.transform = 'translate(' + x + 'px, ' + dy + 'px)';
+            updateDimensionLines();
+            // Infinity Mirror standing on the floor: a soft contact shadow under the whole sign
+            // (Event Marquee letters already have their own floor shadows).
+            sceneFloorShadow(freestanding && mode === 'infinity' ? getSignContentRect() : null);
+        } finally {
+            scenePlacing = false;
+        }
+        // Redrawn at the fitted size (this places it again).
+        if (refit) updatePreviewScale();
     }
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -4212,6 +4519,7 @@ function initSign3dConfigurator(root) {
             wallpaperHidden = !wallpaperToggle.checked;
             if (wallpaperToggleLabel) wallpaperToggleLabel.textContent = wallpaperToggle.checked ? 'Wallpaper On' : 'Wallpaper Off';
             applyWallpaperBackground();
+            placeSignOnScene();
         });
     }
 
@@ -4539,7 +4847,7 @@ function initSign3dConfigurator(root) {
                     const notes = bulbType === 'led' && bulbNotesInput ? bulbNotesInput.value.trim() : '';
                     if (notes) properties['Bulb Colour Instructions'] = notes;
                 }
-                if (root.dataset.sign3dMode === 'marquee') {
+                if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity') {
                     properties['Display'] = getBackingType() === 'none' ? 'Freestanding (stands on the floor)' : 'Wall mounted (mounting only)';
                 }
                 if (isInfinityLogo()) {
@@ -4813,6 +5121,18 @@ function initSign3dConfigurator(root) {
         setTimeout(() => sizeLimitPopup.btn.focus(), 30);
     }
 
+    // Freestanding (stands on the floor) or wall mounted. Event Marquee: "No Backing" is the
+    // freestanding sign. Any configurator: a mounting option whose name or description says
+    // "freestanding" (e.g. an Admin "Freestanding" mounting shown on the Infinity Mirror).
+    function isFreestandingMount() {
+        const mode = root.dataset.sign3dMode;
+        if (mode !== 'marquee' && mode !== 'infinity') return false;
+        const opt = mountingSelect ? mountingSelect.options[mountingSelect.selectedIndex] : null;
+        if (!opt) return false;
+        if (getBackingType() === 'none') return true;
+        return /free\s*-?\s*stand/i.test(opt.value + ' ' + opt.textContent);
+    }
+
     // Mounting type: 'none' | 'raceway' | 'rectangle' | 'circle' (Admin "Backing Type", else auto-detected from the label).
     function getBackingType() {
         const opt = mountingSelect ? mountingSelect.options[mountingSelect.selectedIndex] : null;
@@ -4906,7 +5226,7 @@ function initSign3dConfigurator(root) {
     // Backing colour block, power supply, install badge and the yellow electrician note all follow the mounting + width rules.
     function updateMountingInfo() {
         const type = getBackingType();
-        if (previewInnerForLed) previewInnerForLed.classList.toggle('is-freestanding', root.dataset.sign3dMode === 'marquee' && type === 'none');
+        if (previewInnerForLed) previewInnerForLed.classList.toggle('is-freestanding', isFreestandingMount());
         const over2m = getWidthCm() > 200;
         const plugIn = root.dataset.plugIn === 'true';
         const needsElectrician = !plugIn && (type === 'none' || over2m);
@@ -5151,9 +5471,8 @@ function initSign3dConfigurator(root) {
                 + ' drop-shadow(0 0 30px ' + sign3dRgba(light, 0.4) + ')'
                 + ' drop-shadow(0 0 56px ' + sign3dRgba(light, 0.25) + ')';
         }
-        // front_lit (default): bright face, no halo, only a faint spill
-        return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
-            + ' drop-shadow(0 0 10px ' + sign3dRgba(light, 0.28) + ')';
+        // front_lit (default): bright face, no glow on the wall (client)
+        return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal');
     }
 
     // Auto numbering: only visible steps are numbered, always in order.

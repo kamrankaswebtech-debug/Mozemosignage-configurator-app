@@ -13,7 +13,19 @@ type WallpaperEntry = {
     imageUrl: string;
     sortOrder: string;
     contentBgColor: string;
+    wallPercent: string;
+    wallHeightPercent: string;
 };
+// Where the sign sits on the photo (live preview), % of the photo height from the top. Empty =
+// the empty wall area is found automatically.
+const PLACEMENT = [
+    { key: "wall_percent", name: "wallPercent", label: "Sign centre %" },
+    { key: "wall_height_percent", name: "wallHeightPercent", label: "Sign max height %" },
+] as const;
+const readPlacement = (formData: FormData) => PLACEMENT.map((p) => {
+    const n = parseFloat(String(formData.get(p.name) || ""));
+    return { key: p.key, value: Number.isFinite(n) && n > 0 && n < 100 ? String(Math.round(n * 10) / 10) : "" };
+});
 
 // Uploads a file to Shopify Files via the 3-step staged upload process,
 // returns the new file's GID (used as the value for a file_reference metaobject field).
@@ -102,6 +114,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 imageUrl: f.image || "",
                 sortOrder: f.sort_order || "0",
                 contentBgColor: f.content_bg_color || "",
+                wallPercent: f.wall_percent || "",
+                wallHeightPercent: f.wall_height_percent || "",
             };
         })
         .filter((item: any) => item.category === CATEGORY);
@@ -149,6 +163,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             { key: "sort_order", value: sortOrder },
                             // Only sent when a custom colour is chosen — empty = auto.
                             ...(readContentBgColor(formData) ? [{ key: "content_bg_color", value: readContentBgColor(formData) }] : []),
+                            ...readPlacement(formData).filter((p) => p.value),
                         ],
                     },
                 },
@@ -172,6 +187,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "sort_order", value: sortOrder },
             // "" clears a previous custom colour, switching back to auto.
             { key: "content_bg_color", value: readContentBgColor(formData) },
+            ...readPlacement(formData),
         ];
 
         if (imageFile && imageFile.size > 0) {
@@ -241,6 +257,10 @@ export default function Sign3dWallpapersPage() {
                 <s-paragraph>
                     The first wallpaper (lowest Sort Order) is shown by default on the storefront. Customers can switch between the wallpapers you upload here.
                 </s-paragraph>
+                <s-paragraph>
+                    Sign placement: the live preview puts the sign on the empty wall area of each photo automatically. To set it exactly, enter
+                    "Sign centre %" (where the middle of the sign sits, % of the photo height from the top) and optionally "Sign max height %".
+                </s-paragraph>
                 <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -248,6 +268,7 @@ export default function Sign3dWallpapersPage() {
                         <input type="file" name="image" accept="image/*" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={wallpapers.length + 1} />
                         <ContentBgField initial="" />
+                        {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} /></label>))}
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Wallpaper</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -261,6 +282,7 @@ export default function Sign3dWallpapersPage() {
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Content BG</th>
+                            <th style={{ padding: "8px" }}>Sign placement</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
                     </thead>
@@ -268,7 +290,7 @@ export default function Sign3dWallpapersPage() {
                         {wallpapers.map((w) => (
                             <tr key={w.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === w.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={w.id} />
@@ -278,6 +300,7 @@ export default function Sign3dWallpapersPage() {
                                                 <span style={{ fontSize: "11px", color: "#888" }}>(leave empty to keep current image)</span>
                                                 <input type="number" name="sortOrder" defaultValue={w.sortOrder} />
                                                 <ContentBgField initial={w.contentBgColor} />
+                                                {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} defaultValue={(w as any)[p.name] || ""} /></label>))}
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -291,6 +314,7 @@ export default function Sign3dWallpapersPage() {
                                         <td style={{ padding: "8px" }}>{w.label}</td>
                                         <td style={{ padding: "8px" }}>{w.sortOrder}</td>
                                         <td style={{ padding: "8px" }}><ContentBgCell color={w.contentBgColor} /></td>
+                                        <td style={{ padding: "8px", fontSize: 12 }}>{w.wallPercent ? "Centre " + w.wallPercent + "%" + (w.wallHeightPercent ? " · max " + w.wallHeightPercent + "%" : "") : "Automatic"}</td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">
                                                 <s-button variant="tertiary" onClick={() => setEditingId(w.id)}>Edit</s-button>

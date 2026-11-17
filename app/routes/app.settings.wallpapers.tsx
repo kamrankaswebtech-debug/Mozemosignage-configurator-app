@@ -13,6 +13,18 @@ const PRODUCTS = [
     { value: "bonnet", label: "Acrylic Bonnet" },
 ];
 const readProducts = (formData: FormData) => formData.getAll("products").map(String).filter((p) => PRODUCTS.some((x) => x.value === p)).join(",");
+// Sign placement on the photo (Event Marquee / Infinity Mirror live preview), % of the photo height
+// from the top: floor line (freestanding sign stands on it), wall-mounted sign centre and the
+// tallest a wall-mounted sign may be. Empty = automatic.
+const PLACEMENT = [
+    { key: "floor_percent", name: "floorPercent", label: "Floor line %", hint: "freestanding sign stands here" },
+    { key: "wall_percent", name: "wallPercent", label: "Wall sign centre %", hint: "wall-mounted sign centre" },
+    { key: "wall_height_percent", name: "wallHeightPercent", label: "Wall sign max height %", hint: "optional limit" },
+] as const;
+const readPlacement = (formData: FormData) => PLACEMENT.map((p) => {
+    const n = parseFloat(String(formData.get(p.name) || ""));
+    return { key: p.key, value: Number.isFinite(n) && n > 0 && n < 100 ? String(Math.round(n * 10) / 10) : "" };
+});
 
 type BgEntry = {
     id: string;
@@ -20,6 +32,9 @@ type BgEntry = {
     imageUrl: string;
     sortOrder: string;
     products: string;
+    floorPercent: string;
+    wallPercent: string;
+    wallHeightPercent: string;
 };
 
 async function uploadBgImage(admin: any, file: File): Promise<string> {
@@ -100,6 +115,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             sortOrder: f.sort_order || "0",
             products: f.products || "",
             category: f.category || "",
+            floorPercent: f.floor_percent || "",
+            wallPercent: f.wall_percent || "",
+            wallHeightPercent: f.wall_height_percent || "",
         };
     });
     const images: BgEntry[] = allEntries.filter((entry: any) => entry.category === "wallpaper");
@@ -146,6 +164,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             { key: "category", value: "wallpaper" },
                             { key: "sort_order", value: sortOrder },
                             { key: "products", value: readProducts(formData) },
+                            ...readPlacement(formData).filter((p) => p.value),
                         ],
                     },
                 },
@@ -167,6 +186,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "label", value: label },
             { key: "sort_order", value: sortOrder },
             { key: "products", value: readProducts(formData) },
+            ...readPlacement(formData),
         ];
 
         if (imageFile && imageFile.size > 0) {
@@ -234,6 +254,12 @@ export default function ConfiguratorWallpapersPage() {
             <s-section heading="Add New Background Image">
                 <s-link href="/app/settings">← Back to Settings</s-link>
                 <s-paragraph>Wallpapers for the Infinity Mirror, Event Marquee, Lightbox and Acrylic Bonnet configurators. Tick the configurators each photo is shown on; the lowest Sort Order is the default. (Neon and UV Graphic use the Neon Background Images; 3D uses its own.)</s-paragraph>
+                <s-paragraph>
+                    Sign placement (Event Marquee / Infinity Mirror): % of the photo's height, measured from the top. "Floor line" = where a
+                    freestanding sign stands (e.g. the line where the wall meets the floor); "Wall sign centre" = where the middle of a
+                    wall-mounted sign sits; "Wall sign max height" = optional, for a small sign area (e.g. a panel above a door). Leave empty
+                    for automatic (floor line found from the photo, sign centre half way up the wall).
+                </s-paragraph>
                 <fetcher.Form method="post" encType="multipart/form-data">
                     <input type="hidden" name="intent" value="create" />
                     <s-stack direction="inline" gap="base">
@@ -241,6 +267,7 @@ export default function ConfiguratorWallpapersPage() {
                         <input type="file" name="image" accept="image/*" required />
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={images.length + 1} />
                         {PRODUCTS.map((p) => (<label key={p.value} style={{ display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" name="products" value={p.value} defaultChecked={true} /> {p.label}</label>))}
+                        {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }} title={p.hint}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} /></label>))}
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Image</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -254,6 +281,7 @@ export default function ConfiguratorWallpapersPage() {
                             <th style={{ padding: "8px" }}>Label</th>
                             <th style={{ padding: "8px" }}>Sort Order</th>
                             <th style={{ padding: "8px" }}>Shown On</th>
+                            <th style={{ padding: "8px" }}>Sign placement</th>
                             <th style={{ padding: "8px" }}>Actions</th>
                         </tr>
                     </thead>
@@ -261,7 +289,7 @@ export default function ConfiguratorWallpapersPage() {
                         {images.map((img) => (
                             <tr key={img.id} style={{ borderBottom: "1px solid #eee" }}>
                                 {editingId === img.id ? (
-                                    <td colSpan={5} style={{ padding: "8px" }}>
+                                    <td colSpan={6} style={{ padding: "8px" }}>
                                         <fetcher.Form method="post" encType="multipart/form-data">
                                             <input type="hidden" name="intent" value="update" />
                                             <input type="hidden" name="id" value={img.id} />
@@ -271,6 +299,7 @@ export default function ConfiguratorWallpapersPage() {
                                                 <span style={{ fontSize: "11px", color: "#888" }}>(leave empty to keep current image)</span>
                                                 <input type="number" name="sortOrder" defaultValue={img.sortOrder} />
                                                 {PRODUCTS.map((p) => (<label key={p.value} style={{ display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" name="products" value={p.value} defaultChecked={img.products.split(",").includes(p.value)} /> {p.label}</label>))}
+                                                {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }} title={p.hint}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} defaultValue={(img as any)[p.name] || ""} /></label>))}
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -284,6 +313,9 @@ export default function ConfiguratorWallpapersPage() {
                                         <td style={{ padding: "8px" }}>{img.label}</td>
                                         <td style={{ padding: "8px" }}>{img.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>{img.products ? img.products.split(",").map((v) => PRODUCTS.find((p) => p.value === v)?.label || v).join(", ") : "Not assigned"}</td>
+                                        <td style={{ padding: "8px", fontSize: 12 }}>
+                                            Floor {img.floorPercent ? img.floorPercent + "%" : "auto"} · Wall {img.wallPercent ? img.wallPercent + "%" : "auto"}{img.wallHeightPercent ? " · max " + img.wallHeightPercent + "%" : ""}
+                                        </td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">
                                                 <s-button variant="tertiary" onClick={() => setEditingId(img.id)}>Edit</s-button>
