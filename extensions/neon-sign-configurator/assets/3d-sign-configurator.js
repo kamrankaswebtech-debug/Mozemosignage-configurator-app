@@ -891,7 +891,7 @@ function sign3dBuildOptionCards(root, selectSelector, gridSelector, showPrice) {
             img.className = 'sign3d-configurator__pick-card-img';
             img.alt = opt.textContent.trim();
             const mode = root.dataset.sign3dMode;
-            if (grid.hasAttribute('data-mounting-cards') && (mode === 'marquee' || mode === 'infinity')) {
+            if (grid.hasAttribute('data-mounting-cards') && (mode === 'marquee' || mode === 'infinity' || mode === '3d')) {
                 // Only the MS symbol, centred in a square (title text / corner badge removed).
                 img.classList.add('is-cleaning');
                 const src = opt.dataset.image;
@@ -2278,7 +2278,8 @@ function sign3dHydrateOptions(root) {
         // Event Marquee / Infinity Mirror: own Mounting card picture — the Admin "Event Marquee /
         // Infinity Mirror image" of this entry (3D Signs > Mounting), else the client's built-in
         // picture for its backing type (moz-mnt-*.jpg), else the shared Admin image as before.
-        if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity') {
+        // 3D Illuminated Signs: its Admin "Image (3D)", else the same built-in client picture.
+        if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity' || root.dataset.sign3dMode === '3d') {
             const bt = String(o.b || '').trim().toLowerCase();
             const lt = String(o.l || '').toLowerCase();
             const type = ['none', 'raceway', 'rectangle', 'circle'].indexOf(bt) > -1 ? bt
@@ -2287,7 +2288,7 @@ function sign3dHydrateOptions(root) {
                         : /circle|round/.test(lt) ? 'circle'
                             : /rect|square|panel/.test(lt) ? 'rectangle' : 'none';
             const builtIn = root.dataset['mnt' + type.charAt(0).toUpperCase() + type.slice(1)] || '';
-            opt.dataset.image = o.im || builtIn || o.i || '';
+            opt.dataset.image = root.dataset.sign3dMode === '3d' ? (o.i || builtIn || '') : (o.im || builtIn || o.i || '');
         }
         opt.dataset.backingType = o.b || '';
         opt.dataset.description = o.d || '';

@@ -3525,3 +3525,33 @@
 .sign3d-configurator .sign3d-configurator__font-panel.is-checking .sign3d-configurator__pick-card {
     visibility: hidden;
 }
+
+/* 3D Illuminated Signs Mounting (client): same cards as Infinity Mirror / Event Marquee — 2 per
+   row, each picture cleaned to the MS symbol (JS sign3dCleanMountImage) and shown as a large
+   square filling the card width. */
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards] .sign3d-configurator__pick-card {
+    overflow: hidden;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards].sign3d-configurator__card-grid .sign3d-configurator__pick-card-img {
+    display: block;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    aspect-ratio: 1 / 1 !important;
+    object-fit: cover !important;
+    object-position: center;
+    background: #eeeeee;
+    border-radius: 6px;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards] .sign3d-configurator__pick-card-img.is-clean {
+    transform: none !important;
+    clip-path: none !important;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel [data-mounting-cards] .sign3d-configurator__pick-card-img.is-cleaning {
+    visibility: hidden;
+}

@@ -284,7 +284,7 @@ export default function MountingPage() {
                     preview drawing and the installation / power-supply rules. Leave it on Auto-detect to read it from the label.
                 </s-paragraph>
                 <s-paragraph>
-                    Images: "Image" is the card picture on 3D Illuminated Signs. Event Marquee and Infinity Mirror show their own picture:
+                    Images: "Image" is the card picture on 3D Illuminated Signs (empty = the built-in client picture for the Backing Type). Event Marquee and Infinity Mirror show their own picture:
                     the "Marquee / Infinity image" when uploaded, otherwise the built-in client picture for the Backing Type
                     (No Backing / Raceway / Rectangle / Circle).
                 </s-paragraph>

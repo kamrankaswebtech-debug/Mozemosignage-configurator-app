@@ -57,8 +57,9 @@ const STANDARD_ORDER = [
     "Wiring/connection diagram",
 ];
 const STANDARD_PRODUCTS = ["3d", "infinity", "marquee"];
-// Infinity Mirror and Event Marquee show ONLY the standard included list (client's 10 cards).
-const STANDARD_ONLY_PRODUCTS = ["infinity", "marquee"];
+// 3D Illuminated Signs, Infinity Mirror and Event Marquee show ONLY the standard included list
+// (client's 10 cards).
+const STANDARD_ONLY_PRODUCTS = ["3d", "infinity", "marquee"];
 // 3D LED Lightbox: only these 8 add-ons (client), in this order on the Lightbox (its order is set on
 // the storefront; see sign3d LIGHTBOX_ADDON_ORDER). Every other add-on is hidden from the Lightbox.
 const LIGHTBOX_ADDONS = [
@@ -292,8 +293,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 success: true,
                 message: "Standard list applied: " + updated + " updated, " + created + " added" +
                     (hiddenLb ? ", " + hiddenLb + " other add-on(s) hidden from the Lightbox" : "") +
-                    (hiddenStd ? ", " + hiddenStd + " other included add-on(s) hidden from Infinity Mirror / Event Marquee" : "") + "." +
-                    (others.length ? " Other included add-ons kept on 3D Illuminated Signs (change in Configurator Visibility > 3D Add-ons): " + others.join(", ") + "." : ""),
+                    (hiddenStd ? ", " + hiddenStd + " other included add-on(s) hidden from 3D Signs / Infinity Mirror / Event Marquee" : "") + "." +
+                    (others.length ? " Hidden included add-ons (shown again in Configurator Visibility > 3D Add-ons if wanted): " + others.join(", ") + "." : ""),
             };
         }
 
@@ -414,7 +415,7 @@ export default function AddonsPage() {
                 <s-paragraph>
                     One click sets the client-approved "Included With Your Order" cards on all three configurators:{" "}
                     {STANDARD_ORDER.join(" · ")}. Matching included add-ons are renamed / re-ordered (icons set); missing ones
-                    are added. Infinity Mirror and Event Marquee then show only these 10 included cards (any other included
+                    are added. 3D Illuminated Signs, Infinity Mirror and Event Marquee then show only these 10 included cards (any other included
                     add-on is hidden there). The 3D LED Lightbox gets only its 8 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every
                     other add-on is hidden from the Lightbox. Prices of optional (paid) add-ons are not touched. Per add-on
                     visibility: Settings → Configurator Visibility → "3D Add-ons".
