@@ -478,20 +478,43 @@ function sign3dBuildFontPicker(root) {
         fonts = own.length ? own.concat(listed.filter((f) => own.indexOf(f) === -1)) : [builtIn].concat(listed);
         root.dataset.sign3dFontCount = String(fonts.length);
     }
-    if (!fonts.length) return;
-    // Client: Arial Black is the first font (and the default) on Infinity Mirror and 3D Illuminated
-    // Signs; every other font keeps its Admin "Sort Order" after it.
     const mode = root.dataset.sign3dMode || '3d';
+    // Client: on Infinity Mirror and 3D Illuminated Signs the two Arial Black fonts (Arial Black,
+    // then Arial Black Italic) are the first two options — Arial Black is the default. They are
+    // always offered here, even when hidden for this configurator in Configurator Visibility.
+    // Every other font keeps its Admin "Sort Order" after them.
+    const isArialBlack = (f) => /^arial[\s_-]*black/i.test(String((f && f.name) || '').trim());
     if (mode === 'infinity' || mode === '3d') {
-        const first = (f) => /^arial[\s_-]*black$/i.test(String(f.name || '').trim());
-        fonts = fonts.filter(first).concat(fonts.filter((f) => !first(f)));
+        let all = [];
+        try { all = JSON.parse((root.querySelector('[data-sign3d-fonts]') || {}).textContent || '[]') || []; } catch (e) { all = []; }
+        const same = (a, b) => a.name === b.name && a.family === b.family;
+        all.forEach((f) => { if (f && isArialBlack(f) && !fonts.some((x) => same(x, f))) fonts.push(f); });
+        const arial = fonts
+            .map((f, i) => ({ f, i }))
+            .filter((x) => isArialBlack(x.f))
+            .sort((a, b) => ((/italic|oblique/i.test(a.f.name) ? 1 : 0) - (/italic|oblique/i.test(b.f.name) ? 1 : 0)) || (a.i - b.i))
+            .map((x) => x.f);
+        fonts = arial.concat(fonts.filter((f) => !isArialBlack(f)));
     }
+    // The same font added twice in Admin (same name, or the same font file / family): shown once
+    // (the first one in Sort Order).
+    const seenFont = {};
+    fonts = fonts.filter((f) => {
+        const n = 'n:' + String(f.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const fam = String(f.family || '').toLowerCase().replace(/["'\s]/g, '');
+        if (seenFont[n] || (fam && seenFont['f:' + fam])) return false;
+        seenFont[n] = true;
+        if (fam) seenFont['f:' + fam] = true;
+        return true;
+    });
+    if (!fonts.length) return;
 
     select.innerHTML = '';
     panel.innerHTML = '';
 
-    // Infinity / Marquee / Lightbox: fonts always visible (Neon layout) — no dropdown click needed.
-    const keepOpen = (root.dataset.sign3dMode || '3d') !== '3d';
+    // Every configurator (3D Illuminated Signs too — client): fonts always visible as a list (Neon
+    // layout), no drop-down click needed.
+    const keepOpen = true;
     if (keepOpen) {
         toggle.hidden = true;
         panel.classList.add('is-always-open');
@@ -541,12 +564,33 @@ function sign3dBuildFontPicker(root) {
                 show(null);
             }
         } else {
-            // No Admin preview image: a live text sample in the font itself (Neon shows "Your Text").
+            // No Admin preview image: the font's name written in the font itself, white on the card
+            // (like the other font previews — client), sized so longer names still fit.
             const ph = document.createElement('span');
             ph.className = 'sign3d-configurator__pick-card-placeholder sign3d-font-sample';
-            ph.textContent = keepOpen ? 'Your Text' : font.name;
+            const phText = document.createElement('span');
+            phText.textContent = font.name;
+            ph.appendChild(phText);
             ph.style.fontFamily = font.family;
+            ph.style.fontSize = '18px';
             card.appendChild(ph);
+            // Shrink the name until it fits its card (once the font has loaded and the card is shown).
+            const fit = () => {
+                if (!ph.isConnected || !ph.clientWidth) return;
+                let size = parseFloat(ph.style.fontSize) || 16;
+                while (phText.offsetWidth > ph.clientWidth - 10 && size > 8) {
+                    size -= 0.5;
+                    ph.style.fontSize = size + 'px';
+                }
+            };
+            const later = () => requestAnimationFrame(fit);
+            try {
+                if (document.fonts && document.fonts.load) document.fonts.load('18px ' + font.family).then(later, later);
+                else setTimeout(fit, 300);
+            } catch (err) {
+                setTimeout(fit, 300);
+            }
+            setTimeout(fit, 2600);
         }
 
         const label = document.createElement('span');
@@ -575,6 +619,74 @@ function sign3dBuildFontPicker(root) {
     select.selectedIndex = 0;
     sync();
     if (keepOpen) setOpen(true);
+
+    // 3D Illuminated Signs: bold fonts only (client) — thin / light fonts are taken out of the list
+    // automatically, so a thin font added in Admin later never shows here either. Each font's
+    // weight is measured in the browser once it has loaded (sign3dFontIsThin). A font that cannot
+    // be measured, the Arial Black fonts and the last font left always stay.
+    if (mode === '3d' && fonts.length > 1) {
+        panel.classList.add('is-checking');
+        const reveal = setTimeout(() => panel.classList.remove('is-checking'), 2500);
+        Promise.all(fonts.map((font) => (isArialBlack(font) ? Promise.resolve(false) : sign3dFontIsThin(font.family))))
+            .then((thin) => {
+                const keep = fonts.filter((font, i) => !thin[i]);
+                if (keep.length && keep.length < fonts.length) {
+                    const selected = select.value;
+                    fonts.forEach((font, i) => {
+                        if (!thin[i]) return;
+                        Array.from(select.options).forEach((o) => { if (o.value === font.family) o.remove(); });
+                        panel.querySelectorAll('.sign3d-configurator__pick-card').forEach((c) => { if (c.dataset.value === font.family) c.remove(); });
+                    });
+                    fonts = keep;
+                    if (!keep.some((font) => font.family === selected)) {
+                        select.selectedIndex = 0;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    sync();
+                }
+            }, () => {})
+            .then(() => { clearTimeout(reveal); panel.classList.remove('is-checking'); });
+    }
+}
+
+// Is this font thin / light (not suitable for 3D letters)? Measured on a sample word once the
+// font has loaded: the share of the word's box covered by ink. Bold fonts cover ~0.26-0.75 of
+// it, thin / regular-weight and outline fonts ~0.14-0.24. Resolves false when the font cannot be
+// loaded or measured (it is kept).
+function sign3dFontIsThin(family) {
+    const cache = sign3dFontIsThin.cache || (sign3dFontIsThin.cache = {});
+    const fam = String(family || '').trim();
+    if (!fam) return Promise.resolve(false);
+    if (cache[fam]) return cache[fam];
+    const spec = '100px ' + fam;
+    const load = (document.fonts && document.fonts.load) ? document.fonts.load(spec) : Promise.resolve([]);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+    cache[fam] = Promise.race([load, timeout]).then((faces) => {
+        if (!faces || (Array.isArray(faces) && !faces.length && !/^(?:["']?)(arial|helvetica|verdana|tahoma|georgia|impact)/i.test(fam))) return false;
+        try {
+            const W = 1400;
+            const H = 170;
+            const c = document.createElement('canvas');
+            c.width = W;
+            c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true });
+            g.font = '120px ' + fam;
+            g.textBaseline = 'alphabetic';
+            const word = 'Hamburgefonts';
+            g.fillText(word, 0, 125);
+            const m = g.measureText(word);
+            const boxW = Math.min(W, m.width);
+            const boxH = (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0);
+            if (!boxW || !boxH) return false;
+            const d = g.getImageData(0, 0, W, H).data;
+            let ink = 0;
+            for (let i = 3; i < d.length; i += 4) if (d[i] > 127) ink++;
+            return ink / (boxW * boxH) < 0.25;
+        } catch (err) {
+            return false;
+        }
+    }, () => false);
+    return cache[fam];
 }
 
 // Font preview picture -> white lettering on a transparent background, for a picture drawn on its

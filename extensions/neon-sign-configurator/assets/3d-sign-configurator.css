@@ -3494,3 +3494,34 @@
 .sign3d-configurator .sign3d-configurator__font-panel .sign3d-configurator__pick-card-img.is-clean {
     filter: none !important;
 }
+
+/* 3D Illuminated Signs: the font list is always open (no drop-down — client), same white-on-dark
+   previews as the other configurators. */
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel .sign3d-configurator__font-panel.is-always-open {
+    margin-top: 0;
+    max-height: 320px;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-configurator__pick-card-img,
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-configurator__pick-card-placeholder {
+    aspect-ratio: auto;
+    height: 48px;
+    max-height: 48px;
+    width: 100%;
+    object-fit: contain;
+    border-radius: 5px;
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__panel .sign3d-configurator__font-panel .sign3d-font-sample {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #ffffff;
+    background: #0a0a0f;
+    font-weight: 400;
+    line-height: 1;
+}
+/* 3D: hidden for a moment while thin fonts are taken out of the list (sign3dFontIsThin). */
+.sign3d-configurator .sign3d-configurator__font-panel.is-checking .sign3d-configurator__pick-card {
+    visibility: hidden;
+}
