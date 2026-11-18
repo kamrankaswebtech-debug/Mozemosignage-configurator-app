@@ -3591,3 +3591,24 @@
 .sign3d-configurator .sign3d-configurator__wall-glow[hidden] {
     display: none;
 }
+
+/* Event Marquee / Infinity Mirror scene (JS placeSignOnScene): the wallpaper may be zoomed in a
+   little so the photo's floor line shows above the thumbnails (--moz-scene-size / -pos). */
+.sign3d-configurator.sign3d-mode-marquee:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split::before,
+.sign3d-configurator.sign3d-mode-infinity:not(.moz-no-wallpaper) .sign3d-configurator__preview.moz-split::before {
+    background-size: var(--moz-scene-size, cover);
+    background-position: var(--moz-scene-pos, center);
+}
+/* Standing on the floor: each marquee letter's contact shadow right under its base (the baseline,
+   not the bottom of the letter box), and a soft reflection of the sign in the floor. */
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.is-freestanding.on-scene-floor .sign3d-configurator__letter::before {
+    left: -3%;
+    right: -3%;
+    height: 0.09em;
+    bottom: calc(var(--sign3d-floor-gap, 0.2em) - 0.045em);
+    background: radial-gradient(ellipse at 52% 50%, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.2) 45%, rgba(0, 0, 0, 0) 72%);
+}
+.sign3d-configurator.sign3d-mode-marquee .sign3d-configurator__preview-inner.on-scene-floor .sign3d-configurator__letter,
+.sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-inner.on-scene-floor .sign3d-configurator__letter {
+    -webkit-box-reflect: below calc(-2 * var(--sign3d-floor-gap, 0px)) linear-gradient(to bottom, transparent 62%, rgba(255, 255, 255, 0.2));
+}

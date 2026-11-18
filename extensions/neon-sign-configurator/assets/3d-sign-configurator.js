@@ -1246,7 +1246,7 @@ function sign3dStrokeHalf(fontCss, S) {
 // they come out symmetrical. Same bulb size and spacing in every letter.
 // Returns [{x, y, d}] in em (x from the left edge, y from the baseline, d = bulb diameter).
 function sign3dBulbPoints(ch, fontCss) {
-    const key = fontCss + '|' + ch + '|v8|' + sign3dFontReady(fontCss);
+    const key = fontCss + '|' + ch + '|v9|' + sign3dFontReady(fontCss);
     if (SIGN3D_BULB_CACHE[key]) return SIGN3D_BULB_CACHE[key];
     const S = 120;
     const f = sign3dGlyphField(ch, fontCss, S);
@@ -1446,8 +1446,40 @@ function sign3dBulbPoints(ch, fontCss) {
         }
         if (endA) add(at(a0));
         if (endB) add(at(b0));
-        const n = Math.max(1, Math.round((b0 - a0) / gap));
-        for (let k = 1; k < n; k++) add(at(a0 + (k * (b0 - a0)) / n));
+        // Sharp corners along the stroke (the corners of a Z, the bottom of the V in an M or W):
+        // one bulb right on the corner and even spacing on each side of it — like a real marquee
+        // letter — instead of two bulbs crowding either side of the corner.
+        const corners = [];
+        const look = Math.max(3, hw * 1.6);
+        const pts = s.path.map((p) => XY(p));
+        const idxAt = (d) => { let k = 0; while (k < cum.length - 1 && cum[k] < d) k++; return k; };
+        let lastC = -1e9;
+        for (let k = 1; k < pts.length - 1; k++) {
+            const d = cum[k];
+            if (d - a0 < gap * 0.6 || b0 - d < gap * 0.6) continue;
+            const p0 = pts[idxAt(d - look)];
+            const p2 = pts[idxAt(d + look)];
+            const v1x = pts[k][0] - p0[0], v1y = pts[k][1] - p0[1];
+            const v2x = p2[0] - pts[k][0], v2y = p2[1] - pts[k][1];
+            const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+            if (!l1 || !l2) continue;
+            const turn = Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / (l1 * l2))));
+            if (turn < 1.05) continue; // < ~60 degrees: a curve, not a corner
+            if (d - lastC < gap * 0.6) {
+                // same corner: keep the sharpest point
+                if (corners.length && turn > corners[corners.length - 1].t) corners[corners.length - 1] = { d, t: turn };
+                continue;
+            }
+            corners.push({ d, t: turn });
+            lastC = d;
+        }
+        const stops = [a0].concat(corners.map((c) => c.d), [b0]);
+        corners.forEach((c) => add(at(c.d)));
+        for (let j = 0; j < stops.length - 1; j++) {
+            const len = stops[j + 1] - stops[j];
+            const n = Math.max(1, Math.round(len / gap));
+            for (let k = 1; k < n; k++) add(at(stops[j] + (k * len) / n));
+        }
     });
     // 3) Closed loops (O, 0, D bowls…): start at the top centre so the ring is symmetrical
     cycles.forEach((path) => {
@@ -1467,7 +1499,7 @@ function sign3dBulbPoints(ch, fontCss) {
     });
     // Keep bulbs apart (junction bulbs win)
     const keep = [];
-    const minD = gap * 0.5;
+    const minD = gap * 0.62;
     out.forEach((p) => { if (keep.every((q) => (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y) >= minD * minD)) keep.push(p); });
     // Centre every bulb across its stroke (thin serif bars / horizontals included) and keep it
     // fully inside the letter: it moves to the thickest nearby point and is never wider than the
@@ -2300,11 +2332,15 @@ function sign3dHydrateOptions(root) {
         // the floor); every backing option is for wall mounting only.
         if (freestandMode) {
             const bNone = String(o.b || '').trim().toLowerCase();
-            if (bNone === 'none' || (!bNone && /nos*backing|without/i.test(o.l))) {
+            if (bNone === 'none' || (!bNone && /no\s*backing|without/i.test(o.l))) {
+                opt.dataset.wallText = o.l;
+                opt.dataset.wallDesc = o.d || '';
                 if (!/freestand/i.test(o.l)) opt.textContent = o.l + ' (Freestanding)';
                 opt.dataset.description = isMarqueeMode
                     ? 'Freestanding: the letters stand on the floor and plug into a standard power outlet — no backing panel or wall fixing needed.'
                     : 'Freestanding: the letters stand upright on the floor — no backing panel or wall fixing needed.';
+                opt.dataset.freeText = opt.textContent;
+                opt.dataset.freeDesc = opt.dataset.description;
             } else {
                 opt.dataset.description = (o.d ? o.d + ' ' : '') + 'Designed for wall mounting only (not freestanding).';
             }
@@ -2386,7 +2422,7 @@ function sign3dHydrateOptions(root) {
     // 3D LED Lightbox: the client's own order for its 8 add-ons (by label); any other add-on follows
     // in Admin "Sort Order". Other configurators: Admin "Sort Order" as before.
     const LIGHTBOX_ADDON_ORDER = ['installation guide', 'waterproof cable protection for outdoor applications', 'secure protective packaging',
-        'premium led lighting system', 'wiring/connection diagram', 'outdoor/indoor power supply', 'pre-wired electrical connections', 'mounting screws and hardware'];
+        'premium led lighting system', 'outdoor/indoor power supply', 'pre-wired electrical connections', 'mounting screws and hardware'];
     const lbRank = (o) => {
         if (root.dataset.sign3dMode !== 'lightbox') return 0;
         const r = LIGHTBOX_ADDON_ORDER.indexOf(String(o.l || '').trim().toLowerCase());
@@ -4286,11 +4322,11 @@ function initSign3dConfigurator(root) {
             previewStage.insertBefore(sceneShadowEl, previewStage.firstChild);
         }
         const st = previewStage.getBoundingClientRect();
-        const h = Math.max(8, rect.height * 0.14);
+        const h = Math.max(6, rect.height * 0.09);
         sceneShadowEl.hidden = false;
-        sceneShadowEl.style.left = (rect.left - st.left - rect.width * 0.04) + 'px';
-        sceneShadowEl.style.width = (rect.width * 1.08) + 'px';
-        sceneShadowEl.style.top = (rect.bottom - st.top - h * 0.55) + 'px';
+        sceneShadowEl.style.left = (rect.left - st.left - rect.width * 0.03) + 'px';
+        sceneShadowEl.style.width = (rect.width * 1.06) + 'px';
+        sceneShadowEl.style.top = (rect.bottom - st.top - h * 0.5) + 'px';
         sceneShadowEl.style.height = h + 'px';
     }
     var sceneRefits = 0;
@@ -4412,6 +4448,9 @@ function initSign3dConfigurator(root) {
                 updateDimensionLines();
             }
             sceneFloorShadow(null);
+            previewInner.classList.remove('on-scene-floor');
+            previewBox.style.removeProperty('--moz-scene-size');
+            previewBox.style.removeProperty('--moz-scene-pos');
             if (sceneFitScale !== 1) {
                 sceneFitScale = 1;
                 updatePreviewScale();
@@ -4454,10 +4493,7 @@ function initSign3dConfigurator(root) {
                 const pw = parseFloat(getComputedStyle(previewBox, '::before').width);
                 if (pw > 0 && pw <= box.width + 1) paintW = pw;
             } catch (err) { /* full width */ }
-            const s = Math.max(paintW / info.w, box.height / info.h);
-            const imgTop = box.top + (box.height - info.h * s) / 2;
-            const atY = (pct) => imgTop + (pct / 100) * info.h * s;
-            // 3) Room the sign has: below the toggles, above the wallpaper thumbnails / toolbar.
+            // Room the sign has: below the toggles, above the wallpaper thumbnails / toolbar.
             const topSafe = box.top + 64;
             let bottomSafe = box.bottom - 70;
             const strip = root.querySelector('[data-bg-thumbs]');
@@ -4465,17 +4501,64 @@ function initSign3dConfigurator(root) {
                 const sr = strip.getBoundingClientRect();
                 if (sr.height && sr.top > box.top + 120) bottomSafe = Math.min(bottomSafe, sr.top - 8);
             }
+            const s0 = Math.max(paintW / info.w, box.height / info.h);
+            let s = s0;
+            let offY = (box.height - info.h * s0) / 2;
+            let offX = (paintW - info.w * s0) / 2;
+            // The photo's floor line hidden behind the thumbnails (e.g. the beach, the arcade): the
+            // wallpaper is zoomed in a little and moved up so the floor shows above them — a sign
+            // standing on the floor is then really on the floor. Only for a freestanding sign — a wall
+            // mount keeps the whole photo (e.g. the sign panel above a shop door).
+            if (fy && !is3d && isFreestandingMount()) {
+                const fr = fy / 100;
+                const T = bottomSafe - box.top - info.h * s0 * 0.02;
+                if (T > 40 && offY + fr * info.h * s0 > T) {
+                    // At most 1.2x, so the scene (shop front, sign panel…) stays recognisable.
+                    s = Math.min(s0 * 1.2, Math.max(s0, (box.height - T) / ((1 - fr) * info.h)));
+                    offY = Math.min(0, Math.max(box.height - info.h * s, T - fr * info.h * s));
+                    offX = (paintW - info.w * s) / 2;
+                }
+            }
+            if (s > s0 + 1e-6) {
+                previewBox.style.setProperty('--moz-scene-size', (info.w * s).toFixed(1) + 'px ' + (info.h * s).toFixed(1) + 'px');
+                previewBox.style.setProperty('--moz-scene-pos', offX.toFixed(1) + 'px ' + offY.toFixed(1) + 'px');
+            } else {
+                previewBox.style.removeProperty('--moz-scene-size');
+                previewBox.style.removeProperty('--moz-scene-pos');
+            }
+            const imgTop = box.top + offY;
+            const atY = (pct) => imgTop + (pct / 100) * info.h * s;
             const floorY = atY(fy);
             const freestanding = isFreestandingMount();
             const cy0 = (r.top + r.bottom) / 2;
             let cy;
             let maxH;
+            // Where the letters really end at the bottom: their baseline (the letter boxes also
+            // hold the space for descenders, which made a standing sign look as if it floated)
+            // plus the bottom of the 3D letter sides.
+            let contact = r.bottom;
+            let gapPx = 0;
+            const letter = freestanding && hasText() && textFlex ? textFlex.querySelector('.sign3d-configurator__letter') : null;
+            if (letter) {
+                const pr = document.createElement('i');
+                pr.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline;';
+                letter.appendChild(pr);
+                const baseY = pr.getBoundingClientRect().top;
+                pr.remove();
+                const fsPx = parseFloat(getComputedStyle(letter).fontSize) || 0;
+                const lr = letter.getBoundingClientRect();
+                if (baseY > r.top && baseY <= r.bottom + 1 && fsPx) {
+                    contact = Math.min(r.bottom, baseY + fsPx * 0.045);
+                    gapPx = Math.max(0, lr.bottom - baseY);
+                }
+            }
+            const signH = contact - r.top;
             if (freestanding) {
                 // Base on the floor, a touch in front of the wall line (the sign stands on the floor
                 // in front of the wall, a little nearer to the camera).
                 const base = Math.min(floorY + info.h * s * 0.012, bottomSafe);
                 maxH = base - topSafe;
-                cy = base - Math.min(r.height, maxH) / 2;
+                cy = cy0 + (base - contact);
             } else {
                 const lowest = fy ? Math.min(floorY - box.height * 0.04, bottomSafe) : bottomSafe;
                 maxH = lowest - topSafe;
@@ -4485,7 +4568,7 @@ function initSign3dConfigurator(root) {
             }
             // Too tall for that area (a big logo, a narrow sign panel): the sign is drawn smaller
             // (its real size — no stretched picture); more room again lets it grow back.
-            const want = Math.max(0.35, Math.min(1, sceneFitScale * (Math.max(40, maxH) / r.height)));
+            const want = Math.max(0.35, Math.min(1, sceneFitScale * (Math.max(40, maxH) / (freestanding ? signH : r.height))));
             if (Math.abs(want - sceneFitScale) > 0.02 && (want < sceneFitScale || sceneFitScale < 1) && sceneRefits < 3) {
                 sceneFitScale = want;
                 sceneRefits++;
@@ -4494,10 +4577,17 @@ function initSign3dConfigurator(root) {
             }
             const dy = Math.round(cy - cy0);
             previewInner.style.transform = 'translate(' + x + 'px, ' + dy + 'px)';
+            // Standing on the floor: the contact shadows sit exactly where the letters touch the
+            // floor, with a soft reflection in the floor (CSS .on-scene-floor).
+            previewInner.classList.toggle('on-scene-floor', freestanding);
+            if (freestanding) {
+                const fsPx = letter ? (parseFloat(getComputedStyle(letter).fontSize) || 0) : 0;
+                previewInner.style.setProperty('--sign3d-floor-gap', (gapPx - (fsPx * 0.045)).toFixed(1) + 'px');
+            }
             updateDimensionLines();
-            // Infinity Mirror standing on the floor: a soft contact shadow under the whole sign
-            // (Event Marquee letters already have their own floor shadows).
-            sceneFloorShadow(freestanding && mode === 'infinity' ? getSignContentRect() : null);
+            // Infinity Mirror standing on the floor: one soft contact shadow under the whole sign
+            // (Event Marquee letters each have their own).
+            sceneFloorShadow(freestanding && mode === 'infinity' ? { left: r.left, width: r.width, bottom: contact + dy, height: signH } : null);
         } finally {
             scenePlacing = false;
         }
@@ -4848,7 +4938,7 @@ function initSign3dConfigurator(root) {
                     if (notes) properties['Bulb Colour Instructions'] = notes;
                 }
                 if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity') {
-                    properties['Display'] = getBackingType() === 'none' ? 'Freestanding (stands on the floor)' : 'Wall mounted (mounting only)';
+                    properties['Display'] = isFreestandingMount() ? 'Freestanding (stands on the floor)' : 'Wall mounted (mounting only)';
                 }
                 if (isInfinityLogo()) {
                     properties['Design Source'] = 'Logo Only';
@@ -5121,12 +5211,36 @@ function initSign3dConfigurator(root) {
         setTimeout(() => sizeLimitPopup.btn.focus(), 30);
     }
 
+    // Infinity Mirror: "No Backing" is freestanding for Text Only and wall mounted (standoffs) for
+    // Logo Only — its option / card text follows the chosen start mode.
+    function syncFreestandLabels() {
+        if (root.dataset.sign3dMode !== 'infinity' || !mountingSelect) return;
+        let logo = false;
+        try { logo = isInfinityLogo(); } catch (err) { logo = false; }
+        const grid = root.querySelector('[data-mounting-cards]');
+        Array.from(mountingSelect.options).forEach((opt, i) => {
+            if (!opt.dataset.freeText) return;
+            const text = logo ? opt.dataset.wallText : opt.dataset.freeText;
+            const desc = logo ? opt.dataset.wallDesc : opt.dataset.freeDesc;
+            if (opt.textContent !== text) opt.textContent = text;
+            opt.dataset.description = desc;
+            const card = grid ? grid.querySelector('.sign3d-configurator__pick-card[data-index="' + i + '"]') : null;
+            if (!card) return;
+            const lab = card.querySelector('.sign3d-configurator__pick-card-label');
+            if (lab && lab.textContent !== text) lab.textContent = text;
+            const d = card.querySelector('.sign3d-configurator__pick-card-desc');
+            if (d && d.textContent !== desc) d.textContent = desc;
+        });
+    }
+
     // Freestanding (stands on the floor) or wall mounted. Event Marquee: "No Backing" is the
     // freestanding sign. Any configurator: a mounting option whose name or description says
     // "freestanding" (e.g. an Admin "Freestanding" mounting shown on the Infinity Mirror).
     function isFreestandingMount() {
         const mode = root.dataset.sign3dMode;
         if (mode !== 'marquee' && mode !== 'infinity') return false;
+        // Infinity Mirror "Logo Only" is a wall-mounted sign only (manufacturer).
+        try { if (mode === 'infinity' && isInfinityLogo()) return false; } catch (err) { /* start-up */ }
         const opt = mountingSelect ? mountingSelect.options[mountingSelect.selectedIndex] : null;
         if (!opt) return false;
         if (getBackingType() === 'none') return true;
@@ -5227,6 +5341,7 @@ function initSign3dConfigurator(root) {
     function updateMountingInfo() {
         const type = getBackingType();
         if (previewInnerForLed) previewInnerForLed.classList.toggle('is-freestanding', isFreestandingMount());
+        syncFreestandLabels();
         const over2m = getWidthCm() > 200;
         const plugIn = root.dataset.plugIn === 'true';
         const needsElectrician = !plugIn && (type === 'none' || over2m);
@@ -6222,7 +6337,16 @@ function initSign3dConfigurator(root) {
     // Wall Hanging: box width in photo pixels for a size in cm (eased so large sizes stay on the wall;
     // the wallpaper stays still and only the sign changes size). Client: 30 cm a little smaller and
     // only a small step up per size, so 120 cm still fits the screen (~1.7x the 30 cm box).
-    const lbxWallPx = (cm) => 255 * Math.pow(Math.max(10, cm) / 30, 0.38);
+    // Follows the Admin size list: the smallest size is always shown at the 30 cm size and the
+    // largest at the old 120 cm size (~1.69x), whatever sizes are offered (e.g. 30-90 cm).
+    function lbxWallPx(cm) {
+        const minCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.min(m, r.w), Infinity) : 30;
+        const maxCm = lbSizes.length ? lbSizes.reduce((m, r) => Math.max(m, r.w), 0) : 120;
+        const lo = Math.max(10, Number(minCm) || 30);
+        const span = (Number(maxCm) || 120) / lo;
+        const p = span > 1.2 ? Math.log(Math.pow(4, 0.38)) / Math.log(span) : 0.38;
+        return 255 * Math.pow(Math.max(10, Number(cm) || lo) / lo, p);
+    }
     // Wall Mount: true scale on the wooden panel — the largest size offered fills ~76% of the panel's
     // width, every other size in exact proportion (so every size sits fully on the wood).
     function lbxMountPxPerCm() {

@@ -60,14 +60,13 @@ const STANDARD_PRODUCTS = ["3d", "infinity", "marquee"];
 // 3D Illuminated Signs, Infinity Mirror and Event Marquee show ONLY the standard included list
 // (client's 10 cards).
 const STANDARD_ONLY_PRODUCTS = ["3d", "infinity", "marquee"];
-// 3D LED Lightbox: only these 8 add-ons (client), in this order on the Lightbox (its order is set on
+// 3D LED Lightbox: only these 7 add-ons (client; no wiring diagram — a simple cable), in this order on the Lightbox (its order is set on
 // the storefront; see sign3d LIGHTBOX_ADDON_ORDER). Every other add-on is hidden from the Lightbox.
 const LIGHTBOX_ADDONS = [
     "Installation guide",
     "Waterproof cable protection for outdoor applications",
     "Secure protective packaging",
     "Premium LED lighting system",
-    "Wiring/connection diagram",
     "Outdoor/Indoor Power Supply",
     "Pre-wired electrical connections",
     "Mounting screws and hardware",
@@ -231,7 +230,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 const onLightbox = LIGHTBOX_ADDONS.includes(item.label);
                 if (hit) {
                     // Keep where it is shown, but make sure all three products show it, and the
-                    // Lightbox only when it is one of its 8 add-ons.
+                    // Lightbox only when it is one of its 7 add-ons.
                     const keys = showOnKeys(hit.showOn);
                     STANDARD_PRODUCTS.forEach((k) => { if (!keys.includes(k)) keys.push(k); });
                     const final = onLightbox ? (keys.includes("lightbox") ? keys : keys.concat("lightbox")) : keys.filter((k) => k !== "lightbox");
@@ -262,7 +261,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     created++;
                 }
             }
-            // Every other add-on (included or optional) is hidden from the Lightbox (only 8 there).
+            // Every other add-on (included or optional) is hidden from the Lightbox (only 7 there).
             // Every other INCLUDED add-on is also hidden from Infinity Mirror and Event Marquee, so they
             // show exactly the client's 10 "Included With Your Order" cards. 3D Illuminated Signs and
             // optional (paid) add-ons on Infinity / Marquee are left as they are. Visibility can still
@@ -416,11 +415,11 @@ export default function AddonsPage() {
                     One click sets the client-approved "Included With Your Order" cards on all three configurators:{" "}
                     {STANDARD_ORDER.join(" · ")}. Matching included add-ons are renamed / re-ordered (icons set); missing ones
                     are added. 3D Illuminated Signs, Infinity Mirror and Event Marquee then show only these 10 included cards (any other included
-                    add-on is hidden there). The 3D LED Lightbox gets only its 8 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every
+                    add-on is hidden there). The 3D LED Lightbox gets only its 7 add-ons ({LIGHTBOX_ADDONS.join(" · ")}); every
                     other add-on is hidden from the Lightbox. Prices of optional (paid) add-ons are not touched. Per add-on
                     visibility: Settings → Configurator Visibility → "3D Add-ons".
                 </s-paragraph>
-                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee, Infinity Mirror and the 3D LED Lightbox (8 add-ons)?")) e.preventDefault(); }}>
+                <fetcher.Form method="post" onSubmit={(e) => { if (!confirm("Apply the standard Included list to 3D Signs, Event Marquee, Infinity Mirror and the 3D LED Lightbox (7 add-ons)?")) e.preventDefault(); }}>
                     <input type="hidden" name="intent" value="apply_standard" />
                     <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Apply standard Included list</s-button>
                 </fetcher.Form>
