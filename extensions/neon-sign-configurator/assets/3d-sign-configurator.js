@@ -3069,6 +3069,8 @@ function initSign3dConfigurator(root) {
         if (root.dataset.sign3dMode === 'infinity') {
             const lhField = root.querySelector('[data-letter-height-field]');
             if (lhField) lhField.hidden = mode === 'upload';
+            // Logo Only: priced at the first height row (the height step is hidden for the round mirror).
+            if (mode === 'upload' && typeof lhBoxes !== 'undefined' && lhBoxes.length) lhBox = lhBoxes[0];
             if (previewInner) previewInner.classList.toggle('mode-infinity-logo', mode === 'upload');
             if (mode === 'upload' && !logoPreviewSrc) showLogoPreview(sign3dInfinityPlaceholder());
         }
@@ -4731,7 +4733,9 @@ function initSign3dConfigurator(root) {
             const spanKey = Math.round(bandTop) + '|' + Math.round(bandBot);
             if (info.map && !(spanKey in info.spans)) info.spans[spanKey] = sceneWallSpan(info.map, bandTop, bandBot);
             const span = info.spans ? info.spans[spanKey] : null;
-            if (span) maxW = ((span[1] - span[0]) / 100) * info.w * s * 0.9;
+            // A busy scene (e.g. the arcade seen through an open door) gives a narrow, unreliable
+            // span: the sign may always use at least half of the visible wallpaper width.
+            if (span) maxW = Math.max(((span[1] - span[0]) / 100) * info.w * s * 0.9, paintW * 0.5);
             // The largest size fills that room exactly; every other size is in proportion to it
             // (previewFillShare). The sign is never stretched — it is drawn at that size.
             const fitK = Math.min(Math.max(40, maxH) / (freestanding ? signH : r.height), maxW / r.width);
@@ -5289,9 +5293,9 @@ function initSign3dConfigurator(root) {
     }
     function infPriceRow() {
         if (!sizeBoxMode(root.dataset.sign3dMode) || !lhBox || !lhBox.wp || !lhBox.wp.length) return null;
-        // Infinity Mirror Logo Only (a round mirror) keeps its width slider; 3D logos use the boxes
-        // too (overall length x overall height).
-        try { if (root.dataset.sign3dMode !== '3d' && !hasText()) return null; } catch (err) { return null; }
+        // Every sign uses the size boxes (client) — Infinity Mirror Logo Only too (its overall width
+        // = the mirror's diameter, priced at the first letter height row). Event Marquee has no logo.
+        try { if (root.dataset.sign3dMode === 'marquee' && !hasText()) return null; } catch (err) { return null; }
         return infPriceEntry(lhBox, infSizeCm || lhBox.wp[0].w);
     }
     function applyInfSize() {
@@ -6270,9 +6274,55 @@ function initSign3dConfigurator(root) {
             };
             let ratio = 0.7;
             if (!pts.some((p) => minFor(p, 0.7) > 0)) ratio = 0.45;
-            pts.forEach((p) => {
-                const dia = minFor(p, ratio);
+            // The bulb must show in full on the set-back face: inside the letter AND inside the face
+            // (the letter moved back by the depth). Near a sharp corner (a Z, the V of an M, the feet of
+            // an A) it would be half hidden behind the inner wall and look small — it is moved a little
+            // into the letter instead, or left out when there is no room. Bulbs that end up crowded
+            // next to another one are left out too. Bulbs that already show in full stay exactly where
+            // they are.
+            const onFace = (q, d) => {
+                const r = (d / 2 + rim / 2) / fs;
+                return fits(q.x + shift.x / 2 / fs, q.y + shift.y / 2 / fs, r) && fits(q.x - shift.x / 2 / fs, q.y - shift.y / 2 / fs, r);
+            };
+            // Every bulb full size where possible: a spot that only fits a smaller bulb (the thin
+            // diagonal of an M, the sharp corner of a Z…) moves to the nearest spot where a full-size
+            // bulb fits; full-size bulbs are placed first and a bulb crowding one already placed is
+            // left out — so no small bulbs squeezed in next to normal ones.
+            const roomAt = (q) => {
+                if (!field) return 0;
+                const x = Math.round(field.ox + q.x * field.S);
+                const y = Math.round(field.base + q.y * field.S);
+                if (x < 0 || y < 0 || x >= field.W || y >= field.H) return 0;
+                return (field.dist[y * field.W + x] / field.S) * fs - rim / 2 - shiftHalf - 0.5;
+            };
+            const cands = [];
+            pts.forEach((p0) => {
+                let dia = minFor(p0, ratio);
                 if (!dia) return;
+                let p = p0;
+                if (field && dia < uniformD * 0.92 && ratio > 0.5) {
+                    const step = uniformD / fs * 0.15;
+                    let found = null;
+                    for (let ring = 1; ring <= 6 && !found; ring++) {
+                        for (let k = 0; k < 16; k++) {
+                            const ang = (k / 16) * Math.PI * 2;
+                            const q = { x: p0.x + Math.cos(ang) * step * ring, y: p0.y + Math.sin(ang) * step * ring };
+                            if (2 * roomAt(q) >= uniformD * 0.95 && onFace(q, uniformD)) { found = q; break; }
+                        }
+                    }
+                    if (found) { p = found; dia = uniformD; }
+                }
+                // Still clearly smaller (no room for a full bulb anywhere near): left out, unless the
+                // character is thin all over (then every bulb is small and they all stay).
+                if (ratio > 0.5 && dia < uniformD * 0.85) return;
+                cands.push({ p, dia });
+            });
+            const shown = [];
+            cands.slice().sort((m, n) => n.dia - m.dia).forEach((c) => {
+                if (shown.some((q) => Math.hypot((q.p.x - c.p.x) * fs, (q.p.y - c.p.y) * fs) < uniformD * 1.7)) return;
+                shown.push(c);
+            });
+            shown.forEach(({ p, dia }) => {
                 const cx = p.x * fs + shift.x / 2;
                 const cy = baseY + p.y * fs + shift.y / 2;
                 const b = document.createElement('i');
