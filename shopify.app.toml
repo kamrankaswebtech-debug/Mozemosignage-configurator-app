@@ -1220,6 +1220,21 @@ type = "boolean"
 name = "Sort Order"
 type = "number_integer"
 
+[metaobjects.app.event_marquee_option.fields.width_prices]
+name = "Size Prices (Infinity Mirror)"
+description = "category=letter_height only. Overall price per overall width for this letter height, e.g. 100=2620; 150=2840 (width in cm = price). Infinity Mirror Text signs then show size boxes with these exact prices."
+type = "multi_line_text_field"
+
+[metaobjects.app.event_marquee_option.fields.marquee_width_prices]
+name = "Size Prices (Event Marquee)"
+description = "category=letter_height only. Overall Event Marquee price per overall width for this letter height, e.g. 100=1350; 150=1420 (width in cm = price)."
+type = "multi_line_text_field"
+
+[metaobjects.app.event_marquee_option.fields.sign3d_width_prices]
+name = "Size Prices (3D Illuminated Signs)"
+description = "category=letter_height only. Overall 3D Illuminated Sign price per overall width for this letter height, e.g. 100=1350; 150=1420 (width in cm = price). Lighting options are added on top."
+type = "multi_line_text_field"
+
 [metaobjects.app.event_marquee_option.fields.show_on]
 name = "Show On"
 description = "Used only when category = letter_height. Comma list of: marquee, infinity. Empty = both."

@@ -3612,3 +3612,40 @@
 .sign3d-configurator.sign3d-mode-infinity .sign3d-configurator__preview-inner.on-scene-floor .sign3d-configurator__letter {
     -webkit-box-reflect: below calc(-2 * var(--sign3d-floor-gap, 0px)) linear-gradient(to bottom, transparent 62%, rgba(255, 255, 255, 0.2));
 }
+
+/* 3D Illuminated Signs back glow (client reference): the LED light spills onto the wall right
+   around each letter — a tight, bright halo hugging the edges that fades out within a short
+   distance, no wide wash. Sizes in em so the halo follows the letter size. Backlit: the face is
+   not lit (the chosen colour, a little deeper); Front & Back / Fully Illuminated keep the lit face. */
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__letter {
+    color: color-mix(in srgb, var(--sign3d-light, #ffffff) 78%, #000000);
+    text-shadow:
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent),
+        0 0 0.03em color-mix(in srgb, var(--sign3d-light, #ffffff) 72%, #ffffff),
+        0 0 0.07em color-mix(in srgb, var(--sign3d-light, #ffffff) 72%, #ffffff),
+        0 0 0.11em var(--sign3d-light, #ffffff),
+        0 0 0.18em color-mix(in srgb, var(--sign3d-light, #ffffff) 75%, transparent),
+        0 0.02em 0.3em color-mix(in srgb, var(--sign3d-light, #ffffff) 40%, transparent);
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__letter {
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.7),
+        var(--sign3d-extrusion-shadow, 0 0 0 transparent),
+        0 0 0.05em var(--sign3d-light, #ffffff),
+        0 0 0.11em color-mix(in srgb, var(--sign3d-light, #ffffff) 70%, transparent),
+        0 0.02em 0.22em color-mix(in srgb, var(--sign3d-light, #ffffff) 32%, transparent);
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__letter {
+    text-shadow:
+        var(--sign3d-extrusion-shadow-lit, 0 0 0 transparent),
+        0 0 0.05em color-mix(in srgb, var(--sign3d-light, #ffffff) 75%, transparent),
+        0 0 0.12em color-mix(in srgb, var(--sign3d-light, #ffffff) 50%, transparent),
+        0 0.02em 0.22em color-mix(in srgb, var(--sign3d-light, #ffffff) 25%, transparent);
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-backlit .sign3d-configurator__preview-icon {
+    filter: brightness(0.9) drop-shadow(0 0 2px var(--sign3d-light, #ffffff)) drop-shadow(0 0 6px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent)) drop-shadow(0 0 14px color-mix(in srgb, var(--sign3d-light, #ffffff) 45%, transparent));
+}
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-front_back_lit .sign3d-configurator__preview-icon,
+.sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__preview-icon {
+    filter: brightness(1.12) drop-shadow(0 0 3px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--sign3d-light, #ffffff) 50%, transparent)) drop-shadow(0 0 18px color-mix(in srgb, var(--sign3d-light, #ffffff) 25%, transparent));
+}

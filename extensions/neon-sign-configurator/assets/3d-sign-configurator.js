@@ -329,6 +329,21 @@ function sign3dVisibleFor(root, item) {
     return !keys.length || keys.indexOf(String(root.dataset.sign3dMode || '3d').toLowerCase()) > -1;
 }
 
+// "100=2620; 150=2840" (width in cm, or metres when under 20, = price) -> [{ w: cm, p }] sorted.
+// Pairs separated by ";", "|" or new lines; "$" and thousand separators in prices are ignored.
+function sign3dParseWidthPrices(value) {
+    const out = [];
+    String(value || '').split(/[;|\n]+/).forEach((part) => {
+        const m = part.match(/(\d+(?:\.\d+)?)\s*(m|cm)?\s*[=:]\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
+        if (!m) return;
+        let w = parseFloat(m[1]);
+        if ((m[2] || '').toLowerCase() === 'm' || w < 20) w *= 100;
+        const p = parseFloat(m[3].replace(/,/g, ''));
+        if (w > 0 && p > 0 && !out.some((e) => Math.abs(e.w - w) < 0.01)) out.push({ w: Math.round(w * 100) / 100, p });
+    });
+    return out.sort((a, b) => a.w - b.w);
+}
+
 function sign3dReadJson(root, selector) {
     const el = root.querySelector(selector);
     if (!el) return [];
@@ -416,7 +431,8 @@ function sign3dBuildLetterDepth(depthMm, sideHex, tone, scale) {
 function sign3dInfinityRings(hex, on) {
     const out = [];
     for (let k = 0; k < 9; k++) {
-        const r = 97 - 46 * (1 - Math.pow(0.72, k));
+        // Client: the reflections start at the edge and stay in an outer band (the logo fills the middle).
+        const r = 97 - 19 * (1 - Math.pow(0.7, k));
         const w = Math.max(0.45, 1.25 - k * 0.09);
         const col = on ? sign3dRgba(hex, Math.max(0.14, 0.95 - k * 0.1)) : 'rgba(255,255,255,' + Math.max(0.05, 0.2 - k * 0.018).toFixed(3) + ')';
         out.push('radial-gradient(circle closest-side, transparent ' + (r - w).toFixed(2) + '%, ' + col + ' ' + r.toFixed(2) + '%, transparent ' + (r + w).toFixed(2) + '%)');
@@ -2604,13 +2620,26 @@ function initSign3dConfigurator(root) {
     const widthInput = root.querySelector('[data-width-input]');
     const letterHeightInput = root.querySelector('[data-letter-height-input]');
     // Marquee / Infinity letter height boxes from Admin. No rows = the typed height as before.
-    const lhBoxes = sign3dReadJson(root, '[data-sign3d-lh-boxes]')
-        .map((o, i) => ({ l: String(o.l || '').trim(), h: Number(o.h) || 0, p: Number(o.p) || 0, sr: Number(o.sr) || 999999, i }))
+    // wp: Infinity Mirror size prices of this height (Admin "Size Prices"): [{ w: cm, p: price }].
+    // 3D Illuminated Signs: only the heights that have 3D size prices (Admin "Size Prices (3D
+    // Illuminated Signs)") — none set = the typed letter height and the old pricing, as before.
+    const lhSource = root.dataset.sign3dMode === '3d'
+        ? (() => {
+            try {
+                const all = JSON.parse((root.querySelector('[data-sign3d-lh-boxes]') || {}).textContent || '[]') || [];
+                return (Array.isArray(all) ? all : []).filter((o) => o && sign3dParseWidthPrices(o.wp3).length);
+            } catch (err) { return []; }
+        })()
+        : sign3dReadJson(root, '[data-sign3d-lh-boxes]');
+    const lhBoxes = lhSource
+        .map((o, i) => ({ l: String(o.l || '').trim(), h: Number(o.h) || 0, p: Number(o.p) || 0, sr: Number(o.sr) || 999999, i,
+            wp: sign3dParseWidthPrices(root.dataset.sign3dMode === '3d' ? o.wp3 : (root.dataset.sign3dMode === 'marquee' ? o.wpm : o.wp)) }))
         .filter((o) => o.h > 0)
         .sort((a, b) => (a.sr - b.sr) || (a.h - b.h) || (a.i - b.i));
     let lhBox = lhBoxes[0] || null;
     // Marquee / Infinity / Lightbox have no Colour Intensity option (always the exact colour).
-    const hasIntensity = ['marquee', 'infinity', 'lightbox'].indexOf(root.dataset.sign3dMode) === -1;
+    // 3D Illuminated Signs too (client): no slider, the colour is always shown exactly (100%).
+    const hasIntensity = false;
     const depthSelect = root.querySelector('[data-depth-select]');
     const indoorOutdoorRadios = root.querySelectorAll('[data-indoor-outdoor-radio]');
     const breakdownRows = root.querySelector('[data-breakdown-rows]');
@@ -2810,7 +2839,9 @@ function initSign3dConfigurator(root) {
                 front_back_lit: { a: 0.38, spread: 0.45 },
                 fully_illuminated: { a: 0.32, spread: 0.5 }
             };
-            const look = ledOn ? looks[key] : null;
+            // Client: the glow is a tight halo around the letters (CSS / logo filter), not a wide
+            // wash on the wall — the wash is switched off.
+            const look = null; // was: ledOn ? looks[key] : null
             if (look && !rect) rect = getSignContentRect();
             if (!look || !rect || !rect.width || !rect.height) {
                 if (wallGlowEl) wallGlowEl.hidden = true;
@@ -2861,11 +2892,16 @@ function initSign3dConfigurator(root) {
         }
         if (isInfinityLogo()) {
             // Round infinity mirror: the overall width is the diameter; the logo sits inside it.
-            const d = Math.round(Math.max(120, Math.min(targetW || area.w * 0.6, area.h * 0.92)));
+            // Every size shows a different diameter (the largest that fits the preview height
+            // scaled by the chosen size) — it no longer stops at one size. The logo fills most of
+            // the disc; the infinity rings run around its edge.
+            const full = area.w * SIZE_MAX_FILL;
+            const maxD = Math.min(full, area.h * 0.92);
+            const d = Math.round(Math.max(90, maxD * Math.min(1, (targetW || full * 0.6) / full)));
             w = d;
             h = d;
             logoImg.classList.add('sign3d-infinity-disc');
-            logoImg.style.padding = Math.round(d * 0.2) + 'px';
+            logoImg.style.padding = Math.round(d * 0.13) + 'px';
             logoImg.style.setProperty('--sign3d-inf-rim', Math.max(4, Math.round(d * 0.035)) + 'px');
         } else {
             logoImg.classList.remove('sign3d-infinity-disc');
@@ -2918,6 +2954,7 @@ function initSign3dConfigurator(root) {
         syncSliderFromWidth();
         // Lightbox size boxes: labels in the new unit.
         if (root.dataset.sign3dMode === 'lightbox' && lbSize) renderLbCards();
+        if (sizeBoxMode(root.dataset.sign3dMode)) applyInfSize();
     }
 
     // ---------- Logo: move / resize / stay inside the preview ----------
@@ -3056,6 +3093,13 @@ function initSign3dConfigurator(root) {
             renumberSteps();
         }
 
+        if (lhBox && sizeBoxMode(root.dataset.sign3dMode)) {
+            try {
+                applyInfSize();
+                renderLhBoxes();
+                calculateTotal();
+            } catch (err) { /* start-up: done by initLhBoxes */ }
+        }
         renderLetters();
         hideSelectionBox();
         updatePreviewScale();
@@ -3133,8 +3177,8 @@ function initSign3dConfigurator(root) {
             const labelSpan = document.createElement('span');
             labelSpan.textContent = line.label + (line.note ? ' ' + line.note : '');
             const valueSpan = document.createElement('span');
-            valueSpan.textContent = line.included ? 'Included' : sign3dMoney(root, line.value, true);
-            if (line.included) valueSpan.classList.add('is-included');
+            valueSpan.textContent = line.valueText || (line.included ? 'Included' : sign3dMoney(root, line.value, true));
+            if (line.included || line.valueText) valueSpan.classList.add('is-included');
             row.appendChild(labelSpan);
             row.appendChild(valueSpan);
             breakdownRows.appendChild(row);
@@ -3633,12 +3677,22 @@ function initSign3dConfigurator(root) {
         // Event Marquee / Infinity Mirror on phones and tablets: the free width is small, so the
         // sign fills more of it (up to 85-96% on a phone) — bulbs and mirror reflections need size
         // to read clearly. Wide screens (free width 760px+) keep the original 55-92%.
-        let minFill = SIZE_MIN_FILL;
+        // 3D Illuminated Signs (client): the smallest size clearly smaller; the largest is kept on
+        // the wallpaper's wall by placeSignOnScene.
+        // 3D / Event Marquee / Infinity Mirror (client): the smallest size clearly smaller; the
+        // largest exactly fills the room the wallpaper has for the sign (sceneCapShare, set by
+        // placeSignOnScene) and every size in between follows in proportion.
+        const sceneMode = ['3d', 'marquee', 'infinity'].indexOf(root.dataset.sign3dMode) > -1;
+        let minFill = sceneMode ? 0.3 : SIZE_MIN_FILL;
         let maxFill = SIZE_MAX_FILL;
         if (['marquee', 'infinity'].indexOf(root.dataset.sign3dMode) > -1) {
             const narrow = Math.min(1, Math.max(0, (760 - previewFreeArea().w) / 400));
             minFill += 0.3 * narrow;
             maxFill += 0.04 * narrow;
+        }
+        if (sceneMode && sceneCapShare > 0) {
+            maxFill = Math.min(maxFill, sceneCapShare);
+            minFill = Math.min(minFill, maxFill * 0.4);
         }
         const wr = previewWidthRangeCm();
         let share = minFill + (maxFill - minFill) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
@@ -3748,7 +3802,8 @@ function initSign3dConfigurator(root) {
         const area = previewFreeArea();
         // sceneFitScale: smaller when the sign must fit a wall / floor area of the wallpaper scene
         // (placeSignOnScene); 1 everywhere else.
-        let targetW = area.w * previewFillShare() * (sceneFitScale || 1);
+        sceneLastShare = previewFillShare();
+        let targetW = area.w * sceneLastShare;
         // A round backing panel is as tall as the sign is wide: keep the whole circle in view.
         // A round backing panel is as tall as the sign is wide: keep the whole circle inside the
         // visible wallpaper (about half the preview height, clear of the toggles and thumbnails).
@@ -3949,13 +4004,17 @@ function initSign3dConfigurator(root) {
         // Lightbox size + price boxes (Admin): the box price replaces the width / height / depth tiers.
         const lbRow = lightboxRow();
 
-        const widthTier = lbRow ? null : findAscendingTier(config.widthTiers, 'width', widthCm);
-        const basePrice = lbRow ? lightboxRowPrice(lbRow) : (widthTier ? Number(widthTier.price) || 0 : 0);
-        const baseLabel = lbRow ? 'Size: ' + lbRow.l + ' (' + (lbSides === 'double' ? 'Double-Sided' : 'Front-Facing') + ')' : (widthTier ? widthTier.label : 'Base price');
+        // Infinity Mirror size boxes: the Admin size price is the overall sign price (it replaces the
+        // width / letter height / letter count / depth pricing).
+        const infRow = infPriceRow();
+        const widthTier = (lbRow || infRow) ? null : findAscendingTier(config.widthTiers, 'width', widthCm);
+        const basePrice = lbRow ? lightboxRowPrice(lbRow) : (infRow ? infRow.p : (widthTier ? Number(widthTier.price) || 0 : 0));
+        const baseLabel = lbRow ? 'Size: ' + lbRow.l + ' (' + (lbSides === 'double' ? 'Double-Sided' : 'Front-Facing') + ')'
+            : (infRow ? 'Size: ' + infSizeLabel(infRow.w) + ' wide, ' + lhBox.l + (hasText() ? ' letters' : ' high') : (widthTier ? widthTier.label : 'Base price'));
 
-        const letterHeightTier = (isInfinityLogo() || lbRow) ? null : findAscendingTier(config.letterHeightTiers, 'height', letterHeightCm);
+        const letterHeightTier = (isInfinityLogo() || lbRow || infRow) ? null : findAscendingTier(config.letterHeightTiers, 'height', letterHeightCm);
         const lhRow = isInfinityLogo() ? null : lhBox;
-        const letterHeightAdjustment = (letterHeightTier ? Number(letterHeightTier.adjustment) || 0 : 0) + (lhRow ? lhRow.p : 0);
+        const letterHeightAdjustment = (letterHeightTier ? Number(letterHeightTier.adjustment) || 0 : 0) + (lhRow && !infRow ? lhRow.p : 0);
 
         let letterCountSurcharge = 0;
         let letterCountLabel = '';
@@ -3963,7 +4022,7 @@ function initSign3dConfigurator(root) {
         if (hasText()) {
             letterCount = (textInput.value || '').replace(/\s/g, '').length;
             const includedLetters = Number(settings.includedLetters) || 20;
-            if (letterCount > includedLetters) {
+            if (letterCount > includedLetters && !infRow) {
                 const countTier = findLetterCountTier(config.letterCountTiers, letterCount);
                 letterCountSurcharge = countTier ? Number(countTier.surcharge) || 0 : 0;
                 letterCountLabel = countTier ? countTier.label : '';
@@ -3971,7 +4030,7 @@ function initSign3dConfigurator(root) {
         }
 
         const depthOption = depthSelect ? depthSelect.options[depthSelect.selectedIndex] : null;
-        const depthSurcharge = lbRow ? 0 : (parseFloat(depthOption?.dataset.price) || 0);
+        const depthSurcharge = (lbRow || infRow) ? 0 : (parseFloat(depthOption?.dataset.price) || 0);
         const depthLabel = depthOption?.dataset.label || (depthOption ? depthOption.textContent.trim() : 'Standard');
 
         let illuminationPrice = 0;
@@ -4092,7 +4151,16 @@ function initSign3dConfigurator(root) {
         lines.push({ label: 'Side colour: ' + selectedSideName + ' (' + sign3dPrettyGroup(selectedSideGroup) + ')', value: 0, included: true });
         if (getBackingType() !== 'none') lines.push({ label: (root.dataset.backLabel ? root.dataset.backLabel.toLowerCase().replace(/^./, (x) => x.toUpperCase()) : 'Backing colour') + ': ' + selectedBackName + ' (' + sign3dPrettyGroup(selectedBackGroup) + ')', value: 0, included: true });
         if (!isLightbox) lines.push({ label: isOutdoor ? 'Outdoor construction' : 'Indoor', value: outdoorSurcharge, included: !isOutdoor });
-        lines.push({ label: 'Standard delivery (Australia-wide)', value: 0, included: true });
+        // Shipping (client — we sell worldwide): Infinity Mirror / Event Marquee size prices include
+        // shipping (50% / 40% of the size price), shown for information only (not added again).
+        // Other signs: worldwide shipping included in the price.
+        if (infRow && sizeBoxPct(root.dataset.sign3dMode)) {
+            const pct = sizeBoxPct(root.dataset.sign3dMode);
+            const ship = Math.round(infRow.p * pct) / 100;
+            lines.push({ label: 'Worldwide shipping (' + pct + '% of the size price, included above)', value: ship, valueText: sign3dMoney(root, ship) });
+        } else {
+            lines.push({ label: 'Worldwide shipping (included in the price)', value: 0, included: true });
+        }
 
         renderBreakdown(lines);
 
@@ -4308,7 +4376,9 @@ function initSign3dConfigurator(root) {
     // var (not const / let): placeSignOnScene can run before this line during start-up.
     var sceneImgCache;
     var scenePlacing;
-    var sceneFitScale = 1;
+    var sceneFitScale = 1; // (kept for reference; sizing now uses sceneCapShare)
+    var sceneCapShare = 0;
+    var sceneLastShare = 0;
     var sceneShadowEl = null;
     function sceneFloorShadow(rect) {
         if (!rect || !previewStage) {
@@ -4343,6 +4413,8 @@ function initSign3dConfigurator(root) {
             entry.h = im.naturalHeight;
             entry.floor = sceneFindFloor(im);
             entry.wall = sceneFindWall(im);
+            entry.map = sceneLumMap(im);
+            entry.spans = {};
             entry.done = true;
             placeSignOnScene();
         };
@@ -4377,16 +4449,92 @@ function initSign3dConfigurator(root) {
             const L = (x, y) => { const i = (y * W + x) * 4; return 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; };
             let best = 0;
             let bestY = 0;
+            const rowE = [];
             for (let y = Math.round(H * 0.45); y < Math.round(H * 0.92); y++) {
                 let e = 0;
                 for (let x = Math.round(W * 0.25); x < Math.round(W * 0.75); x++) e += Math.abs(L(x, y + 1) - L(x, y - 1));
+                rowE.push([y, e]);
                 if (e > best) { best = e; bestY = y; }
             }
-            return best > W * 0.5 * 6 ? (bestY / H) * 100 : 0;
+            if (best <= W * 0.5 * 6) return 0;
+            // A clear floor line is one edge much stronger than any other (skirting / wall-floor
+            // line). A busy scene (beach waves, arcade, shop entrance) has no single line — the edge
+            // found there is usually the horizon or a door, not the floor: a typical floor height
+            // (78% down) is used instead. Admin "Floor line %" always wins over both.
+            let second = 0;
+            rowE.forEach(([y, e]) => { if (Math.abs(y - bestY) > 3 && e > second) second = e; });
+            return best >= second * 1.8 ? (bestY / H) * 100 : 78;
         } catch (err) {
             return 0;
         }
     }
+    // Small luminance map of the photo (160 px wide) for sceneWallSpan.
+    function sceneLumMap(im) {
+        try {
+            const W = 160;
+            const H = Math.max(40, Math.round(W * (im.naturalHeight / im.naturalWidth || 0.67)));
+            const c = document.createElement('canvas');
+            c.width = W;
+            c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true });
+            g.drawImage(im, 0, 0, W, H);
+            const d = g.getImageData(0, 0, W, H).data;
+            const L = new Float32Array(W * H);
+            for (let i = 0; i < W * H; i++) L[i] = 0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2];
+            return { W, H, L };
+        } catch (err) {
+            return null;
+        }
+    }
+    // Left / right edge (% of the photo width) of the plain wall, panel or floor area around the
+    // middle of the picture in a band of rows (y0..y1, % of the height): from the centre outwards
+    // as long as the columns look like the centre (same brightness, no busy detail) — it stops at
+    // flowers, plants, pillars, door frames… Returns [l, r] or null.
+    function sceneWallSpan(map, y0, y1) {
+        if (!map) return null;
+        const { W, H, L } = map;
+        const a = Math.max(1, Math.round((y0 / 100) * H));
+        const b = Math.min(H - 2, Math.round((y1 / 100) * H));
+        if (b - a < 2) return null;
+        const mean = new Float32Array(W);
+        const busy = new Float32Array(W);
+        for (let x = 1; x < W - 1; x++) {
+            let m = 0;
+            let t = 0;
+            for (let y = a; y <= b; y++) {
+                const i = y * W + x;
+                m += L[i];
+                t += Math.abs(L[i + 1] - L[i - 1]) + Math.abs(L[i + W] - L[i - W]);
+            }
+            mean[x] = m / (b - a + 1);
+            busy[x] = t / (b - a + 1);
+        }
+        const c0 = Math.round(W * 0.42);
+        const c1 = Math.round(W * 0.58);
+        const ms = [];
+        const bs = [];
+        for (let x = c0; x <= c1; x++) { ms.push(mean[x]); bs.push(busy[x]); }
+        ms.sort((p, q) => p - q);
+        bs.sort((p, q) => p - q);
+        const refM = ms[ms.length >> 1];
+        const refB = bs[bs.length >> 1];
+        const ok = (x) => Math.abs(mean[x] - refM) < Math.max(16, refM * 0.22) && busy[x] < Math.max(10, refB * 2.2);
+        const walk = (dir) => {
+            let x = Math.round(W / 2);
+            let bad = 0;
+            let last = x;
+            while (x > 1 && x < W - 2) {
+                x += dir;
+                if (ok(x)) { bad = 0; last = x; } else if (++bad > 2) break;
+            }
+            return last;
+        };
+        const l = walk(-1);
+        const r = walk(1);
+        if (r - l < W * 0.2) return null;
+        return [(l / W) * 100, (r / W) * 100];
+    }
+
     // Empty wall area of a photo (3D Illuminated Signs): the tallest calm band (no windows, doors,
     // awnings or decorations) across the middle of the picture, between 3% and 75% of its height.
     // Returns { c, h } = its centre and height in % of the photo height, or null.
@@ -4442,6 +4590,10 @@ function initSign3dConfigurator(root) {
         const x = previewInner._sign3dShift || 0;
         const natural = x ? 'translateX(' + x + 'px)' : '';
         const reset = () => {
+            if (sceneCapShare) {
+                sceneCapShare = 0;
+                updatePreviewScale();
+            }
             if (previewInner._sign3dScene) {
                 previewInner._sign3dScene = false;
                 previewInner.style.transform = natural;
@@ -4463,12 +4615,13 @@ function initSign3dConfigurator(root) {
         // 3D Illuminated Signs are always wall mounted: the sign goes on the photo's empty wall area
         // (Admin "Sign centre %", else found automatically); no floor needed.
         const is3d = mode === '3d';
-        const autoWall = is3d && info.wall ? info.wall : null;
+        // The empty wall / sign panel found in the photo (used when Admin has no wall values).
+        const autoWall = info.wall || null;
         const fy = parseFloat(thumb && thumb.dataset.floorY) || (is3d ? 0 : info.floor);
         if (!fy && !is3d) { reset(); return; }
-        const wy = parseFloat(thumb && thumb.dataset.wallY) || (autoWall ? autoWall.c : fy * 0.5);
+        const wy = parseFloat(thumb && thumb.dataset.wallY) || (autoWall && (!fy || autoWall.c < fy) ? autoWall.c : fy * 0.5);
         if (!wy) { reset(); return; }
-        const wh = parseFloat(thumb && thumb.dataset.wallH) || (autoWall && !parseFloat(thumb && thumb.dataset.wallY) ? autoWall.h : 0);
+        const wh = parseFloat(thumb && thumb.dataset.wallH) || (autoWall && !parseFloat(thumb && thumb.dataset.wallY) && (!fy || autoWall.c < fy) ? autoWall.h : 0);
         let refit = false;
         scenePlacing = true;
         try {
@@ -4563,14 +4716,32 @@ function initSign3dConfigurator(root) {
                 const lowest = fy ? Math.min(floorY - box.height * 0.04, bottomSafe) : bottomSafe;
                 maxH = lowest - topSafe;
                 if (wh > 0) maxH = Math.min(maxH, wh / 100 * info.h * s * 0.85);
+                // Centred on the wall height and kept within the wall above and below it, so the
+                // largest size reaches the edge of the wall but never past it.
+                maxH = Math.min(maxH, 2 * Math.max(20, atY(wy) - topSafe), 2 * Math.max(20, lowest - atY(wy)));
                 const half = Math.min(r.height, maxH) / 2;
                 cy = Math.min(Math.max(atY(wy), topSafe + half), lowest - half);
             }
-            // Too tall for that area (a big logo, a narrow sign panel): the sign is drawn smaller
-            // (its real size — no stretched picture); more room again lets it grow back.
-            const want = Math.max(0.35, Math.min(1, sceneFitScale * (Math.max(40, maxH) / (freestanding ? signH : r.height))));
-            if (Math.abs(want - sceneFitScale) > 0.02 && (want < sceneFitScale || sceneFitScale < 1) && sceneRefits < 3) {
-                sceneFitScale = want;
+            // Width: between the wallpaper's elements (flowers, plants, pillars, door frames) at the
+            // sign's height — measured on the photo.
+            let maxW = Infinity;
+            const hPct = (px) => ((px - imgTop) / (info.h * s)) * 100;
+            const bandTop = freestanding ? hPct(floorY - Math.min(signH, maxH)) : hPct(cy - Math.min(r.height, maxH) / 2);
+            const bandBot = freestanding ? hPct(floorY) - 1.5 : hPct(cy + Math.min(r.height, maxH) / 2);
+            const spanKey = Math.round(bandTop) + '|' + Math.round(bandBot);
+            if (info.map && !(spanKey in info.spans)) info.spans[spanKey] = sceneWallSpan(info.map, bandTop, bandBot);
+            const span = info.spans ? info.spans[spanKey] : null;
+            if (span) maxW = ((span[1] - span[0]) / 100) * info.w * s * 0.9;
+            // The largest size fills that room exactly; every other size is in proportion to it
+            // (previewFillShare). The sign is never stretched — it is drawn at that size.
+            const fitK = Math.min(Math.max(40, maxH) / (freestanding ? signH : r.height), maxW / r.width);
+            let cap = sceneLastShare > 0 ? sceneLastShare * fitK : 0;
+            if (cap >= SIZE_MAX_FILL * 1.04) cap = 0;
+            else if (cap) cap = Math.max(0.12, cap);
+            const prevCap = sceneCapShare;
+            const changed = (!cap !== !prevCap) || (cap && prevCap && Math.abs(cap - prevCap) / prevCap > 0.03);
+            if (changed && sceneRefits < 4) {
+                sceneCapShare = cap;
                 sceneRefits++;
                 if (!sceneRefitTimer) sceneRefitTimer = setTimeout(() => { sceneRefits = 0; sceneRefitTimer = null; }, 400);
                 refit = true;
@@ -4937,6 +5108,13 @@ function initSign3dConfigurator(root) {
                     const notes = bulbType === 'led' && bulbNotesInput ? bulbNotesInput.value.trim() : '';
                     if (notes) properties['Bulb Colour Instructions'] = notes;
                 }
+                // Infinity Mirror size boxes: the chosen size and the shipping share (info for the order).
+                const infCartRow = infPriceRow();
+                if (infCartRow) {
+                    properties['Size'] = roundNice(infCartRow.w / 100) + ' m wide, ' + (lhBox ? lhBox.l : '') + (hasText() ? ' letters' : ' high');
+                    const shipPct = sizeBoxPct(root.dataset.sign3dMode);
+                    if (shipPct) properties['Shipping (included in price)'] = sign3dMoney(root, Math.round(infCartRow.p * shipPct) / 100) + ' (' + shipPct + '%)';
+                }
                 if (root.dataset.sign3dMode === 'marquee' || root.dataset.sign3dMode === 'infinity') {
                     properties['Display'] = isFreestandingMount() ? 'Freestanding (stands on the floor)' : 'Wall mounted (mounting only)';
                 }
@@ -5089,6 +5267,77 @@ function initSign3dConfigurator(root) {
         }
     }
 
+    // ---- Infinity Mirror size boxes (client): the overall price for each overall width at the
+    // chosen letter height, exactly as set in Admin (Letter Height Boxes > Size Prices). Shown for
+    // Text signs instead of the width slider; Logo Only keeps the slider and its pricing. The
+    // chosen width drives the preview, the measurements and the cart exactly like the slider did.
+    var infSizeCm = 0; // var: calculateTotal can run before this line during start-up
+    // Event Marquee uses the same size boxes with its own prices (Admin "Size Prices (Event Marquee)").
+    // Shipping share of the size price shown in the price breakdown (client): Infinity 50%, Marquee 40%.
+    // (a function, not a const: calculateTotal can run before this line during start-up)
+    function sizeBoxPct(mode) { return mode === 'infinity' ? 50 : (mode === 'marquee' ? 40 : 0); }
+    // Configurators with size boxes (when their Admin size prices are set).
+    function sizeBoxMode(mode) { return mode === 'infinity' || mode === 'marquee' || mode === '3d'; }
+    function infSizeLabel(cm) {
+        return currentUnit === 'cm' ? roundNice(cm / 100) + ' m' : formatDim(cm);
+    }
+    function infPriceEntry(row, cm) {
+        if (!row || !row.wp || !row.wp.length) return null;
+        let best = row.wp[0];
+        row.wp.forEach((e) => { if (Math.abs(e.w - cm) < Math.abs(best.w - cm)) best = e; });
+        return best;
+    }
+    function infPriceRow() {
+        if (!sizeBoxMode(root.dataset.sign3dMode) || !lhBox || !lhBox.wp || !lhBox.wp.length) return null;
+        // Infinity Mirror Logo Only (a round mirror) keeps its width slider; 3D logos use the boxes
+        // too (overall length x overall height).
+        try { if (root.dataset.sign3dMode !== '3d' && !hasText()) return null; } catch (err) { return null; }
+        return infPriceEntry(lhBox, infSizeCm || lhBox.wp[0].w);
+    }
+    function applyInfSize() {
+        if (!sizeBoxMode(root.dataset.sign3dMode)) return;
+        const field = root.querySelector('[data-size-slider-field]');
+        if (!field) return;
+        const parts = field.querySelectorAll('.sign3d-configurator__width-entry, .sign3d-configurator__slider-row, [data-width-hint]');
+        let grid = field.querySelector('[data-inf-size-cards]');
+        const row = infPriceRow();
+        if (!row) {
+            if (grid) grid.style.display = 'none';
+            parts.forEach((p) => { p.style.display = ''; });
+            return;
+        }
+        if (!grid) {
+            grid = document.createElement('div');
+            grid.className = 'sign3d-configurator__card-grid sign3d-inf-size-cards';
+            grid.setAttribute('data-inf-size-cards', '');
+            field.appendChild(grid);
+        }
+        parts.forEach((p) => { p.style.display = 'none'; });
+        grid.style.display = '';
+        infSizeCm = row.w;
+        grid.innerHTML = '';
+        lhBox.wp.forEach((e) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'sign3d-configurator__pick-card' + (e.w === infSizeCm ? ' is-selected' : '');
+            b.innerHTML = '<span class="sign3d-configurator__pick-card-label"></span><span class="sign3d-configurator__pick-card-price"></span>';
+            b.children[0].textContent = infSizeLabel(e.w);
+            b.children[1].textContent = sign3dMoney(root, e.p);
+            b.addEventListener('click', () => {
+                infSizeCm = e.w;
+                applyInfSize();
+                renderLhBoxes();
+                updatePreviewScale();
+                calculateTotal();
+            });
+            grid.appendChild(b);
+        });
+        if (widthInput && Math.abs(getWidthCm() - infSizeCm) > 0.01) {
+            widthInput.value = roundNice(infSizeCm / unitFactor());
+            try { syncSliderFromWidth(); } catch (err) { /* slider not ready */ }
+        }
+    }
+
     // ---- Letter height boxes (Marquee / Infinity) ----
     function renderLhBoxes() {
         const grid = root.querySelector('[data-lh-boxes]');
@@ -5098,12 +5347,14 @@ function initSign3dConfigurator(root) {
         lhBoxes.forEach((r) => {
             const tier = findAscendingTier(tiers, 'height', r.h);
             const price = (tier ? Number(tier.adjustment) || 0 : 0) + r.p;
+            // Infinity Mirror size prices: the box shows this height's overall price at the chosen size.
+            const sized = infPriceRow() ? infPriceEntry(r, infSizeCm) : null;
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'sign3d-configurator__pick-card' + (r === lhBox ? ' is-selected' : '');
             b.innerHTML = '<span class="sign3d-configurator__pick-card-label"></span><span class="sign3d-configurator__pick-card-price"></span>';
             b.children[0].textContent = r.l;
-            b.children[1].textContent = price > 0 ? sign3dMoney(root, price, true) : 'Included';
+            b.children[1].textContent = sized ? sign3dMoney(root, sized.p) : (price > 0 ? sign3dMoney(root, price, true) : 'Included');
             b.addEventListener('click', () => { lhBox = r; applyLhBox(); });
             grid.appendChild(b);
         });
@@ -5111,6 +5362,7 @@ function initSign3dConfigurator(root) {
     function applyLhBox() {
         if (!lhBox || !letterHeightInput) return;
         letterHeightInput.value = roundNice(lhBox.h / unitFactor());
+        applyInfSize();
         renderLhBoxes();
         updatePreviewScale();
         calculateTotal();
@@ -5569,22 +5821,22 @@ function initSign3dConfigurator(root) {
             return 'brightness(0.7) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal');
         }
         if (key === 'backlit') {
-            return 'brightness(1) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
-                + ' drop-shadow(0 0 6px ' + sign3dRgba(light, 0.9) + ')'
-                + ' drop-shadow(0 0 18px ' + sign3dRgba(light, 0.7) + ')'
-                + ' drop-shadow(0 0 36px ' + sign3dRgba(light, 0.5) + ')';
+            return 'brightness(0.9) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
+                + ' drop-shadow(0 0 2px ' + sign3dRgba(light, 1) + ')'
+                + ' drop-shadow(0 0 6px ' + sign3dRgba(light, 0.85) + ')'
+                + ' drop-shadow(0 0 14px ' + sign3dRgba(light, 0.45) + ')';
         }
         if (key === 'front_back_lit') {
             return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal')
-                + ' drop-shadow(0 0 10px ' + sign3dRgba(light, 0.7) + ')'
-                + ' drop-shadow(0 0 26px ' + sign3dRgba(light, 0.5) + ')'
-                + ' drop-shadow(0 0 46px ' + sign3dRgba(light, 0.3) + ')';
+                + ' drop-shadow(0 0 3px ' + sign3dRgba(light, 0.9) + ')'
+                + ' drop-shadow(0 0 8px ' + sign3dRgba(light, 0.6) + ')'
+                + ' drop-shadow(0 0 16px ' + sign3dRgba(light, 0.3) + ')';
         }
         if (key === 'fully_illuminated') {
             return 'brightness(1.12) saturate(1.05) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'lit')
-                + ' drop-shadow(0 0 12px ' + sign3dRgba(light, 0.6) + ')'
-                + ' drop-shadow(0 0 30px ' + sign3dRgba(light, 0.4) + ')'
-                + ' drop-shadow(0 0 56px ' + sign3dRgba(light, 0.25) + ')';
+                + ' drop-shadow(0 0 4px ' + sign3dRgba(light, 0.7) + ')'
+                + ' drop-shadow(0 0 10px ' + sign3dRgba(light, 0.45) + ')'
+                + ' drop-shadow(0 0 20px ' + sign3dRgba(light, 0.22) + ')';
         }
         // front_lit (default): bright face, no glow on the wall (client)
         return 'brightness(1.12) ' + sign3dBuildSideFilter(depthMm, selectedSideHex, 'normal');
