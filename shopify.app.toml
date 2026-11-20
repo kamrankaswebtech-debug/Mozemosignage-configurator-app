@@ -661,6 +661,21 @@ name = "Overall Width Max (cm)"
 description = "category=pricing_settings only. Largest overall sign width/length (all units, with or without backing)."
 type = "number_decimal"
 
+[metaobjects.app.sign3d_option.fields.shipping_percent_3d]
+name = "Shipping % (3D Illuminated Signs)"
+description = "category=pricing_settings only. Share of the size price shown as worldwide shipping (included). Empty = 50."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.shipping_percent_infinity]
+name = "Shipping % (Infinity Mirror)"
+description = "category=pricing_settings only. Share of the size price shown as worldwide shipping (included). Empty = 60."
+type = "number_decimal"
+
+[metaobjects.app.sign3d_option.fields.shipping_percent_marquee]
+name = "Shipping % (Event Marquee)"
+description = "category=pricing_settings only. Share of the size price shown as worldwide shipping (included). Empty = 40."
+type = "number_decimal"
+
 [metaobjects.app.uv_size]
 name = "UV Sign Size"
 description = "Available size options for UV Graphic signs"
@@ -1401,6 +1416,11 @@ type = "number_decimal"
 name = "Wallpaper: Wall Sign Centre (%)"
 description = "category=wallpaper only. Height of a wall-mounted sign's centre: % of the photo height from the top (e.g. 35). Empty = half way up the wall."
 type = "number_decimal"
+
+[metaobjects.app.lightbox_option.fields.mount_mode]
+name = "Wallpaper: Infinity Text Display"
+description = "category=wallpaper only. Per configurator, e.g. infinity=floor;marquee=floor. floor = shown only with No Mounting (freestanding), wall = shown only with a mounting option, not listed = always shown."
+type = "single_line_text_field"
 
 [metaobjects.app.lightbox_option.fields.wall_height_percent]
 name = "Wallpaper: Wall Sign Max Height (%)"

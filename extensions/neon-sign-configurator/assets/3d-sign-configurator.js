@@ -1025,8 +1025,25 @@ function sign3dBuildColourSwatches(root) {
             keys = allKeys.filter((g) => groups[g]);
             if (!keys.length) return;
         }
-        // Event Marquee face / side colours: White first (and the default face colour), Black last.
+        // Mounting (backing) colour (client): only three options — 3D Illuminated Signs / Event
+        // Marquee: White, Grey, Black; Infinity Mirror: Black, Grey, White. The first is the default.
+        // Each uses the Admin colour of that name when it exists (its exact shade), else a standard one.
         let prefer = cfg.prefer;
+        const mode3 = root.dataset.sign3dMode;
+        if (cfg.container === '[data-back-colour-swatches]' && (mode3 === '3d' || mode3 === 'marquee' || mode3 === 'infinity')) {
+            const all = allKeys.map((g) => allGroups[g]).flat();
+            const pick = (re, name, hex) => {
+                const c = all.find((x) => re.test(String(x.name || '')));
+                return c ? Object.assign({}, c, { name: c.name }) : { name, hex, price: 0, sortOrder: 1 };
+            };
+            const white = pick(/^\s*white\s*$/i, 'White', '#ffffff');
+            const grey = pick(/^\s*(grey|gray)\s*$/i, 'Grey', '#8c8c8c');
+            const black = pick(/^\s*black\s*$/i, 'Black', '#111111');
+            [white, grey, black].forEach((c) => { c.sortOrder = 1; });
+            groups = { standard: mode3 === 'infinity' ? [black, grey, white] : [white, grey, black] };
+            keys = ['standard'];
+            prefer = null;
+        }
         const isMarqueeColour = root.dataset.sign3dMode === 'marquee' && (cfg.container === '[data-colour-swatches]' || cfg.container === '[data-side-colour-swatches]');
         if (isMarqueeColour) {
             const isWhite = (c) => /^\s*white\s*$/i.test(String(c.name || '')) || /^#?(fff|ffffff)$/i.test(String(c.hex || '').trim());
@@ -1145,7 +1162,7 @@ function sign3dReadLimits(root) {
     try { raw = JSON.parse((el && el.textContent.trim()) || '{}') || {}; } catch (err) { raw = {}; }
     const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
     const cur = String(raw.cur || '').trim().toUpperCase();
-    return { lmin: num(raw.lmin), lmax: num(raw.lmax), wmin: num(raw.wmin), wmax: num(raw.wmax), cur };
+    return { lmin: num(raw.lmin), lmax: num(raw.lmax), wmin: num(raw.wmin), wmax: num(raw.wmax), cur, sp3: num(raw.sp3), spi: num(raw.spi), spm: num(raw.spm) };
 }
 
 // Price text with the Admin "Currency Label" (Pricing Settings), e.g. AUD -> "+$199.99 AUD".
@@ -2412,6 +2429,7 @@ function sign3dHydrateOptions(root) {
             btn.dataset.floorY = Number(o.fy) > 0 ? String(o.fy) : '';
             btn.dataset.wallY = Number(o.wy) > 0 ? String(o.wy) : '';
             btn.dataset.wallH = Number(o.wh) > 0 ? String(o.wh) : '';
+            btn.dataset.mountMode = String(o.mm || '').trim().toLowerCase();
             btn.title = o.l;
             btn.setAttribute('aria-label', o.l);
             const img = document.createElement('img');
@@ -3071,6 +3089,22 @@ function initSign3dConfigurator(root) {
             if (lhField) lhField.hidden = mode === 'upload';
             // Logo Only: priced at the first height row (the height step is hidden for the round mirror).
             if (mode === 'upload' && typeof lhBoxes !== 'undefined' && lhBoxes.length) lhBox = lhBoxes[0];
+            // Logo Only (client): no mounting choice — the round mirror is always wall mounted on
+            // standoffs ("No Backing", no panel charge); the Mounting step is hidden.
+            const ms = root.querySelector('[data-mounting-select]');
+            const mField = ms ? (root.querySelector('[data-mounting-cards]') || ms).closest('.sign3d-configurator__field') : null;
+            if (mField) {
+                const lab = mField.querySelector('[data-step]');
+                if (lab) lab.hidden = mode === 'upload';
+                root.classList.toggle('moz-inf-logo-nomount', mode === 'upload');
+            }
+            if (ms && mode === 'upload') {
+                const none = Array.from(ms.options).findIndex((o) => String(o.dataset.backingType || '').toLowerCase() === 'none' || /no\s*backing/i.test(o.value));
+                if (none > -1 && ms.selectedIndex !== none) {
+                    ms.selectedIndex = none;
+                    try { ms.dispatchEvent(new Event('change', { bubbles: true })); } catch (err) { /* start-up */ }
+                }
+            }
             if (previewInner) previewInner.classList.toggle('mode-infinity-logo', mode === 'upload');
             if (mode === 'upload' && !logoPreviewSrc) showLogoPreview(sign3dInfinityPlaceholder());
         }
@@ -3694,7 +3728,8 @@ function initSign3dConfigurator(root) {
         }
         if (sceneMode && sceneCapShare > 0) {
             maxFill = Math.min(maxFill, sceneCapShare);
-            minFill = Math.min(minFill, maxFill * 0.4);
+            // Infinity Mirror (client): the smallest size shows larger (60% of the largest).
+            minFill = root.dataset.sign3dMode === 'infinity' ? maxFill * 0.6 : Math.min(minFill, maxFill * 0.4);
         }
         const wr = previewWidthRangeCm();
         let share = minFill + (maxFill - minFill) * rangePos(getWidthCm() || wr.min, wr.min, wr.max);
@@ -4156,12 +4191,13 @@ function initSign3dConfigurator(root) {
         // Shipping (client — we sell worldwide): Infinity Mirror / Event Marquee size prices include
         // shipping (50% / 40% of the size price), shown for information only (not added again).
         // Other signs: worldwide shipping included in the price.
-        if (infRow && sizeBoxPct(root.dataset.sign3dMode)) {
-            const pct = sizeBoxPct(root.dataset.sign3dMode);
-            const ship = Math.round(infRow.p * pct) / 100;
-            lines.push({ label: 'Worldwide shipping (' + pct + '% of the size price, included above)', value: ship, valueText: sign3dMoney(root, ship) });
-        } else {
-            lines.push({ label: 'Worldwide shipping (included in the price)', value: 0, included: true });
+        // (client) shown as a separate white note under the total, not as a cost line.
+        const shipNote = root.querySelector('[data-shipping-note]');
+        if (shipNote) {
+            const pct = infRow ? sizeBoxPct(root.dataset.sign3dMode) : 0;
+            shipNote.textContent = pct
+                ? 'Worldwide shipping (' + pct + '% of the size price, included above): ' + sign3dMoney(root, Math.round(infRow.p * pct) / 100)
+                : 'Worldwide shipping included in the price.';
         }
 
         renderBreakdown(lines);
@@ -4649,7 +4685,9 @@ function initSign3dConfigurator(root) {
                 if (pw > 0 && pw <= box.width + 1) paintW = pw;
             } catch (err) { /* full width */ }
             // Room the sign has: below the toggles, above the wallpaper thumbnails / toolbar.
-            const topSafe = box.top + 64;
+            // A sign panel at the very top of the photo (Admin "Wall sign max height"): the sign may
+            // use it right up to the top (the toggles sit at the far left).
+            const topSafe = box.top + (wh > 0 && !isFreestandingMount() ? 16 : 64);
             let bottomSafe = box.bottom - 70;
             const strip = root.querySelector('[data-bg-thumbs]');
             if (strip && strip.offsetParent !== null) {
@@ -4711,13 +4749,13 @@ function initSign3dConfigurator(root) {
             if (freestanding) {
                 // Base on the floor, a touch in front of the wall line (the sign stands on the floor
                 // in front of the wall, a little nearer to the camera).
-                const base = Math.min(floorY + info.h * s * 0.012, bottomSafe);
+                const base = Math.min(floorY + info.h * s * (mode === 'infinity' ? 0.03 : 0.012), bottomSafe);
                 maxH = base - topSafe;
                 cy = cy0 + (base - contact);
             } else {
                 const lowest = fy ? Math.min(floorY - box.height * 0.04, bottomSafe) : bottomSafe;
                 maxH = lowest - topSafe;
-                if (wh > 0) maxH = Math.min(maxH, wh / 100 * info.h * s * 0.85);
+                if (wh > 0) maxH = Math.min(maxH, wh / 100 * info.h * s * 0.95);
                 // Centred on the wall height and kept within the wall above and below it, so the
                 // largest size reaches the edge of the wall but never past it.
                 maxH = Math.min(maxH, 2 * Math.max(20, atY(wy) - topSafe), 2 * Math.max(20, lowest - atY(wy)));
@@ -4735,10 +4773,11 @@ function initSign3dConfigurator(root) {
             const span = info.spans ? info.spans[spanKey] : null;
             // A busy scene (e.g. the arcade seen through an open door) gives a narrow, unreliable
             // span: the sign may always use at least half of the visible wallpaper width.
-            if (span) maxW = Math.max(((span[1] - span[0]) / 100) * info.w * s * 0.9, paintW * 0.5);
+            if (span) maxW = Math.max(((span[1] - span[0]) / 100) * info.w * s * (wh > 0 && !freestanding ? 0.96 : 0.9), paintW * 0.5);
             // The largest size fills that room exactly; every other size is in proportion to it
             // (previewFillShare). The sign is never stretched — it is drawn at that size.
-            const fitK = Math.min(Math.max(40, maxH) / (freestanding ? signH : r.height), maxW / r.width);
+            // (text letter boxes are taller than the letters: on a sign panel the letters themselves fill it)
+            const fitK = Math.min(Math.max(40, maxH) / (freestanding ? signH : r.height * (hasText() && wh > 0 ? 0.62 : 1)), maxW / r.width);
             let cap = sceneLastShare > 0 ? sceneLastShare * fitK : 0;
             if (cap >= SIZE_MAX_FILL * 1.04) cap = 0;
             else if (cap) cap = Math.max(0.12, cap);
@@ -5279,7 +5318,15 @@ function initSign3dConfigurator(root) {
     // Event Marquee uses the same size boxes with its own prices (Admin "Size Prices (Event Marquee)").
     // Shipping share of the size price shown in the price breakdown (client): Infinity 50%, Marquee 40%.
     // (a function, not a const: calculateTotal can run before this line during start-up)
-    function sizeBoxPct(mode) { return mode === 'infinity' ? 50 : (mode === 'marquee' ? 40 : 0); }
+    // Admin: 3D Illuminated Signs > Pricing Settings > Shipping %. Defaults (client): 3D 50%,
+    // Infinity Mirror 60%, Event Marquee 40%.
+    function sizeBoxPct(mode) {
+        if (!root._sign3dShip) {
+            const l = sign3dReadLimits(root);
+            root._sign3dShip = { '3d': l.sp3 || 50, infinity: l.spi || 60, marquee: l.spm || 40 };
+        }
+        return root._sign3dShip[mode] || 0;
+    }
     // Configurators with size boxes (when their Admin size prices are set).
     function sizeBoxMode(mode) { return mode === 'infinity' || mode === 'marquee' || mode === '3d'; }
     function infSizeLabel(cm) {
@@ -5467,6 +5514,37 @@ function initSign3dConfigurator(root) {
         setTimeout(() => sizeLimitPopup.btn.focus(), 30);
     }
 
+    // Infinity Mirror Text Only (client): with No Mounting only the floor wallpapers show, with a
+    // mounting option only the wall (sign panel) wallpapers — Admin "Infinity Text Display" of each
+    // wallpaper (empty = always shown). The selected wallpaper switches when it is hidden.
+    function syncSceneWallpapers() {
+        const mode = root.dataset.sign3dMode;
+        if ((mode !== 'infinity' && mode !== 'marquee') || !bgThumbs || !bgThumbs.length) return;
+        let want = '';
+        try { if (hasText()) want = isFreestandingMount() ? 'floor' : 'wall'; } catch (err) { return; }
+        // Admin value per product: "infinity=floor;marquee=floor" (a plain "floor" / "wall" = Infinity).
+        const modeOf = (t) => {
+            const v = String(t.dataset.mountMode || '');
+            if (v.indexOf('=') < 0) return mode === 'infinity' ? v : '';
+            const hit = v.split(/[;,]/).map((p) => p.split('=')).find((p) => p[0].trim() === mode);
+            return hit ? String(hit[1] || '').trim() : '';
+        };
+        const visible = [];
+        Array.from(bgThumbs).forEach((t) => {
+            const m = modeOf(t);
+            const show = !want || !m || m === want;
+            t.hidden = !show;
+            t.style.display = show ? '' : 'none';
+            if (show) visible.push(t);
+        });
+        if (!visible.length) {
+            Array.from(bgThumbs).forEach((t) => { t.hidden = false; t.style.display = ''; });
+            return;
+        }
+        const current = Array.from(bgThumbs).find((t) => t.dataset.bgUrl === selectedBgUrl);
+        if (!current || current.hidden) visible[0].click();
+    }
+
     // Infinity Mirror: "No Backing" is freestanding for Text Only and wall mounted (standoffs) for
     // Logo Only — its option / card text follows the chosen start mode.
     function syncFreestandLabels() {
@@ -5598,6 +5676,7 @@ function initSign3dConfigurator(root) {
         const type = getBackingType();
         if (previewInnerForLed) previewInnerForLed.classList.toggle('is-freestanding', isFreestandingMount());
         syncFreestandLabels();
+        syncSceneWallpapers();
         const over2m = getWidthCm() > 200;
         const plugIn = root.dataset.plugIn === 'true';
         const needsElectrician = !plugIn && (type === 'none' || over2m);
@@ -5730,7 +5809,8 @@ function initSign3dConfigurator(root) {
                     updatePreviewColour();
                 }
             },
-            {
+            // (3D / Marquee / Infinity: the mounting colour is one of three fixed options — no custom box.)
+            ['3d', 'marquee', 'infinity'].indexOf(root.dataset.sign3dMode) > -1 ? null : {
                 labelEl: backColourNameLabel, list: backSwatches,
                 apply: (hex, name) => {
                     selectedBackHex = hex; selectedBackName = name; selectedBackGroup = 'custom';
@@ -5741,7 +5821,7 @@ function initSign3dConfigurator(root) {
         ];
 
         targets.forEach((t) => {
-            if (!t.labelEl || !t.labelEl.parentElement) return;
+            if (!t || !t.labelEl || !t.labelEl.parentElement) return;
             const box = document.createElement('div');
             box.className = 'sign3d-configurator__custom-colour';
             const row = document.createElement('div');

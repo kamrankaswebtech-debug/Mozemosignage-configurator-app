@@ -101,7 +101,7 @@
     </script>
 
     <script type="application/json" data-sign3d-wallpapers>
-    [{% assign s3d_w_first = true %}{% if s3d_mode == "lightbox" %}{"l":"Storefront Wall","s":-1,"th":{{ s3d_lb_wall | json }},"w":{{ s3d_lb_wall | json }},"cb":""}{% assign s3d_w_first = false %}{% endif %}{% if s3d_lib_count > 0 %}{% for o in metaobjects["app--418838118401--lightbox_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% assign s3d_lp = o.products.value | default: '' | split: ',' %}{% if s3d_wc == "wallpaper" and o.image.value and s3d_lp contains s3d_mode %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }},"cb":"","fy":{{ o.floor_percent.value | default: 0 }},"wy":{{ o.wall_percent.value | default: 0 }},"wh":{{ o.wall_height_percent.value | default: 0 }}}{% endif %}{% endfor %}{% elsif s3d_mode == "lightbox" %}{% else %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }},"cb":{{ o.content_bg_color.value | default: "" | strip | json }},"wy":{{ o.wall_percent.value | default: 0 }},"wh":{{ o.wall_height_percent.value | default: 0 }}}{% endif %}{% endfor %}{% endif %}]
+    [{% assign s3d_w_first = true %}{% if s3d_mode == "lightbox" %}{"l":"Storefront Wall","s":-1,"th":{{ s3d_lb_wall | json }},"w":{{ s3d_lb_wall | json }},"cb":""}{% assign s3d_w_first = false %}{% endif %}{% if s3d_lib_count > 0 %}{% for o in metaobjects["app--418838118401--lightbox_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% assign s3d_lp = o.products.value | default: '' | split: ',' %}{% if s3d_wc == "wallpaper" and o.image.value and s3d_lp contains s3d_mode %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }},"cb":"","fy":{{ o.floor_percent.value | default: 0 }},"wy":{{ o.wall_percent.value | default: 0 }},"wh":{{ o.wall_height_percent.value | default: 0 }},"mm":{{ o.mount_mode.value | default: "" | downcase | json }}}{% endif %}{% endfor %}{% elsif s3d_mode == "lightbox" %}{% else %}{% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_wc = o.category.value | strip | downcase %}{% if s3d_wc == "wallpaper" and o.image.value %}{% unless s3d_w_first %},{% endunless %}{% assign s3d_w_first = false %}{"l":{{ o.label.value | json }},"s":{{ o.sort_order.value | default: 999999 }},"th":{{ o.image.value | image_url: width: 120 | json }},"w":{{ o.image.value | image_url: width: 1920 | json }},"cb":{{ o.content_bg_color.value | default: "" | strip | json }},"wy":{{ o.wall_percent.value | default: 0 }},"wh":{{ o.wall_height_percent.value | default: 0 }}}{% endif %}{% endfor %}{% endif %}]
     </script>
 
     <script type="application/json" data-sign3d-finishes>
@@ -109,7 +109,7 @@
     </script>
 
     <script type="application/json" data-sign3d-limits>
-    {% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_lc = o.category.value | strip | downcase %}{% if s3d_lc == "pricing_settings" %}{"lmin":{{ o.letter_height_min_cm.value | default: 0 }},"lmax":{{ o.letter_height_max_cm.value | default: 0 }},"wmin":{{ o.width_min_cm.value | default: 0 }},"wmax":{{ o.width_max_cm.value | default: 0 }},"cur":{{ o.currency_label.value | default: "" | strip | json }}}{% break %}{% endif %}{% endfor %}
+    {% for o in metaobjects["app--418838118401--sign3d_option"].values %}{% assign s3d_lc = o.category.value | strip | downcase %}{% if s3d_lc == "pricing_settings" %}{"sp3":{{ o.shipping_percent_3d.value | default: 0 }},"spi":{{ o.shipping_percent_infinity.value | default: 0 }},"spm":{{ o.shipping_percent_marquee.value | default: 0 }},"lmin":{{ o.letter_height_min_cm.value | default: 0 }},"lmax":{{ o.letter_height_max_cm.value | default: 0 }},"wmin":{{ o.width_min_cm.value | default: 0 }},"wmax":{{ o.width_max_cm.value | default: 0 }},"cur":{{ o.currency_label.value | default: "" | strip | json }}}{% break %}{% endif %}{% endfor %}
     </script>
 
     <script type="application/json" data-sign3d-mountings>
@@ -361,7 +361,7 @@
       <span class="sign3d-configurator__price-value" data-total-price>$0.00</span>
     </div>
 
-    <p class="sign3d-configurator__delivery-note">FREE STANDARD DELIVERY AUSTRALIA-WIDE. Oversized/commercial installations may require a custom freight quotation.</p>
+    <p class="sign3d-configurator__delivery-note" data-shipping-note>Worldwide shipping included in the price.</p>
 
     <button type="button" class="sign3d-configurator__review-btn" data-review-btn>Review Final Design &amp; Price</button>
 

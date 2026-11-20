@@ -3649,3 +3649,15 @@
 .sign3d-configurator.sign3d-mode-3d .sign3d-configurator__preview-stage .sign3d-configurator__preview-inner.led-on.effect-fully_illuminated .sign3d-configurator__preview-icon {
     filter: brightness(1.12) drop-shadow(0 0 3px color-mix(in srgb, var(--sign3d-light, #ffffff) 85%, transparent)) drop-shadow(0 0 9px color-mix(in srgb, var(--sign3d-light, #ffffff) 50%, transparent)) drop-shadow(0 0 18px color-mix(in srgb, var(--sign3d-light, #ffffff) 25%, transparent));
 }
+
+/* Infinity Mirror Logo Only (client): no mounting choice — mounting cards and backing colour hidden
+   (the step label is hidden by JS so the step numbers stay in order). */
+.sign3d-configurator.moz-inf-logo-nomount [data-mounting-cards],
+.sign3d-configurator.moz-inf-logo-nomount [data-backing-colour-block] {
+    display: none !important;
+}
+/* Worldwide shipping note under the total (client): white, separate from the price lines. */
+.sign3d-configurator .sign3d-configurator__delivery-note[data-shipping-note] {
+    color: #ffffff;
+    opacity: 1;
+}

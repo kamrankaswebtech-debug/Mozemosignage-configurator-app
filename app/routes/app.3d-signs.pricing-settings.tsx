@@ -16,6 +16,9 @@ type Settings = {
     widthMinCm: string;
     widthMaxCm: string;
     currencyLabel: string;
+    shipping3d: string;
+    shippingInfinity: string;
+    shippingMarquee: string;
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -44,6 +47,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         widthMinCm: first?.width_min_cm || "",
         widthMaxCm: first?.width_max_cm || "",
         currencyLabel: first?.currency_label || "",
+        shipping3d: first?.shipping_percent_3d || "50",
+        shippingInfinity: first?.shipping_percent_infinity || "60",
+        shippingMarquee: first?.shipping_percent_marquee || "40",
     };
     const hasEntry = !!first;
     return { settings, hasEntry };
@@ -73,6 +79,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ["letter_height_max_cm", "letterHeightMaxCm"],
         ["width_min_cm", "widthMinCm"],
         ["width_max_cm", "widthMaxCm"],
+        ["shipping_percent_3d", "shipping3d"],
+        ["shipping_percent_infinity", "shippingInfinity"],
+        ["shipping_percent_marquee", "shippingMarquee"],
     ] as const).forEach(([key, name]) => {
         const value = String(formData.get(name) || "").trim();
         if (value !== "") fields.push({ key, value });
@@ -178,6 +187,23 @@ export default function PricingSettingsPage() {
                         <label>
                             Currency Label — shown after every price in the 3D configurator, e.g. AUD → +$199.99 AUD (leave empty for no label)
                             <input type="text" name="currencyLabel" maxLength={8} placeholder="AUD" defaultValue={settings.currencyLabel} />
+                        </label>
+                        <s-heading>Worldwide Shipping (shown under the total price)</s-heading>
+                        <s-paragraph>
+                            Share of the size price shown as "Worldwide shipping (…% of the size price, included above)" on the configurators
+                            with size boxes. It is information only — the size price already includes it.
+                        </s-paragraph>
+                        <label>
+                            3D Illuminated Signs — Shipping % (default 50)
+                            <input type="number" step="0.01" min="0" max="100" name="shipping3d" defaultValue={settings.shipping3d} />
+                        </label>
+                        <label>
+                            Infinity Mirror — Shipping % (default 60)
+                            <input type="number" step="0.01" min="0" max="100" name="shippingInfinity" defaultValue={settings.shippingInfinity} />
+                        </label>
+                        <label>
+                            Event Marquee — Shipping % (default 40)
+                            <input type="number" step="0.01" min="0" max="100" name="shippingMarquee" defaultValue={settings.shippingMarquee} />
                         </label>
                         <s-heading>Size Limits (storefront)</s-heading>
                         <s-paragraph>

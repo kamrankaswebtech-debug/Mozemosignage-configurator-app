@@ -21,6 +21,31 @@ const PLACEMENT = [
     { key: "wall_percent", name: "wallPercent", label: "Wall sign centre %", hint: "wall-mounted sign centre" },
     { key: "wall_height_percent", name: "wallHeightPercent", label: "Wall sign max height %", hint: "optional limit" },
 ] as const;
+// Infinity Mirror Text Only: which mounting choice shows this wallpaper ("" = always).
+// Stored as "infinity=floor;marquee=floor" (a plain "floor" / "wall" = Infinity Mirror only).
+const MODE_PRODUCTS = [{ key: "infinity", name: "mountModeInf", label: "Infinity Text display" }, { key: "marquee", name: "mountModeMq", label: "Event Marquee display" }] as const;
+const parseMountMode = (v: string, key: string) => {
+    const t = String(v || "");
+    if (t.indexOf("=") < 0) return key === "infinity" ? t : "";
+    const hit = t.split(/[;,]/).map((p) => p.split("=")).find((p) => p[0].trim() === key);
+    return hit ? String(hit[1] || "").trim() : "";
+};
+const readMountMode = (formData: FormData) => MODE_PRODUCTS
+    .map((p) => { const v = String(formData.get(p.name) || ""); return v === "floor" || v === "wall" ? p.key + "=" + v : ""; })
+    .filter(Boolean).join(";");
+const MountModeSelect = ({ value }: { value: string }) => (
+    <>
+        {MODE_PRODUCTS.map((p) => (
+            <label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>{p.label}
+                <select name={p.name} defaultValue={parseMountMode(value, p.key)}>
+                    <option value="">Always</option>
+                    <option value="floor">No Mounting only (floor)</option>
+                    <option value="wall">Mounting only (wall / sign panel)</option>
+                </select>
+            </label>
+        ))}
+    </>
+);
 const readPlacement = (formData: FormData) => PLACEMENT.map((p) => {
     const n = parseFloat(String(formData.get(p.name) || ""));
     return { key: p.key, value: Number.isFinite(n) && n > 0 && n < 100 ? String(Math.round(n * 10) / 10) : "" };
@@ -35,6 +60,7 @@ type BgEntry = {
     floorPercent: string;
     wallPercent: string;
     wallHeightPercent: string;
+    mountMode: string;
 };
 
 async function uploadBgImage(admin: any, file: File): Promise<string> {
@@ -118,6 +144,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             floorPercent: f.floor_percent || "",
             wallPercent: f.wall_percent || "",
             wallHeightPercent: f.wall_height_percent || "",
+            mountMode: f.mount_mode || "",
         };
     });
     const images: BgEntry[] = allEntries.filter((entry: any) => entry.category === "wallpaper");
@@ -165,6 +192,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                             { key: "sort_order", value: sortOrder },
                             { key: "products", value: readProducts(formData) },
                             ...readPlacement(formData).filter((p) => p.value),
+                            ...(readMountMode(formData) ? [{ key: "mount_mode", value: readMountMode(formData) }] : []),
                         ],
                     },
                 },
@@ -187,6 +215,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             { key: "sort_order", value: sortOrder },
             { key: "products", value: readProducts(formData) },
             ...readPlacement(formData),
+            { key: "mount_mode", value: readMountMode(formData) },
         ];
 
         if (imageFile && imageFile.size > 0) {
@@ -268,6 +297,7 @@ export default function ConfiguratorWallpapersPage() {
                         <input type="number" name="sortOrder" placeholder="Sort Order" defaultValue={images.length + 1} />
                         {PRODUCTS.map((p) => (<label key={p.value} style={{ display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" name="products" value={p.value} defaultChecked={true} /> {p.label}</label>))}
                         {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }} title={p.hint}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} /></label>))}
+                        <MountModeSelect value="" />
                         <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Add Image</s-button>
                     </s-stack>
                 </fetcher.Form>
@@ -300,6 +330,7 @@ export default function ConfiguratorWallpapersPage() {
                                                 <input type="number" name="sortOrder" defaultValue={img.sortOrder} />
                                                 {PRODUCTS.map((p) => (<label key={p.value} style={{ display: "flex", alignItems: "center", gap: 4 }}><input type="checkbox" name="products" value={p.value} defaultChecked={img.products.split(",").includes(p.value)} /> {p.label}</label>))}
                                                 {PLACEMENT.map((p) => (<label key={p.key} style={{ display: "flex", alignItems: "center", gap: 4 }} title={p.hint}>{p.label} <input type="number" step="0.1" min="0" max="99" name={p.name} style={{ width: 70 }} defaultValue={(img as any)[p.name] || ""} /></label>))}
+                                                <MountModeSelect value={img.mountMode} />
                                                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>Save</s-button>
                                                 <s-button variant="tertiary" onClick={() => setEditingId(null)}>Cancel</s-button>
                                             </s-stack>
@@ -314,7 +345,7 @@ export default function ConfiguratorWallpapersPage() {
                                         <td style={{ padding: "8px" }}>{img.sortOrder}</td>
                                         <td style={{ padding: "8px" }}>{img.products ? img.products.split(",").map((v) => PRODUCTS.find((p) => p.value === v)?.label || v).join(", ") : "Not assigned"}</td>
                                         <td style={{ padding: "8px", fontSize: 12 }}>
-                                            Floor {img.floorPercent ? img.floorPercent + "%" : "auto"} · Wall {img.wallPercent ? img.wallPercent + "%" : "auto"}{img.wallHeightPercent ? " · max " + img.wallHeightPercent + "%" : ""}
+                                            Floor {img.floorPercent ? img.floorPercent + "%" : "auto"} · Wall {img.wallPercent ? img.wallPercent + "%" : "auto"}{img.wallHeightPercent ? " · max " + img.wallHeightPercent + "%" : ""}{MODE_PRODUCTS.map((p) => { const m = parseMountMode(img.mountMode, p.key); return m ? " · " + (p.key === "infinity" ? "Infinity" : "Marquee") + ": " + (m === "floor" ? "No Mounting" : "Mounting") : ""; }).join("")}
                                         </td>
                                         <td style={{ padding: "8px" }}>
                                             <s-stack direction="inline" gap="tight">
